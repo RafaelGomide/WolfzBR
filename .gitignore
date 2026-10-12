@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+*.spec
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+
+# Variáveis de ambiente
+.env
+.env.*
+!.env.example
+
+# Testes / lint
+.pytest_cache/
+.hypothesis/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Frontend
+node_modules/
+frontend/dist/
+src/wolfz/static/
+
+# Workspace local e saídas do WolfzBR
+.wolfz/
+saida/
+*.hyper
+*.log
+
+# Dados de usuário (nunca versionar planilhas fora do corpus de testes)
+*.xlsx
+*.xls
+*.ods
+*.csv
+*.parquet
+!tests/corpus/**
+!src/wolfz/br/data/*.parquet
+
+# Excel: arquivos temporários de lock
+~$*
+
+# Notebooks
+.ipynb_checkpoints/
+
+# IDE / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
