@@ -58,3 +58,6 @@ saida/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Planejamento pessoal (não versionado)
+dev/
