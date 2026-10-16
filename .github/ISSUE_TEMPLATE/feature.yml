@@ -1,0 +1,34 @@
+name: Funcionalidade
+description: Uma ideia ou uma operação nova.
+labels: ["tipo:feature"]
+body:
+  - type: textarea
+    id: problema
+    attributes:
+      label: Qual problema isso resolve
+      description: Descreva a situação real, de preferência com um exemplo de planilha.
+      placeholder: Recebo todo mês um relatório do ERP em que a data vem como "202403" e preciso de uma data de verdade.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposta
+    attributes:
+      label: Como você imagina que funcione
+      description: Se for uma operação nova, diga a entrada e a saída esperadas.
+
+  - type: textarea
+    id: arquivo
+    attributes:
+      label: Arquivo de exemplo anonimizado (opcional)
+      description: Ajuda muito. **Nunca anexe dados reais de pessoas.**
+
+  - type: checkboxes
+    id: power-query
+    attributes:
+      label: Exportação
+      description: >-
+        Toda operação precisa ter tradução para Power Query M. Se você souber como fazer
+        o mesmo no Power Query, conte na proposta.
+      options:
+        - label: Sei (ou imagino) como fazer isso no Power Query

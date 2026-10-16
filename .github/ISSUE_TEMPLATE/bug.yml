@@ -1,0 +1,58 @@
+name: Bug
+description: Algo não funciona como deveria.
+labels: ["tipo:bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por reportar. Sem um arquivo que reproduza o problema quase nunca dá para corrigir,
+        então ele é obrigatório. **Nunca anexe dados reais de pessoas**: troque nomes, CPFs, CNPJs,
+        telefones e valores por dados inventados, mantendo o formato (máscara, separadores, colunas).
+
+  - type: textarea
+    id: o-que-aconteceu
+    attributes:
+      label: O que aconteceu
+      description: O que você fez, o que esperava e o que aconteceu.
+      placeholder: |
+        Rodei `wolfz run vendas.wolfz.json vendas_mar.csv -o saida/` e a coluna valor saiu vazia.
+        Esperava os valores em reais convertidos para número.
+    validations:
+      required: true
+
+  - type: textarea
+    id: arquivo
+    attributes:
+      label: Arquivo de exemplo anonimizado
+      description: |
+        Anexe (arraste para cá) a planilha ou CSV que reproduz o problema, já anonimizado.
+        Se o problema estiver na receita, anexe também o `.wolfz.json`.
+    validations:
+      required: true
+
+  - type: textarea
+    id: erro
+    attributes:
+      label: Mensagem de erro
+      description: A saída do terminal ou a mensagem da interface, se houver.
+      render: text
+
+  - type: input
+    id: versao
+    attributes:
+      label: Versão do WolfzBR
+      description: Saída de `wolfz --version`.
+      placeholder: wolfz 0.1.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: sistema
+    attributes:
+      label: Sistema operacional
+      options:
+        - Windows
+        - Linux
+        - macOS (não suportado oficialmente)
+    validations:
+      required: true
