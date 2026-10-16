@@ -1,4 +1,3 @@
-import pytest
 from typer.testing import CliRunner
 
 import wolfz
@@ -13,5 +12,4 @@ def test_version():
 
 def test_api_publica():
     assert wolfz.load_recipe is wolfz.core.recipe.load_recipe
-    with pytest.raises(NotImplementedError):  # motor entra em F0.G
-        wolfz.run("receita.wolfz.json", "dados.csv")
+    assert wolfz.run is wolfz.core.engine.run_file
