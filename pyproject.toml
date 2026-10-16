@@ -1,0 +1,79 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "wolfzbr"
+version = "0.1.0.dev0"
+description = "Limpeza de planilhas brasileiras com receitas reproduzíveis e exportação para Power Query M, Python, Tableau e Power BI."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Rafael Gomide" }]
+keywords = ["limpeza de dados", "planilhas", "excel", "power bi", "power query", "polars", "brasil"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: Portuguese (Brazilian)",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business :: Financial :: Spreadsheet",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+dependencies = [
+    # Motor
+    "polars>=1.0",
+    "pyarrow>=16.0",
+    # Ingestão
+    "fastexcel>=0.11",
+    "python-calamine>=0.2",
+    "openpyxl>=3.1",
+    # Receita / validação
+    "pydantic>=2.7",
+    # Padrões BR
+    "rapidfuzz>=3.9",
+    # Workspace (ID de projeto e lock por projeto, §4.3 e §9 do design)
+    "python-ulid>=2.7",
+    "filelock>=3.13",
+    # API
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.30",
+    "python-multipart>=0.0.9",
+    # CLI
+    "typer>=0.12",
+]
+
+[project.optional-dependencies]
+tableau = ["tableauhyperapi>=0.0.19"]
+sql = ["duckdb>=1.0"]
+dev = [
+    "pytest>=8.0",
+    "hypothesis>=6.100",
+    "syrupy>=4.6",
+    "ruff>=0.5",
+    "import-linter>=2.0",
+    "pytest-cov>=5.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/RafaelGomide/WolfzBR"
+Repository = "https://github.com/RafaelGomide/WolfzBR"
+Issues = "https://github.com/RafaelGomide/WolfzBR/issues"
+Documentation = "https://github.com/RafaelGomide/WolfzBR/blob/main/docs/system_design.md"
+
+[project.scripts]
+wolfz = "wolfz.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wolfz"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/wolfz", "README.md", "LICENSE"]
