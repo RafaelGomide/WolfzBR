@@ -36,12 +36,12 @@ Os três trade-offs principais: (1) **expressividade sacrificada por equivalênc
 | Métrica | Valor |
 |---|---|
 | Usuários simultâneos | 1 (aplicação single-user, local) |
-| Tamanho máximo de arquivo suportado | <<100mb>> |
-| Número máximo de linhas com experiência fluida | <<fluido até 500 mil linhas; funcional (mais lento) até 100 MB>> |
-| Latência alvo do preview após editar um passo (p50) | <<p50 ≤ 300 ms, p95 ≤ 1 s para tabelas até o limite de linhas fluido>> |
-| Tempo alvo de importação + detecção (arquivo típico) | <<1 min max dependendo do tamanho do arquivo>> |
-| RAM mínima da máquina-alvo | <<8gb>> |
-| Sistemas operacionais suportados | <<linux, windows, mac>> |
+| Tamanho máximo de arquivo suportado | 100 MB (funcional, mais lento perto do teto) |
+| Número máximo de linhas com experiência fluida | 500 mil linhas (o preview materializa só a página de 200 linhas) |
+| Latência alvo do preview após editar um passo | p50 ≤ 300 ms, p95 ≤ 1 s (tabelas até o limite fluido) |
+| Tempo alvo de importação + detecção (arquivo típico) | ≤ 1 min, dependendo do tamanho do arquivo |
+| RAM mínima da máquina-alvo | 8 GB |
+| Sistemas operacionais suportados | Linux e Windows (macOS não suportado oficialmente, mas pode funcionar) |
 | Versão mínima do Python | 3.12 |
 | Disponibilidade | não aplicável — o processo existe enquanto o usuário o mantém aberto |
 | Consistência | forte, trivialmente — um único processo, um único usuário (ver §9) |
@@ -64,7 +64,7 @@ Os três trade-offs principais: (1) **expressividade sacrificada por equivalênc
 
 - **SUPOSIÇÃO**: o arquivo típico é uma planilha de relatório de área de negócio, na casa de milhares a dezenas de milhares de linhas. O teto físico de uma aba `.xlsx` é 1.048.576 linhas; acima disso só CSV. O design é dimensionado para o caso típico e *não quebra* no teto, mas não promete fluidez nele (ver §8).
 - **SUPOSIÇÃO**: o usuário roda o WolfzBR na própria estação de trabalho, com o arquivo em disco local ou em pasta sincronizada — não em servidor compartilhado. Isso sustenta a decisão de bind exclusivo em `127.0.0.1`.
-- **SUPOSIÇÃO**: o público principal usa Windows (é onde o Power BI Desktop roda). Linux e macOS são desejáveis para desenvolvimento e para o público de dados abertos, mas a prioridade de teste está em aberto (§2.2).
+- **SUPOSIÇÃO**: o público principal usa Windows (é onde o Power BI Desktop roda). Linux é suportado oficialmente (desenvolvimento e público de dados abertos) e entra na matriz de CI junto com o Windows (§13.1). macOS não é suportado oficialmente nem testado no CI, mas deve funcionar (§2.2).
 - **SUPOSIÇÃO**: "equivalência" entre Polars e o script Python exportado é verificável automaticamente; entre Polars e M, só a sintaxe é verificável sem o Power BI Desktop. A equivalência semântica do M depende de teste manual ou CI Windows (§13.5).
 - **SUPOSIÇÃO**: o repositório fica no GitHub e usa GitHub Actions como CI.
 
@@ -92,7 +92,7 @@ Não há tráfego de rede a dimensionar — o "servidor" atende um navegador na 
 - Exemplo: 50.000 linhas × 30 colunas × 15 bytes ≈ 22 MB brutos → **~3–7 MB** em Parquet.
 - No teto do `.xlsx` (1.048.576 linhas × 30 colunas): ~470 MB brutos → **~50–150 MB** em Parquet.
 - Checkpoints multiplicam isso pelo número de passos materializados; por isso a política é materializar só a página exibida, não o frame inteiro de cada passo (§8.4).
-- Política de limpeza do workspace (quando apagar projetos e caches antigos): <<cache de checkpoints ≤ 2 GB com LRU; projeto sem acesso há 90 dias é listado como "antigo", mas nunca apagado automaticamente>>
+- Política de limpeza do workspace: cache de checkpoints limitado a 2 GB com recolhimento LRU (§8.4). Projeto sem acesso há 90 dias é listado como "antigo", mas **nunca é apagado automaticamente**; a remoção é sempre ação do usuário.
 
 ### 3.4 Bandwidth
 
@@ -103,7 +103,7 @@ Não há tráfego de rede a dimensionar — o "servidor" atende um navegador na 
 
 - Polars lazy só materializa o que o plano pede. O pior caso de memória não é o preview, é a **importação** (ler a aba inteira para detectar estrutura) e a **exportação** (materializar o resultado completo).
 - A leitura estrutural com `openpyxl` (mesclagens, negrito) é a parte mais cara: carrega objetos Python por célula. Mitigação: usar `openpyxl` só para os metadados estruturais e `fastexcel`/`calamine` para os valores.
-- Orçamento de memória do processo: << ≤ 2 GB para um arquivo de 100 MB>>
+- Orçamento de memória do processo: **≤ 2 GB para um arquivo de 100 MB**. É o valor verificado pelo teste de carga.
 
 ### 3.6 Instâncias
 
@@ -179,7 +179,13 @@ class Op(BaseModel):                      # base de toda operação do catálogo
 ### 4.3 Estratégia de ID
 
 - **Passos**: sequencial curto e legível (`s1`, `s2`, …), único dentro da receita. O `id` aparece como comentário no M exportado, então legibilidade importa mais que unicidade global. O `id` não é reaproveitado quando um passo é removido, para que a referência em um M já exportado não passe a apontar para outro passo.
-- **Projetos**: <<>> (opções: UUID, ULID, slug derivado do nome do arquivo)
+- **Projetos**: **ULID**. Ordena por data de criação e é seguro como nome de pasta. (Alternativas descartadas: UUID, que não ordena, e slug do nome do arquivo, que colide.)
+  - **Formato**: 26 caracteres em Crockford Base32, sempre em maiúsculas (ex.: `01JA8Z3K6QF4V7XG2M9T5RNB0C`). Sem `/`, `\`, `.` ou espaço, e sem diferença de caixa entre IDs, então funciona igual em sistemas de arquivos que diferenciam maiúsculas (Linux) e nos que não diferenciam (Windows).
+  - **Geração**: pacote `python-ulid`, no momento do `POST /projects`. Não precisa de monotonicidade dentro do mesmo milissegundo: há um único usuário.
+  - **Onde aparece**: nome da pasta (`~/.wolfz/projects/<id>/`), parâmetro de rota da API (`/projects/{id}`) e campo `project_id` dos logs (§12.1). Na interface, o projeto é mostrado pelo nome, nunca pelo ID.
+  - **Fora da receita**: o ID não entra no `recipe.wolfz.json`. Como o ULID carrega um timestamp, deixá-lo fora mantém a receita determinística e portável entre máquinas (§9).
+  - **Validação**: a API só aceita IDs que casam com `^[0-9A-HJKMNP-TV-Z]{26}$` antes de montar qualquer caminho. Isso fecha path traversal (`../`) pelo parâmetro de rota (§11.4).
+  - **Nome legível**: o nome do arquivo original fica no `project.json` (campo `name`) e pode ser renomeado sem mexer no ID nem na pasta.
 
 ### 4.4 Chaves de cache e o que servem
 
@@ -216,7 +222,7 @@ A chave do checkpoint N depende de todos os passos até N. Editar o passo N muda
 - Tudo sob o prefixo `/api`, para separar das rotas estáticas da SPA.
 - Recursos no plural (`/projects`).
 - Verbos: `GET` para leitura, `POST` para criar projeto e disparar exportação, `PUT` para substituir a receita inteira, `DELETE` para remover projeto.
-- Status codes: `200`/`201` sucesso, `401` token de sessão ausente ou inválido, `404` projeto ou passo inexistente, `409` receita desatualizada (§9), `413` arquivo acima do limite, `422` erro de validação — inclusive receita inválida e `assert` reprovado, `500` erro não tratado.
+- Status codes: `200`/`201` sucesso, `401` token de sessão ausente ou inválido, `404` projeto ou passo inexistente, `409` receita desatualizada (§9), `423` projeto aberto em outra instância (§9), `413` arquivo acima do limite, `422` erro de validação — inclusive receita inválida e `assert` reprovado, `500` erro não tratado.
 
 ### 5.3 Especificação OpenAPI 3.1 (endpoints principais)
 
@@ -353,20 +359,20 @@ A mesma estrutura alimenta a mensagem de erro da CLI, para que `wolfz run` e a i
 ### 5.6 Filtros, ordenação, sparse fieldsets
 
 - Filtros e ordenação **não são parâmetros do preview**: se o usuário quer filtrar ou ordenar, isso é um passo da receita (`filter`, `sort`). Manter o preview como espelho fiel da receita evita o usuário ver uma coisa na tela e exportar outra.
-- Filtro/ordenação apenas de visualização, que não entram na receita: <<não ter no MVP>> (ter ou não ter no MVP)
+- Filtro/ordenação apenas de visualização, que não entram na receita: **fora do MVP**. Entra depois da 1.0 se houver pedido.
 - Sparse fieldsets: parâmetro `columns` opcional no preview, para tabelas muito largas em que o grid só exibe as colunas visíveis.
 
 ### 5.7 Versionamento
 
 - **API**: sem versionamento de URL. A SPA é compilada e distribuída no mesmo pacote que o backend, então cliente e servidor nunca estão em versões diferentes.
 - **Receita**: é o contrato de verdade, e é versionada pelo campo `wolfz_version`. Receitas antigas são migradas por `recipe/migrate.py` ao carregar. Receita de versão *mais nova* que o WolfzBR instalado é recusada com mensagem pedindo atualização, nunca interpretada parcialmente.
-- Política de compatibilidade da receita (por quantas versões uma receita antiga continua abrindo): <<toda receita `1.x` abre em qualquer versão `1.y`>>
+- Política de compatibilidade da receita: toda receita `1.x` abre em qualquer versão `1.y`. Receitas `0.x` têm migração até a 1.0 e depois deixam de abrir.
 
 ### 5.8 Idempotência
 
 - `PUT /recipe` é idempotente por definição (substitui o documento inteiro).
 - `POST /projects` cria um projeto novo a cada chamada; reimportar o mesmo arquivo reaproveita o `raw.parquet` pela chave de hash (§4.4), então a repetição é barata.
-- `POST /exports` sobre um diretório que já contém arquivos: <<falhar por padrão com `--overwrite` na CLI e confirmação na interface>> (sobrescrever, falhar, ou criar subpasta com data)
+- `POST /exports` sobre um diretório que já contém arquivos: **falha por padrão**. Sobrescrever exige `--overwrite` na CLI ou confirmação explícita na interface.
 
 ### 5.9 Rate limiting
 
@@ -379,7 +385,13 @@ Importação de arquivo grande e exportação podem levar de segundos a minutos.
 ### 5.11 Bulk operations
 
 - Na API: não há. Uma receita, um arquivo.
-- Na CLI: aplicar a mesma receita a vários arquivos de uma vez (`wolfz run receita.wolfz.json pasta/*.xlsx`): <<>> (entra em qual fase, se entrar)
+- Na CLI: aplicar a mesma receita a vários arquivos de uma vez (`wolfz run receita.wolfz.json pasta/*.xlsx`): **entra na Fase 2**. É barato e muito útil para quem recebe 12 arquivos mensais.
+  - **Entrada**: um ou mais caminhos ou padrões glob depois da receita. O próprio WolfzBR expande o glob, porque o PowerShell e o `cmd` do Windows não expandem `*.xlsx` como o shell do Linux. Os arquivos são processados em **ordem alfabética**, para que o resultado e o relatório sejam determinísticos.
+  - **Execução**: **sequencial**, um arquivo por vez. O paralelismo continua vindo do Polars dentro de cada arquivo; rodar vários em paralelo estouraria o orçamento de memória (§3.5).
+  - **Saída**: `-o saida/` vira a pasta-raiz, com um resultado por arquivo de entrada nomeado a partir do arquivo original (`saida/vendas_jan.csv`, `saida/vendas_fev.csv`…). Se dois arquivos gerariam o mesmo nome, o lote falha **antes de começar**. A regra de diretório existente vale para o lote inteiro (§5.8): sem `--overwrite`, falha se `saida/` já tiver arquivos.
+  - **Falha em um arquivo**: cada arquivo é independente e atômico (build-then-swap, §9). Por padrão o lote **continua** nos demais e reporta tudo no fim; `--fail-fast` interrompe no primeiro erro.
+  - **Relatório**: tabela no terminal (arquivo, status, linhas de saída, tempo, motivo da falha) e `saida/_relatorio.json` com o mesmo conteúdo, para quem automatiza. O motivo usa o formato de erro padronizado (§5.4).
+  - **Código de saída**: `0` se todos passaram, `1` se pelo menos um falhou, `2` para erro de uso (receita inválida, nenhum arquivo encontrado, colisão de nomes). Permite usar o `wolfz run` em scripts e agendadores.
 
 ---
 
@@ -513,7 +525,7 @@ Não aplicável.
 - Cache = checkpoints por passo, endereçados por hash de conteúdo (§4.4). Não há TTL nem invalidação explícita: chave que não é mais referenciada vira lixo e é recolhida.
 - **O que materializar**: só a página pedida. Materializar o frame inteiro de cada passo multiplicaria o uso de disco pelo número de passos (§3.3).
 - Exceção: passos que não são expressáveis como plano lazy barato — `unpivot`, `pivot`, `dedupe`, `sort`, e o `normalize_municipio` com fuzzy — podem justificar checkpoint completo, porque recalculá-los a cada rolagem do grid é caro.
-- Limite de tamanho do cache e política de recolhimento: <<>>
+- Limite de tamanho do cache e política de recolhimento: **≤ 2 GB, recolhimento LRU**. Só checkpoints são recolhidos; `raw.parquet` e receita de um projeto existente nunca são.
 
 ### 8.5 Réplicas de leitura / replication lag
 
@@ -540,7 +552,14 @@ Não aplicável — não há banco em rede. O DuckDB opcional é embarcado e abr
 - **Consistência forte, trivialmente**: um processo, um usuário, um disco. Toda leitura reflete a receita gravada.
 - **Gravação atômica da receita**: escrever em arquivo temporário no mesmo diretório e renomear por cima. Um crash no meio deixa a receita antiga intacta, nunca um JSON truncado.
 - **Concorrência**: o único cenário real é o mesmo projeto aberto em duas abas do navegador. Tratado com concorrência otimista — `ETag` na leitura, `If-Match` na escrita, `409` se a receita mudou por baixo. Lock pessimista seria desproporcional.
-- **Duas instâncias do WolfzBR sobre o mesmo workspace**: <<>> (impedir com lockfile, ou permitir e confiar no `ETag`)
+- **Duas instâncias do WolfzBR sobre o mesmo workspace**: permitidas, com **lockfile por projeto** (não pelo workspace inteiro). A segunda instância que tentar abrir um projeto já aberto recebe erro claro; projetos diferentes podem ser editados em paralelo.
+  - **Arquivo**: `~/.wolfz/projects/<id>/.lock`, com lock de arquivo do sistema operacional via pacote `filelock` (funciona igual em Windows e Linux). O lock é do SO, não só a existência do arquivo: se o processo morrer ou travar, o SO libera sozinho e não sobra lock órfão para limpar à mão.
+  - **Quando é adquirido**: ao abrir o projeto na interface (`GET /projects/{id}`) ou ao criá-lo. É mantido enquanto o projeto estiver aberto e liberado ao fechar o projeto ou encerrar o processo.
+  - **Metadados para a mensagem**: ao lado do lock, `.lock.json` com `pid`, porta da instância e `opened_at`. Serve só para a mensagem de erro ("este projeto já está aberto em outra janela do WolfzBR, em http://127.0.0.1:PORTA"), nunca para decidir se o lock é válido.
+  - **Erro na API**: `423 Locked` no formato padrão (§5.4), separado do `409` do `ETag`, para a interface mostrar "aberto em outra instância" em vez de "receita desatualizada". O projeto aparece na listagem como "aberto em outra instância", sem permitir edição.
+  - **O que não precisa de lock**: `wolfz run` (não usa o workspace, §4.5), `wolfz inspect` e a listagem de projetos. Duas abas da mesma instância continuam tratadas pelo `ETag`, porque o lock é por processo.
+  - **Limpeza do cache** (§3.3, §8.4): o recolhimento LRU pula projetos com lock ativo.
+  - **Limitação**: workspace em pasta de rede ou sincronizada (OneDrive, Google Drive) pode não respeitar lock de arquivo. Não é suportado; o padrão `~/.wolfz/` fica no disco local.
 - **Transações**: exportação é build-then-swap — gera tudo em diretório temporário e move no fim, para nunca deixar uma pasta PBIP pela metade que o Power BI abriria com erro.
 - **Determinismo**: nenhuma operação depende de relógio, locale da máquina, ordem de dicionário ou aleatoriedade. Parsers BR usam regras fixas, não o locale do sistema. É pré-requisito para os testes de snapshot e para a promessa de reprodutibilidade.
 - **Exactly-once / at-least-once, sagas, ordenação de eventos**: não aplicável — não há mensagens nem serviços.
@@ -633,7 +652,7 @@ Não aplicável — um usuário, dono de todos os projetos. A fronteira de autor
 | Página web maliciosa chamando a API local | Token de sessão obrigatório + validação de `Host` + sem CORS |
 | Outro usuário da rede acessando a API | Bind exclusivo em loopback |
 | Injeção de código no M ou no Python exportado, via nome de coluna ou literal da receita | Geração por funções de escape dedicadas para identificadores e strings de cada linguagem — nunca concatenação direta; testes com nomes de coluna hostis (`"`, `#"`, quebras de linha) |
-| Injeção de fórmula em CSV/Excel exportado (célula iniciando com `=`, `+`, `-`, `@`) | <<>> (neutralizar por padrão, deixar opcional, ou não tratar — neutralizar altera o dado) |
+| Injeção de fórmula em CSV/Excel exportado (célula iniciando com `=`, `+`, `-`, `@`) | Neutralização disponível como **opção desligada por padrão** (neutralizar altera o dado). A interface avisa quando houver células começando com `=`, `+`, `-` ou `@`. |
 | Zip bomb / arquivo gigante | Limite de tamanho compactado e descompactado |
 | Consumo irrestrito de recurso | Limite de `limit` no preview; um preview por projeto por vez |
 | Dependência comprometida (supply chain) | Versões fixadas em lockfile para o build de release; `pip-audit` no CI |
@@ -688,8 +707,8 @@ Não implementado — um processo único. O `step_id` no log dá a rastreabilida
 
 Metas de engenharia, não compromisso operacional:
 
-- SLI: latência do preview após edição de passo. SLO: <<>> (o valor de §2.2)
-- SLI: taxa de detecção correta sem ajuste manual no corpus. SLO: <<>>
+- SLI: latência do preview após edição de passo. SLO: p50 ≤ 300 ms, p95 ≤ 1 s (§2.2).
+- SLI: taxa de detecção correta sem ajuste manual no corpus. SLO: ≥ 80% do corpus na 1.0.
 - Critério de pronto do MVP: 10 planilhas inéditas do corpus chegando a tabela limpa em menos de 3 minutos cada, sem escrever código.
 
 ### 12.5 Alertas
@@ -708,7 +727,7 @@ Nenhum operacional. Um relatório de métricas do corpus gerado a cada release, 
 
 GitHub Actions: lint e formatação (`ruff`), testes (`pytest`), lint de imports (núcleo não importa API), build da SPA e do pacote.
 
-- Matriz de sistemas operacionais e versões de Python testadas: <<>>
+- Matriz de sistemas operacionais e versões de Python testadas: `ubuntu-latest` e `windows-latest` × Python `3.12` e `3.13`.
 - Publicação no PyPI: por tag de versão, com trusted publishing (sem token guardado em segredo).
 
 ### 13.2 Estratégia de release
@@ -716,7 +735,7 @@ GitHub Actions: lint e formatação (`ruff`), testes (`pytest`), lint de imports
 - Canal: PyPI (`pipx install wolfzbr`). Versionamento SemVer; mudança incompatível no formato da receita é major.
 - Rollback: o usuário instala a versão anterior (`pipx install wolfzbr==X.Y.Z`); uma release ruim é retirada com yank no PyPI.
 - Sem blue-green nem canary — não há servidor. O risco de release é contido pelo corpus de regressão antes de publicar.
-- Cadência de release e critério para sair de `0.x`: <<>>
+- Cadência de release e critério para sair de `0.x`: uma versão `0.x` por marco do roadmap (§16.3). Sai de `0.x` quando todos os critérios de aceite da v1.0 forem cumpridos.
 
 ### 13.3 Migrations
 
@@ -731,12 +750,12 @@ Sem infraestrutura de flags. Funcionalidades opcionais entram como *extras* de i
 - **Unit**: cada operação, cada parser e validador BR.
 - **Property-based** (hypothesis): ida e volta dos parsers BR — `parse_brl(format_brl(x)) == x`; CPF/CNPJ válidos, inválidos e alfanuméricos.
 - **Equivalência de exportação**: para cada operação, executar no Polars e no script Python exportado e comparar os resultados. É a condição de entrada no catálogo.
-- **Power Query M**: validação de sintaxe automatizada. Execução real e comparação com o Polars: <<>> (teste manual a cada release, ou CI Windows com Power BI Desktop)
+- **Power Query M**: validação de sintaxe automatizada. Execução real e comparação com o Polars: **checklist manual no Power BI Desktop a cada release**, a partir da 0.5 (CI Windows com Power BI Desktop não é viável).
 - **Corpus / snapshot**: planilhas reais de dados abertos, cada uma com receita esperada e saída esperada em Parquet.
 - **Detecção**: métricas por arquivo do corpus, acompanhadas a cada release.
 - **Integração**: endpoints via `TestClient`, incluindo os casos de segurança (sem token, `Host` forjado).
 - **Carga**: arquivos sintéticos grandes para validar os números de §3 e os limites de §2.2.
-- **E2E de interface**: <<>> (ter ou não Playwright no MVP)
+- **E2E de interface**: Playwright com 3 a 5 fluxos principais, a partir da 0.4.
 
 ### 13.6 Runbook — 3 incidentes mais prováveis
 
@@ -754,8 +773,8 @@ Sem infraestrutura de flags. Funcionalidades opcionais entram como *extras* de i
 | GitHub (repositório + Actions) | R$ 0 | Repositório público; runners Windows consomem minutos mais rápido, mas são gratuitos em repositório público |
 | PyPI | R$ 0 | Gratuito |
 | Dados do IBGE embutidos | R$ 0 | Públicos; fonte citada em `NOTICE` |
-| Domínio e site de documentação (fase 4) | <<>> | Depende de usar domínio próprio ou GitHub Pages |
-| Certificado de assinatura de código para o executável Windows (fase 4) | <<>> | Sem assinatura, o SmartScreen alerta o usuário ao abrir o `.exe` |
+| Domínio e site de documentação (fase 4) | pós-1.0 | Depende de usar domínio próprio ou GitHub Pages |
+| Certificado de assinatura de código para o executável Windows (fase 4) | pós-1.0 | Sem assinatura, o SmartScreen alerta o usuário ao abrir o `.exe` |
 | **Total nas fases 0–3** | **R$ 0** | |
 
 O custo dominante do projeto não é dinheiro, é **tempo de manutenção**: cada operação nova precisa de três implementações e de testes de equivalência. É o preço deliberado da proposta de valor (ADR-2).
@@ -848,35 +867,28 @@ Riscos secundários: empacotamento pesado por causa de Polars e Hyper API (mitig
 
 *(time = você mesmo. Cada item corresponde a um `<<>>` no documento.)*
 
-**Metas e limites**
-- Tamanho máximo de arquivo e número de linhas com experiência fluida (§2.2).
-- Latência alvo do preview e tempo alvo de importação + detecção (§2.2, §12.4).
-- RAM mínima da máquina-alvo e orçamento de memória do processo (§2.2, §3.5).
-- Meta de taxa de detecção correta no corpus (§12.4).
-
-**Plataforma e stack**
-- Sistemas operacionais suportados e matriz de CI (§2.2, §13.1).
+**Em aberto** (valor provisório entre `<<>>`, a confirmar)
 - Frontend: Svelte ou React (§7).
 - Grid: Glide Data Grid ou AG Grid Community (§7).
-- Formato do ID de projeto (§4.3).
-
-**Comportamento do produto**
-- Filtro e ordenação apenas de visualização no grid, fora da receita (§5.6).
-- Exportar sobre um diretório que já tem arquivos: sobrescrever, falhar ou criar subpasta (§5.8).
-- `wolfz run` em lote sobre vários arquivos — se entra e em qual fase (§5.11).
 - Salvamento da receita automático ou manual (§10.7).
-- Duas instâncias sobre o mesmo workspace: bloquear ou permitir (§9).
-- Neutralizar injeção de fórmula em CSV/Excel exportado, sabendo que isso altera o dado (§11.5).
 - Transporte do token de sessão: header ou cookie (§11.1).
 
-**Manutenção e operação**
-- Política de limpeza do workspace e limite do cache de checkpoints (§3.3, §8.4).
-- Por quantas versões uma receita antiga continua abrindo (§5.7).
-- Como validar a execução real do M: manual a cada release ou CI Windows (§13.5).
-- Testes E2E de interface no MVP (§13.5).
-- Cadência de release e critério para sair de `0.x` (§13.2).
-
-**Custos e licença**
-- Domínio próprio para o site ou GitHub Pages (§14).
-- Pagar certificado de assinatura de código para o executável Windows (§14).
-- Licença: o overview deixa em aberto entre Apache-2.0 e MIT, e o repositório já tem um arquivo `LICENSE` — confirmar que ele reflete a escolha final.
+**Resolvidas**
+- ~~Tamanho máximo de arquivo e linhas com experiência fluida~~: 100 MB; 500 mil linhas (§2.2).
+- ~~Latência alvo do preview e tempo de importação + detecção~~: p50 ≤ 300 ms, p95 ≤ 1 s; ≤ 1 min (§2.2, §12.4).
+- ~~RAM mínima e orçamento de memória~~: 8 GB; ≤ 2 GB para um arquivo de 100 MB (§2.2, §3.5).
+- ~~Meta de detecção correta no corpus~~: ≥ 80% sem ajuste na 1.0 (§12.4).
+- ~~Sistemas operacionais e matriz de CI~~: Linux e Windows; `ubuntu-latest` e `windows-latest` × Python 3.12 e 3.13 (§2.2, §13.1).
+- ~~Formato do ID de projeto~~: ULID (§4.3).
+- ~~Filtro/ordenação só de visualização~~: fora do MVP (§5.6).
+- ~~Export sobre diretório existente~~: falha por padrão; `--overwrite` ou confirmação (§5.8).
+- ~~`wolfz run` em lote~~: Fase 2 (§5.11).
+- ~~Duas instâncias sobre o mesmo workspace~~: lockfile por projeto (§9).
+- ~~Injeção de fórmula em CSV/Excel~~: opção desligada por padrão, com aviso na interface (§11.5).
+- ~~Limpeza do workspace e limite do cache~~: cache ≤ 2 GB com LRU; projeto antigo nunca é apagado automaticamente (§3.3, §8.4).
+- ~~Compatibilidade de receitas antigas~~: `1.x` abre em qualquer `1.y`; `0.x` migra até a 1.0 (§5.7).
+- ~~Validação real do M~~: checklist manual no Power BI Desktop a cada release, a partir da 0.5 (§13.5).
+- ~~E2E de interface~~: Playwright com 3 a 5 fluxos, a partir da 0.4 (§13.5).
+- ~~Cadência de release e saída do `0.x`~~: uma `0.x` por marco do roadmap; sai com os critérios de aceite da v1.0 (§13.2).
+- ~~Domínio e certificado de assinatura de código~~: pós-1.0, Fase 4 (§14).
+- ~~Licença~~: **MIT**, conforme o arquivo `LICENSE` do repositório.
