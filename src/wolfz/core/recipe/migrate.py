@@ -1,0 +1,62 @@
+"""Migração de receitas de ``wolfz_version`` antiga para a atual.
+
+Roda ao carregar, em memória; o arquivo só é regravado quando o usuário
+salva (§13.3 do design). Política (§5.7): receitas ``0.x`` são migradas até
+a 1.0; depois disso toda receita ``1.x`` abre em qualquer versão ``1.y``.
+Receita de versão mais nova que o WolfzBR instalado é recusada, nunca
+interpretada pela metade.
+
+Para mudar o formato: suba ``CURRENT_VERSION`` e registre em ``MIGRATIONS``
+uma função que leva o dicionário da versão anterior para a seguinte.
+"""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Callable
+from typing import Any
+
+CURRENT_VERSION = "0.1"
+
+RecipeDict = dict[str, Any]
+
+# versão de origem -> (versão de destino, função). Vazio enquanto o formato
+# não mudar.
+MIGRATIONS: dict[str, tuple[str, Callable[[RecipeDict], RecipeDict]]] = {}
+
+
+class RecipeVersionError(ValueError):
+    """Versão da receita ausente, inválida ou sem caminho de migração."""
+
+
+def parse_version(version: object) -> tuple[int, int]:
+    """'0.1' -> (0, 1). Só major.minor: a receita não tem versão de patch."""
+    if not isinstance(version, str) or not (m := re.fullmatch(r"(\d+)\.(\d+)", version)):
+        raise RecipeVersionError(f"wolfz_version inválida: {version!r} (esperado algo como '0.1')")
+    return int(m[1]), int(m[2])
+
+
+def migrate(data: RecipeDict, target: str = CURRENT_VERSION) -> RecipeDict:
+    """Leva a receita até ``target`` aplicando as migrações em sequência.
+
+    Devolve um dicionário novo; o original não é alterado."""
+    if "wolfz_version" not in data:
+        raise RecipeVersionError("receita sem o campo 'wolfz_version'")
+    version = data["wolfz_version"]
+    if parse_version(version) > parse_version(target):
+        raise RecipeVersionError(
+            f"receita feita com uma versão mais nova do WolfzBR (formato {version}); "
+            f"este WolfzBR lê até o formato {target}. Atualize com: pipx upgrade wolfzbr"
+        )
+    data = dict(data)
+    while data["wolfz_version"] != target:
+        step = MIGRATIONS.get(data["wolfz_version"])
+        if step is None:
+            raise RecipeVersionError(
+                f"não há migração do formato {data['wolfz_version']} para {target}; "
+                "a receita é antiga demais para esta versão do WolfzBR"
+            )
+        next_version, fn = step
+        data = fn(data)
+        data["wolfz_version"] = next_version
+    return data
