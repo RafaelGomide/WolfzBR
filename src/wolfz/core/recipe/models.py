@@ -11,9 +11,10 @@ from __future__ import annotations
 
 import re
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from datetime import datetime
 from functools import cache
-from typing import Annotated, Any, Literal, Union, get_args, get_origin
+from typing import Annotated, Any, ClassVar, Literal, Union, get_args, get_origin
 
 import polars as pl
 from pydantic import (
@@ -42,6 +43,17 @@ class Op(_Model, ABC):
     Cada subclasse declara ``op: Literal["nome"]``, os próprios parâmetros e
     as três traduções. Registre com ``@register_op``."""
 
+    # Funções de wolfz.br que o script Python exportado precisa embutir. As
+    # dependências (outras funções e constantes) são resolvidas sozinhas.
+    python_helpers: ClassVar[tuple[Callable[..., Any], ...]] = ()
+    # Funções M auxiliares, declaradas uma vez no início da consulta: nome -> definição.
+    m_helpers: ClassVar[dict[str, str]] = {}
+    # Exemplos para o teste de equivalência e para a documentação. Cada um é
+    # {"step": parâmetros do passo, "input": colunas de entrada} e, opcional,
+    # "expected": colunas esperadas na saída. Toda operação do catálogo
+    # precisa de pelo menos um.
+    examples: ClassVar[tuple[dict[str, Any], ...]] = ()
+
     id: str = Field(pattern=STEP_ID_PATTERN, description="Identificador do passo: s1, s2, …")
     op: str
 
@@ -51,11 +63,13 @@ class Op(_Model, ABC):
 
     @abstractmethod
     def to_m(self, prev: str, name: str) -> str:
-        """Linha de Power Query M que cria ``name`` a partir do passo ``prev``."""
+        """Passo de Power Query M no formato ``name = expressão``, a partir
+        do passo ``prev``."""
 
     @abstractmethod
     def to_python(self) -> str:
-        """Trecho de script Python (Polars) equivalente ao passo."""
+        """Linhas de script Python (Polars) equivalentes ao passo, operando
+        sobre a variável ``lf`` (um ``LazyFrame``)."""
 
 
 class SourceMatch(_Model):

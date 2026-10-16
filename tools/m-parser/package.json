@@ -1,0 +1,9 @@
+{
+  "name": "wolfz-m-parser",
+  "private": true,
+  "description": "Valida a sintaxe do Power Query M gerado pelo WolfzBR (F0.F5).",
+  "type": "module",
+  "dependencies": {
+    "@microsoft/powerquery-parser": "2.0.0"
+  }
+}
