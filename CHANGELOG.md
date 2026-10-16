@@ -6,6 +6,10 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 
 ## [Não publicado]
 
+## [0.1.0] - 2026-10-16
+
+Primeira versão: receita, três operações e `wolfz run`. Ainda não publicada no PyPI.
+
 ### Adicionado
 
 - Pacote `wolfzbr` (`src/wolfz/`) com parsers e validadores brasileiros: moeda, percentual, datas, CPF, CNPJ (inclusive alfanumérico), CEP, telefone, UF, município e código IBGE.
@@ -16,9 +20,11 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 - `wolfz.run(receita, arquivo)` para uso em notebook.
 - CLI `wolfz run RECEITA ARQUIVO -o SAIDA` com saída CSV ou Parquet e códigos de saída documentados.
 - CI no GitHub Actions (Linux e Windows, Python 3.12 e 3.13), ruff, pre-commit e import-linter.
+- Receita e CSV de exemplo (`exemplo.wolfz.json`, `tests/corpus/minimo.csv`).
 
 ### Corrigido
 
 - `clean_cnpj` descartava CNPJ alfanumérico válido que parecia notação científica (ex.: `00.000.000/000E-20`).
 
-[Não publicado]: https://github.com/RafaelGomide/WolfzBR/commits/main
+[Não publicado]: https://github.com/RafaelGomide/WolfzBR/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/RafaelGomide/WolfzBR/releases/tag/v0.1.0

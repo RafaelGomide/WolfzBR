@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import polars as pl
 import pytest
@@ -177,3 +178,15 @@ def test_schema():
     result = runner.invoke(app, ["schema"])
     assert result.exit_code == 0
     assert json.loads(result.output)["title"] == "Recipe"
+
+
+def test_exemplo_de_ponta_a_ponta(tmp_path):
+    """Critério de pronto da Fase 0: o exemplo do repositório roda pela CLI."""
+    raiz = Path(__file__).resolve().parents[1]
+    result = _run(raiz / "exemplo.wolfz.json", raiz / "tests" / "corpus" / "minimo.csv", "-o", f"{tmp_path}/")
+    assert result.exit_code == 0, result.output
+    assert pl.read_csv(tmp_path / "minimo.csv").to_dict(as_series=False) == {
+        "regiao": ["Sul", "Sudeste", "Norte", "Centro-Oeste"],
+        "valor": [1234.56, -10.0, 0.0, None],
+        "obs": [None, "estorno", "sem venda no mês", "dado não informado"],
+    }
