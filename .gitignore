@@ -29,7 +29,8 @@ htmlcov/
 # Frontend
 node_modules/
 frontend/dist/
-src/wolfz/static/
+src/wolfz/static/*
+!src/wolfz/static/.gitkeep
 
 # Workspace local e saídas do WolfzBR
 .wolfz/
