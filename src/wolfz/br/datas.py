@@ -28,9 +28,7 @@ def excel_serial_to_date(serial: float | int | str) -> date | None:
 
 _DATE_ISO = re.compile(r"(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})")
 _DATE_DMY = re.compile(r"(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4}|\d{2})")
-_DATE_TEXT = re.compile(
-    r"(\d{1,2})(?:\s+de\s+|[\s/\-.])([a-z]{3,9})\.?(?:\s+de\s+|[\s/\-.])(\d{4}|\d{2})"
-)
+_DATE_TEXT = re.compile(r"(\d{1,2})(?:\s+de\s+|[\s/\-.])([a-z]{3,9})\.?(?:\s+de\s+|[\s/\-.])(\d{4}|\d{2})")
 _TIME_SUFFIX = re.compile(r"[ T]\d{1,2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$")
 
 
@@ -104,9 +102,9 @@ def parse_date_br(
         if eight_digits == "dmy":
             return dmy
         return ymd or dmy
-    if accept_excel_serial and re.fullmatch(r"\d{5}([.,]\d+)?", k):
-        if 20_000 <= float(k.replace(",", ".")) <= 80_000:
-            return excel_serial_to_date(k)
+    is_serial = accept_excel_serial and re.fullmatch(r"\d{5}([.,]\d+)?", k)
+    if is_serial and 20_000 <= float(k.replace(",", ".")) <= 80_000:
+        return excel_serial_to_date(k)
     return None
 
 

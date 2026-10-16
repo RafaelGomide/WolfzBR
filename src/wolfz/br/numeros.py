@@ -12,7 +12,7 @@ import re
 from wolfz.core.text import is_null_token, normalize_key, normalize_spaces
 
 _CURRENCY = re.compile(r"R\$|US\$|U\$|€|\$|\bBRL\b|\bUSD\b|\bEUR\b", re.I)
-_DASHES = {"-", "–", "—"}
+_DASHES = {"-", "\u2013", "\u2014"}  # hífen, meia-risca, travessão
 
 
 def _normalize_separators(s: str, decimal: str) -> str | None:
@@ -113,6 +113,18 @@ def parse_brl(value: object, debit_negative: bool = False) -> float | None:
     Igual a ``parse_number_br`` com decimal=',' e '-' valendo zero, que é
     como o formato contábil do Excel exibe zero."""
     return parse_number_br(value, decimal=",", dash_is_zero=True, debit_negative=debit_negative)
+
+
+def format_brl(value: float | None, symbol: bool = True) -> str | None:
+    """Inverso de ``parse_brl``: 1234.56 -> 'R$ 1.234,56'; -5 -> '-R$ 5,00'.
+
+    Arredonda para centavos. Valor que arredonda para zero sai sem sinal,
+    para não exibir '-R$ 0,00'."""
+    if value is None:
+        return None
+    text = f"{abs(value):,.2f}".translate(str.maketrans(",.", ".,"))
+    sign = "-" if value < 0 and text != "0,00" else ""
+    return f"{sign}R$ {text}" if symbol else f"{sign}{text}"
 
 
 def parse_percent_br(value: object, bare: str = "fraction") -> float | None:

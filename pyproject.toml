@@ -61,6 +61,7 @@ dev = [
     "ruff>=0.5",
     "import-linter>=2.0",
     "pytest-cov>=5.0",
+    "pre-commit>=3.7",
 ]
 
 [project.urls]
@@ -77,3 +78,42 @@ packages = ["src/wolfz"]
 
 [tool.hatch.build.targets.sdist]
 include = ["src/wolfz", "README.md", "LICENSE"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+src = ["src", "tests"]
+# Não formatar blocos de código dentro da documentação.
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+# Docstrings e comentários em português usam travessão e meia-risca de propósito.
+ignore = ["RUF002", "RUF003"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["wolfz"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.importlinter]
+root_package = "wolfz"
+
+[[tool.importlinter.contracts]]
+name = "Núcleo não importa API nem CLI (§6.3 do design)"
+type = "forbidden"
+source_modules = ["wolfz.core", "wolfz.ops", "wolfz.br", "wolfz.export"]
+forbidden_modules = ["wolfz.api", "wolfz.cli"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-markers", "--cov", "--cov-report=term-missing"]
+
+[tool.coverage.run]
+source = ["wolfz"]
+branch = true
+
+[tool.coverage.report]
+skip_empty = true
+show_missing = true

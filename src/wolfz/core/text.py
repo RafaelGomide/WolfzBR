@@ -12,8 +12,8 @@ import unicodedata
 
 from wolfz.br.constants import NULL_TOKENS
 
-_ZERO_WIDTH = dict.fromkeys(map(ord, "​‌‍⁠﻿­"))
-_ESPACOS_ESPECIAIS = re.compile(r"[    　\t\r\n]+")
+_ZERO_WIDTH = dict.fromkeys(map(ord, "\u200b\u200c\u200d\u2060\ufeff\u00ad"))
+_ESPACOS_ESPECIAIS = re.compile("[\u00a0\u2007\u202f\u2009\u3000\t\r\n]+")
 
 
 def remove_accents(text: str) -> str:

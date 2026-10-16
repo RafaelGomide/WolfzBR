@@ -17,8 +17,8 @@ def normalize_uf(value: object) -> str | None:
 
 
 _MUN_UF = (
-    re.compile(r"(.+?)\s*\(([A-Za-z]{2})\)"),      # Alta Floresta D'Oeste (RO)  [SIDRA]
-    re.compile(r"(.+?)\s*[-–/]\s*([A-Za-z]{2})"),  # Vitória - ES / Vitória/ES
+    re.compile(r"(.+?)\s*\(([A-Za-z]{2})\)"),  # Alta Floresta D'Oeste (RO)  [SIDRA]
+    re.compile(r"(.+?)\s*[-\u2013/]\s*([A-Za-z]{2})"),  # Vitória - ES / Vitória/ES
 )
 
 

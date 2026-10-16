@@ -19,8 +19,12 @@ from wolfz.core.naming import dedupe_names, to_snake_case
 from wolfz.core.text import is_null_token, normalize_spaces
 
 _DTYPES: dict[Callable, pl.DataType] = {
-    parse_number_br: pl.Float64, parse_brl: pl.Float64, parse_percent_br: pl.Float64,
-    parse_date_br: pl.Date, parse_month_year: pl.Date, parse_bool_br: pl.Boolean,
+    parse_number_br: pl.Float64,
+    parse_brl: pl.Float64,
+    parse_percent_br: pl.Float64,
+    parse_date_br: pl.Date,
+    parse_month_year: pl.Date,
+    parse_bool_br: pl.Boolean,
 }
 
 
@@ -61,7 +65,7 @@ def clean_column_names(df: pl.DataFrame) -> pl.DataFrame:
     'Valor de Venda' -> 'valor_de_venda'; '\\ufeffRegiao - Sigla' ->
     'regiao_sigla'; duas colunas 'Valor' -> 'valor', 'valor_2'."""
     names = dedupe_names([to_snake_case(c) for c in df.columns])
-    return df.rename(dict(zip(df.columns, names)))
+    return df.rename(dict(zip(df.columns, names, strict=True)))
 
 
 def normalize_text_columns(
@@ -78,14 +82,15 @@ def normalize_text_columns(
     df = df.with_columns(
         pl.col(c)
         .str.normalize("NFC")
-        .str.replace_all("[​‌‍⁠﻿­]", "")
-        .str.replace_all(r"[\s    　]+", " ")
+        .str.replace_all("[\u200b\u200c\u200d\u2060\ufeff\u00ad]", "")
+        .str.replace_all("[\\s\u00a0\u2007\u202f\u2009\u3000]+", " ")
         .str.strip_chars()
         for c in columns
     )
     exprs = []
     for c in columns:
-        tokens = [v for v in df.get_column(c).drop_nulls().unique().to_list() if is_null_token(v, extra_nulls)]
+        uniques = df.get_column(c).drop_nulls().unique().to_list()
+        tokens = [v for v in uniques if is_null_token(v, extra_nulls)]
         if tokens:
             exprs.append(pl.when(pl.col(c).is_in(tokens)).then(None).otherwise(pl.col(c)).alias(c))
     return df.with_columns(exprs) if exprs else df
@@ -181,4 +186,4 @@ def promote_header(df: pl.DataFrame, n_rows: int = 1, sep: str = "_") -> pl.Data
                 parts.append(p)
         names.append(sep.join(parts) or f"coluna_{j + 1}")
     names = dedupe_names(names)
-    return df.slice(n_rows).rename(dict(zip(df.columns, names)))
+    return df.slice(n_rows).rename(dict(zip(df.columns, names, strict=True)))

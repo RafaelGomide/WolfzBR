@@ -32,12 +32,14 @@ def quick_profile(df: pl.DataFrame, top: int = 3) -> pl.DataFrame:
         values = s.to_list()
         non_null = [v for v in values if v is not None]
         shapes = Counter(value_shape(v) for v in non_null)
-        rows.append({
-            "coluna": name,
-            "nulos": s.null_count(),
-            "vazios_ou_marcadores": sum(is_null_token(v) for v in non_null),
-            "distintos": s.n_unique(),
-            "formas": " | ".join(f"{k} ({c})" for k, c in shapes.most_common(top)),
-            "exemplos": " | ".join(str(v)[:30] for v in list(dict.fromkeys(non_null))[:top]),
-        })
+        rows.append(
+            {
+                "coluna": name,
+                "nulos": s.null_count(),
+                "vazios_ou_marcadores": sum(is_null_token(v) for v in non_null),
+                "distintos": s.n_unique(),
+                "formas": " | ".join(f"{k} ({c})" for k, c in shapes.most_common(top)),
+                "exemplos": " | ".join(str(v)[:30] for v in list(dict.fromkeys(non_null))[:top]),
+            }
+        )
     return pl.DataFrame(rows)

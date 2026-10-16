@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+# fmt: off
 UFS: dict[str, str] = {
     "AC": "Acre", "AL": "Alagoas", "AP": "Amapá", "AM": "Amazonas",
     "BA": "Bahia", "CE": "Ceará", "DF": "Distrito Federal",
@@ -41,3 +42,4 @@ NULL_TOKENS: frozenset[str] = frozenset({
     "nao identificado", "nao disponivel", "(vazio)", "(em branco)", "(blank)",
     "00/00/0000", "0000-00-00", "00000000",
 })
+# fmt: on

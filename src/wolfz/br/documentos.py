@@ -10,10 +10,13 @@ from wolfz.core.text import is_null_token, normalize_key, normalize_spaces, only
 def _strip_float_suffix(s: str) -> str | None:
     """'12345678909.0' -> '12345678909'. Ferramentas que leem a coluna como
     número devolvem o documento com '.0'. Notação científica ('1,23457E+13')
-    é irrecuperável: o Excel já descartou os dígitos finais."""
+    é irrecuperável: o Excel já descartou os dígitos finais.
+
+    Só o valor inteiro no formato do Excel (um dígito antes da vírgula) conta
+    como notação científica: '00000000000E20' é um CNPJ alfanumérico válido."""
     if re.fullmatch(r"\d+\.0+", s):
         return s.split(".")[0]
-    if re.search(r"\d[eE][+-]?\d", s):
+    if re.fullmatch(r"\d([.,]\d+)?[eE][+-]?\d+", s):
         return None
     return s
 
@@ -77,7 +80,7 @@ def _cnpj_check_digits(base12: str) -> str:
     weights = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
     digits = base12
     for w in (weights, [6, *weights]):
-        total = sum((ord(c) - 48) * p for c, p in zip(digits, w))
+        total = sum((ord(c) - 48) * p for c, p in zip(digits, w, strict=False))
         rest = total % 11
         digits += "0" if rest < 2 else str(11 - rest)
     return digits[12:]
@@ -169,15 +172,19 @@ def clean_cep(value: object) -> str | None:
     return d if len(d) == 8 and d != "00000000" else None
 
 
+# fmt: off
 _DDDS = {
     11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 24, 27, 28, 31, 32, 33, 34,
     35, 37, 38, 41, 42, 43, 44, 45, 46, 47, 48, 49, 51, 53, 54, 55, 61, 62,
     63, 64, 65, 66, 67, 68, 69, 71, 73, 74, 75, 77, 79, 81, 82, 83, 84, 85,
     86, 87, 88, 89, 91, 92, 93, 94, 95, 96, 97, 98, 99,
 }
+# fmt: on
 
 
-def clean_phone(value: object, default_ddd: str | int | None = None, add_ninth_digit: bool = True) -> str | None:
+def clean_phone(
+    value: object, default_ddd: str | int | None = None, add_ninth_digit: bool = True
+) -> str | None:
     """Telefone para E.164: '(27) 99999-9999' -> '+5527999999999'.
 
     Trata '+55', zero de longa distância ('027...'), código de operadora

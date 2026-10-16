@@ -44,7 +44,8 @@ def infer_br_type(values: Iterable[object], sample: int = 2000, min_rate: float 
     for name, test in _DETECTORS:
         rate = sum(test(v) for v in vals) / len(vals)
         if rate >= min_rate:
-            if name == "codigo" or (name == "numero" and any(v.startswith("0") and v[1:2].isdigit() for v in vals)):
+            leading_zero = any(v.startswith("0") and v[1:2].isdigit() for v in vals)
+            if name == "codigo" or (name == "numero" and leading_zero):
                 return "codigo", rate
             return name, rate
     return "texto", 1.0
