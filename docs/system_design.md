@@ -36,12 +36,12 @@ Os três trade-offs principais: (1) **expressividade sacrificada por equivalênc
 | Métrica | Valor |
 |---|---|
 | Usuários simultâneos | 1 (aplicação single-user, local) |
-| Tamanho máximo de arquivo suportado | <<>> |
-| Número máximo de linhas com experiência fluida | <<>> |
-| Latência alvo do preview após editar um passo (p50) | <<>> |
-| Tempo alvo de importação + detecção (arquivo típico) | <<>> |
-| RAM mínima da máquina-alvo | <<>> |
-| Sistemas operacionais suportados | <<>> |
+| Tamanho máximo de arquivo suportado | <<100mb>> |
+| Número máximo de linhas com experiência fluida | <<1000>> |
+| Latência alvo do preview após editar um passo (p50) | <<0.5ms no minimo>> |
+| Tempo alvo de importação + detecção (arquivo típico) | <<1 min max dependendo do tamanho do arquivo>> |
+| RAM mínima da máquina-alvo | <<8gb>> |
+| Sistemas operacionais suportados | <<linux, windows>> |
 | Versão mínima do Python | 3.12 |
 | Disponibilidade | não aplicável — o processo existe enquanto o usuário o mantém aberto |
 | Consistência | forte, trivialmente — um único processo, um único usuário (ver §9) |
@@ -483,8 +483,8 @@ Request-response síncrono do ponto de vista do cliente. Internamente, os handle
 | Modelo da receita | Pydantic v2 | dataclasses + jsonschema | União discriminada por `op`, JSON Schema gerado para a interface montar formulários | Acopla o formato da receita ao Pydantic |
 | API | FastAPI + Uvicorn | Flask, Litestar | OpenAPI automático, integração nativa com Pydantic | Nenhum relevante nesta escala |
 | CLI | Typer | Click, argparse | Mesma base de type hints do resto do código | Dependência a mais |
-| Frontend | <<>> (Svelte ou React, + Vite) | — | <<>> | <<>> |
-| Grid | <<>> (Glide Data Grid ou AG Grid Community) | — | <<>> | <<>> |
+| Frontend | <<react>> | html + css | <<mais possibilidades>> |  |
+| Grid | <<Glide Data Grid>> (Glide Data Grid ou AG Grid Community) | — | <<High Performance>> | << sacrifica a flexibilidade e a capacidade de composição que os desenvolvedores web costumam esperar do DOM tradicional>> |
 | Fuzzy match | `rapidfuzz` | `thefuzz`, Levenshtein próprio | Rápido, licença permissiva | Não existe em M — exige a estratégia de de-para (ADR-7) |
 | SQL ad hoc | DuckDB (opcional) | nenhum | Consultar o Parquet de cache sem código | Mais uma dependência pesada; por isso opcional |
 | Tableau | `tableauhyperapi` (extra opcional) | `pantab` | API oficial, tipos corretos | Binário grande e licença proprietária; fica em `wolfzbr[tableau]` |
@@ -589,7 +589,7 @@ Não aplicável — sem fila.
 ### 10.7 Backup, restore, RPO/RTO reais
 
 - **Backup**: o arquivo original nunca é modificado e a receita é um JSON de chaves ordenadas feito para o Git. Com os dois, tudo é reconstruível.
-- **RPO**: a última gravação da receita. Com salvamento automático a cada alteração, é efetivamente zero. Salvamento automático ou manual: <<>>
+- **RPO**: a última gravação da receita. Com salvamento automático a cada alteração, é efetivamente zero. Salvamento automático ou manual: <<automatico>>
 - **RTO**: o tempo de reimportar o arquivo e reexecutar a receita — segundos a minutos.
 - Apagar `~/.wolfz/` inteiro não perde nada que o usuário não possa refazer, desde que a receita tenha sido salva fora do workspace ou versionada.
 
@@ -607,7 +607,7 @@ O modelo de ameaça não é um atacante na internet: é **outro software na mesm
 
 - O servidor escuta **apenas em `127.0.0.1`**, nunca em `0.0.0.0`, em porta livre aleatória.
 - Um **token de sessão** aleatório é gerado a cada start e entregue à SPA na URL que o `wolfz ui` abre. Toda chamada a `/api` exige o token.
-- Onde o token é transportado nas chamadas: <<>> (opções: header `Authorization`, ou cookie `HttpOnly` + `SameSite=Strict`)
+- Onde o token é transportado nas chamadas: <<header `Authorization`>> (opções: header `Authorization`, ou cookie `HttpOnly` + `SameSite=Strict`)
 
 ### 11.2 Token
 
