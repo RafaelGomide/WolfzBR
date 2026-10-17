@@ -482,6 +482,7 @@ class Unpivot(Op):
     valores nulos, como o ``Table.UnpivotOtherColumns`` do Power Query."""
 
     op: Literal["unpivot"]
+    full_checkpoint = True  # junta a tabela inteira e reordena
     index: list[str] = Field(min_length=1)
     variable_name: str = Field(default="variavel", min_length=1)
     value_name: str = Field(default="valor", min_length=1)

@@ -305,6 +305,7 @@ class Dedupe(Op):
     só essas colunas; sem, a linha inteira."""
 
     op: Literal["dedupe"]
+    full_checkpoint = True  # compara a tabela inteira
     cols: list[str] | None = None
 
     examples = (
@@ -367,6 +368,7 @@ class Sort(Op):
     ordem crescente e no fim da decrescente. Empate mantém a ordem original."""
 
     op: Literal["sort"]
+    full_checkpoint = True  # reordena a tabela inteira
     by: list[str] = Field(min_length=1)
     descending: bool | list[bool] = False
 

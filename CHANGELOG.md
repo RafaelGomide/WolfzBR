@@ -21,6 +21,11 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 - `wolfz.run` e `wolfz run` leem `.xlsx`, `.xls` e `.ods` (a aba da receita, ou a primeira que casa com `sheet_name_regex`). Planilha vem como grade (colunas `A`, `B`, …); CSV vem com cabeçalho, ou como grade quando a receita começa por `select_range` ou `header_rows`.
 - As receitas esperadas do corpus rodam de ponta a ponta e são comparadas com o gabarito (72 hoje); a receita inicial proposta pela detecção roda em todos os arquivos do corpus.
 
+- Preview paginado com cache (`wolfz.core.engine.preview`): devolve a página `offset..offset+limit` da tabela depois de qualquer passo, materializando só essa página. Checkpoints por passo em `<projeto>/checkpoints/`, endereçados por uma chave encadeada (hash do raw + passos até ali, sem o `id`): editar o passo N invalida de N em diante sem lógica de invalidação.
+- Checkpoint completo para passos caros de recalcular (`unpivot`, `dedupe`, `sort` e os que rodam função Python por valor, como `parse_date_br`); os passos seguintes partem dele.
+- Limpeza do cache em LRU até 2 GB no workspace inteiro, pulando projetos abertos (lock ativo) e o projeto em edição; `raw.parquet` e receita nunca são recolhidos.
+- `scripts/benchmark_preview.py`: 500 mil linhas, receita de 8 passos, edição do último passo. Medido nesta versão: p50 16 ms e p95 26 ms com cache (SLO: p50 ≤ 300 ms, p95 ≤ 1 s); sem cache, p50 de 12,4 s. A abertura, que grava os checkpoints, leva cerca de 6 s.
+
 ### Alterado
 
 - `parse_date_br` lê DDMMAAAA sem o zero do dia (`'1032021'` → 01/03/2021), que é como a data fica depois de passar pelo Excel como número.

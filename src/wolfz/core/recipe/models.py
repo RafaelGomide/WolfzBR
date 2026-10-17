@@ -45,6 +45,11 @@ class Op(_Model, ABC):
 
     # Funções de wolfz.br que o script Python exportado precisa embutir. As
     # dependências (outras funções e constantes) são resolvidas sozinhas.
+    # Passo caro de recalcular a cada página do preview (reordena ou junta a
+    # tabela inteira, ou roda uma função Python por valor): o motor grava a
+    # tabela inteira depois dele como checkpoint, e os passos seguintes
+    # partem dali (§8.4 do design).
+    full_checkpoint: ClassVar[bool] = False
     python_helpers: ClassVar[tuple[Callable[..., Any], ...]] = ()
     # Funções M auxiliares, declaradas uma vez no início da consulta: nome -> definição.
     m_helpers: ClassVar[dict[str, str]] = {}

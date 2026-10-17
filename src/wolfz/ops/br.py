@@ -74,6 +74,7 @@ class ParseBrl(Op):
     errado (ver ``wolfz.br.numeros.parse_brl``)."""
 
     op: Literal["parse_brl"]
+    full_checkpoint = True  # função Python por valor
     cols: list[str] = Field(min_length=1)
     debit_negative: bool = False
 
@@ -128,6 +129,10 @@ class _ValorBr(Op):
     script exportado, ``map_elements``. Valor nulo continua nulo."""
 
     cols: list[str] = Field(min_length=1)
+
+    # Função Python por valor: o Polars não empurra o recorte da página para
+    # dentro dela, então recalcular a cada página custaria a coluna inteira.
+    full_checkpoint = True
 
     funcao: ClassVar[Callable[..., Any]]
     dtype: ClassVar[str]  # nome do tipo Polars: "Float64", "Date"…
