@@ -38,6 +38,7 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
   - Parquet com compressão zstd;
   - opção de neutralizar fórmulas no CSV (F0.A9), desligada por padrão: prefixa com `'` o texto que começa com `=`, `+`, `-`, `@`, tabulação ou `\r`. A exportação conta essas células, e a interface e a CLI avisam quando a opção está desligada;
   - build-then-swap para qualquer combinação de arquivos: tudo é gerado numa pasta temporária e só movido no fim. Se algum formato falhar, nenhum arquivo existente é tocado.
+- `wolfz ui [--port] [--no-browser]`: sobe a API local e abre a interface no navegador, com a chave de acesso no endereço. Sem `--port`, usa uma porta livre; porta ocupada dá erro claro (código 2).
 - `wolfz run --format xlsx`, `--sep`, `--decimal-comma` e `--neutralize-formulas`.
 - Testes de ponta a ponta com Playwright: importar, editar e exportar; erro de passo; reabrir projeto; escolher aba; ajustar a área.
 

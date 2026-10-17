@@ -179,6 +179,41 @@ def run(
 
 
 @app.command()
+def ui(
+    port: Annotated[
+        int,
+        typer.Option("--port", min=0, max=65535, help="Porta local (padrão: uma livre, escolhida na hora)."),
+    ] = 0,
+    no_browser: Annotated[
+        bool, typer.Option("--no-browser", help="Não abre o navegador; só mostra o endereço.")
+    ] = False,
+) -> None:
+    """Abre a interface no navegador.
+
+    A API escuta só em 127.0.0.1, com uma chave de acesso nova a cada
+    execução. O endereço impresso já traz a chave; Ctrl+C encerra.
+    """
+    # Importa a API só aqui: os outros comandos não pagam o custo do FastAPI.
+    from wolfz.api.security import STATIC_DIR
+    from wolfz.api.server import abrir_quando_pronto, criar_servidor, porta_disponivel
+
+    if port and not porta_disponivel(port):
+        _fail(
+            ExitCode.INVALID_RECIPE,
+            f"A porta {port} já está em uso (outro WolfzBR aberto?).",
+            "Use outra com --port, ou deixe sem --port para usar uma livre.",
+        )
+    servidor, url = criar_servidor(port=port)
+    if not (STATIC_DIR / "index.html").is_file():
+        typer.echo("Atenção: a interface não foi compilada neste pacote; só a API vai responder.", err=True)
+    typer.echo(f"WolfzBR rodando em {url}")
+    typer.echo("Deixe este terminal aberto enquanto usa a interface. Ctrl+C encerra.")
+    if not no_browser:
+        abrir_quando_pronto(servidor, url)
+    servidor.run()
+
+
+@app.command()
 def schema() -> None:
     """Imprime o JSON Schema da receita (wolfz schema > recipe.schema.json)."""
     # ASCII puro: redirecionar para arquivo no Windows não depende do encoding do console.

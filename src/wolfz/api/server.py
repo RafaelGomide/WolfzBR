@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import os
 import socket
+import threading
+import time
+import webbrowser
+from collections.abc import Callable
 
 import uvicorn
 
@@ -19,6 +23,38 @@ def porta_livre() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((HOST, 0))
         return s.getsockname()[1]
+
+
+def porta_disponivel(porta: int) -> bool:
+    """A porta está livre no loopback?"""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind((HOST, porta))
+        except OSError:
+            return False
+    return True
+
+
+def abrir_quando_pronto(
+    servidor: uvicorn.Server,
+    url: str,
+    abrir: Callable[[str], object] | None = None,
+    espera: float = 15.0,
+) -> threading.Thread:
+    """Abre ``url`` no navegador assim que o servidor aceitar conexões (numa
+    thread, porque ``servidor.run()`` ocupa a principal). Se ele não subir a
+    tempo, não abre nada: o endereço já foi impresso no terminal."""
+
+    def esperar() -> None:
+        fim = time.monotonic() + espera
+        while not servidor.started and not servidor.should_exit and time.monotonic() < fim:
+            time.sleep(0.05)
+        if servidor.started:
+            (abrir or webbrowser.open)(url)
+
+    thread = threading.Thread(target=esperar, name="wolfz-navegador", daemon=True)
+    thread.start()
+    return thread
 
 
 def criar_servidor(
