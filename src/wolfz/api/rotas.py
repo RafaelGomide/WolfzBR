@@ -12,9 +12,10 @@ import json
 import re
 import shutil
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -34,6 +35,15 @@ from wolfz.core.profile import profile_table
 from wolfz.core.recipe import Recipe, dumps_recipe, load_recipe, recipe_from_dict, registered_ops, save_recipe
 from wolfz.core.recipe.migrate import CURRENT_VERSION
 from wolfz.core.workspace import PROJECT_FILE, RAW_FILE, STRUCTURE_FILE, write_json_atomic
+from wolfz.export.dados import (
+    EXTENSOES,
+    ExportError,
+    OpcoesCsv,
+    Separador,
+    celulas_formula,
+    escritor,
+    gravar_juntos,
+)
 from wolfz.export.m import recipe_to_m
 from wolfz.export.python import recipe_to_python
 
@@ -48,6 +58,12 @@ class PedidoExportacao(BaseModel):
     )
     output_dir: str | None = None
     overwrite: bool = False
+    csv_separator: Separador = Field(default=",", description="Separador do CSV: ',', ';' ou tabulação.")
+    decimal_comma: bool = Field(default=False, description="Número no CSV com vírgula decimal (1234,5).")
+    neutralize_formulas: bool = Field(
+        default=False,
+        description="Prefixa com ' o texto do CSV que começa com =, +, -, @ (injeção de fórmula, F0.A9).",
+    )
 
 
 def _ler_json(path: Path) -> Any:
@@ -273,7 +289,7 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
     def exportar(project_id: str, pedido: PedidoExportacao) -> dict[str, Any]:
         """Gera os arquivos. Pasta com arquivo do mesmo nome: falha, a não ser
         com ``overwrite`` (F0.A6). Tudo é gerado numa pasta temporária e movido
-        no fim (build-then-swap, §9)."""
+        no fim (build-then-swap, F1.I4)."""
         pasta = projetos.abrir(project_id)
         indisponiveis = sorted(set(pedido.formats) - set(_EXTENSOES))
         if indisponiveis:
@@ -293,29 +309,30 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
                 title="Arquivo já existe",
                 existing=existentes,
             )
-        saida.mkdir(parents=True, exist_ok=True)
+
         tabela = None
-        if {"csv", "parquet"} & set(alvos):
+        formulas = None
+        if set(alvos) & set(EXTENSOES):
             tabela = collect(atual, pl.scan_parquet(pasta / RAW_FILE))
-        trabalho = Path(tempfile.mkdtemp(prefix=".wolfz-export-", dir=saida))
+            formulas = celulas_formula(tabela)
+        opcoes = OpcoesCsv(separator=pedido.csv_separator, decimal_comma=pedido.decimal_comma)
+        escritas: dict[Path, Callable[[Path], None]] = {}
+        for fmt, alvo in alvos.items():
+            if fmt in EXTENSOES:
+                escritas[alvo] = escritor(fmt, tabela, opcoes, pedido.neutralize_formulas, aba=atual.name)
+            elif fmt == "powerquery":
+                escritas[alvo] = partial(_escrever_texto, recipe_to_m(atual))
+            else:
+                escritas[alvo] = partial(_escrever_texto, recipe_to_python(atual))
         try:
-            for fmt, alvo in alvos.items():
-                tmp = trabalho / alvo.name
-                if fmt == "csv":
-                    tabela.write_csv(tmp)
-                elif fmt == "parquet":
-                    tabela.write_parquet(tmp)
-                elif fmt == "powerquery":
-                    tmp.write_text(recipe_to_m(atual), encoding="utf-8")
-                else:
-                    tmp.write_text(recipe_to_python(atual), encoding="utf-8")
-            for alvo in alvos.values():
-                (trabalho / alvo.name).replace(alvo)
-        finally:
-            shutil.rmtree(trabalho, ignore_errors=True)
+            gravar_juntos(escritas)
+        except ExportError as exc:
+            raise Problem(422, str(exc), title="Não cabe neste formato") from None
         return {
             "files": [str(p) for p in alvos.values()],
             "rows": tabela.height if tabela is not None else None,
+            "formula_cells": formulas,
+            "neutralized": bool(pedido.neutralize_formulas and "csv" in alvos),
         }
 
     # -----------------------------------------------------------------------
@@ -340,7 +357,11 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
     return api
 
 
-_EXTENSOES = {"csv": ".csv", "parquet": ".parquet", "powerquery": ".pq", "python": ".py"}
+_EXTENSOES = {**EXTENSOES, "powerquery": ".pq", "python": ".py"}
+
+
+def _escrever_texto(texto: str, path: Path) -> None:
+    path.write_text(texto, encoding="utf-8")
 
 
 def _pasta_uploads(ws) -> Path:

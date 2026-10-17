@@ -164,7 +164,19 @@ export const T = {
     pasta: "Pasta de saída",
     pastaDica:
       "Caminho completo (ex.: C:\\Users\\voce\\Documentos\\saida). Em branco, vai para a pasta do projeto.",
-    emBreve: "em breve",
+    opcoesCsv: "Opções do CSV",
+    separador: "Separador",
+    separadores: {
+      ";": "ponto e vírgula (Excel em português)",
+      ",": "vírgula",
+      "\t": "tabulação",
+    } as Record<string, string>,
+    virgulaDecimal: "Vírgula decimal (1234,56)",
+    neutralizar: "Neutralizar fórmulas",
+    neutralizarDica:
+      "Põe um ' antes do texto que começa com =, +, -, @. Use quando o arquivo vier de fonte não confiável. O Excel (.xlsx) já grava texto sempre como texto.",
+    avisoFormulas: (n: number) =>
+      `${n.toLocaleString("pt-BR")} ${n === 1 ? "célula de texto começa" : "células de texto começam"} com =, +, - ou @ e ${n === 1 ? "pode" : "podem"} virar fórmula ao abrir o CSV numa planilha. Se a fonte não for confiável, exporte de novo com "Neutralizar fórmulas".`,
     exportar: "Exportar",
     exportando: "Exportando…",
     existe: "Já existem arquivos com esses nomes:",

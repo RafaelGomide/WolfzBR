@@ -219,6 +219,22 @@
             "title": "Files",
             "type": "array"
           },
+          "formula_cells": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Formula Cells"
+          },
+          "neutralized": {
+            "default": false,
+            "title": "Neutralized",
+            "type": "boolean"
+          },
           "rows": {
             "anyOf": [
               {
@@ -397,6 +413,23 @@
       },
       "PedidoExportacao": {
         "properties": {
+          "csv_separator": {
+            "default": ",",
+            "description": "Separador do CSV: ',', ';' ou tabulação.",
+            "enum": [
+              ",",
+              ";",
+              "\t"
+            ],
+            "title": "Csv Separator",
+            "type": "string"
+          },
+          "decimal_comma": {
+            "default": false,
+            "description": "Número no CSV com vírgula decimal (1234,5).",
+            "title": "Decimal Comma",
+            "type": "boolean"
+          },
           "formats": {
             "items": {
               "enum": [
@@ -413,6 +446,12 @@
             "minItems": 1,
             "title": "Formats",
             "type": "array"
+          },
+          "neutralize_formulas": {
+            "default": false,
+            "description": "Prefixa com ' o texto do CSV que começa com =, +, -, @ (injeção de fórmula, F0.A9).",
+            "title": "Neutralize Formulas",
+            "type": "boolean"
           },
           "output_dir": {
             "anyOf": [
@@ -1005,7 +1044,7 @@
     },
     "/api/projects/{project_id}/exports": {
       "post": {
-        "description": "Gera os arquivos. Pasta com arquivo do mesmo nome: falha, a não ser\ncom ``overwrite`` (F0.A6). Tudo é gerado numa pasta temporária e movido\nno fim (build-then-swap, §9).",
+        "description": "Gera os arquivos. Pasta com arquivo do mesmo nome: falha, a não ser\ncom ``overwrite`` (F0.A6). Tudo é gerado numa pasta temporária e movido\nno fim (build-then-swap, F1.I4).",
         "operationId": "exportar_api_projects__project_id__exports_post",
         "parameters": [
           {

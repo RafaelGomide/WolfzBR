@@ -100,7 +100,7 @@ def test_run_nao_sobrescreve_sem_flag(receita, entrada, tmp_path):
     assert "A saída já existe" in result.output
     assert saida.read_text(encoding="utf-8") == "antigo"
     assert _run(receita, entrada, "-o", saida, "--overwrite").exit_code == 0
-    assert saida.read_text(encoding="utf-8").startswith("regiao,valor")
+    assert saida.read_bytes().startswith(b"\xef\xbb\xbfregiao,valor")  # UTF-8 com BOM
 
 
 def test_run_erro_de_passo_sai_com_1_e_nao_grava(receita, tmp_path):
@@ -279,3 +279,40 @@ def test_inspect_cabecalho_invalido(tmp_path):
     result = runner.invoke(app, ["inspect", str(path), "--header-row", "3"])
     assert result.exit_code == 2
     assert "Uso incorreto" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Exportação de dados (F1.I)
+# ---------------------------------------------------------------------------
+
+
+def test_run_csv_para_excel_brasileiro(receita, entrada, tmp_path):
+    saida = tmp_path / "limpo.csv"
+    assert _run(receita, entrada, "-o", saida, "--sep", ";", "--decimal-comma").exit_code == 0
+    linhas = saida.read_text(encoding="utf-8-sig").splitlines()
+    assert linhas == ["regiao;valor", "Sul;1234,56", "Norte;-10,0"]
+
+
+def test_run_xlsx(receita, entrada, tmp_path):
+    from openpyxl import load_workbook
+
+    result = _run(receita, entrada, "-o", f"{tmp_path}/", "--format", "xlsx")
+    assert result.exit_code == 0, result.output
+    ws = load_workbook(tmp_path / "vendas_jan.xlsx")["vendas"]
+    assert [[c.value for c in linha] for linha in ws.iter_rows()] == [
+        ["regiao", "valor"],
+        ["Sul", 1234.56],
+        ["Norte", -10.0],
+    ]
+
+
+def test_run_avisa_e_neutraliza_formulas(receita, tmp_path):
+    entrada = tmp_path / "perigo.csv"
+    entrada.write_text("regiao;Vlr\n=HYPERLINK(1);R$ 1,00\n", encoding="utf-8")
+    saida = tmp_path / "limpo.csv"
+    result = _run(receita, entrada, "-o", saida)
+    assert result.exit_code == 0 and "1 células de texto começam com =" in result.output
+    assert "\n=HYPERLINK(1)," in saida.read_text(encoding="utf-8-sig")
+    result = _run(receita, entrada, "-o", saida, "--overwrite", "--neutralize-formulas")
+    assert result.exit_code == 0 and "Atenção" not in result.output
+    assert "\n'=HYPERLINK(1)," in saida.read_text(encoding="utf-8-sig")

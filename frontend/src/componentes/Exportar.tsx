@@ -1,5 +1,6 @@
-// Tela de exportação (F1.H12): formatos, pasta de saída e confirmação
-// quando já existem arquivos com os mesmos nomes (F0.A6: falha por padrão).
+// Tela de exportação (F1.H12, F1.I): formatos, opções do CSV, pasta de
+// saída, confirmação quando já existem arquivos com os mesmos nomes (F0.A6)
+// e aviso de células que podem virar fórmula (F0.A9).
 
 import { useState } from "react";
 import { api, chamar, ErroApi, type Exportacao } from "../api/cliente";
@@ -7,12 +8,17 @@ import { T } from "../textos";
 import { CaixaErro, Carregando } from "./Estado";
 
 type Formato = "csv" | "parquet" | "xlsx" | "powerquery" | "python";
-const DISPONIVEIS: Formato[] = ["csv", "parquet", "powerquery", "python"];
-const EM_BREVE: Formato[] = ["xlsx"];
+type Separador = "," | ";" | "\t";
+const FORMATOS: Formato[] = ["csv", "xlsx", "parquet", "powerquery", "python"];
+const SEPARADORES: Separador[] = [";", ",", "\t"];
 
 export function Exportar({ projeto, aoFechar }: { projeto: string; aoFechar: () => void }) {
   const [formatos, setFormatos] = useState<Set<Formato>>(new Set(["csv"]));
   const [pasta, setPasta] = useState("");
+  // Padrão do CSV: o que abre direto no Excel em português.
+  const [separador, setSeparador] = useState<Separador>(";");
+  const [virgulaDecimal, setVirgulaDecimal] = useState(true);
+  const [neutralizar, setNeutralizar] = useState(false);
   const [estado, setEstado] = useState<
     | { tipo: "editando" }
     | { tipo: "exportando" }
@@ -27,7 +33,14 @@ export function Exportar({ projeto, aoFechar }: { projeto: string; aoFechar: () 
       const resultado = await chamar(
         api.POST("/api/projects/{project_id}/exports", {
           params: { path: { project_id: projeto } },
-          body: { formats: [...formatos], output_dir: pasta.trim() || null, overwrite },
+          body: {
+            formats: FORMATOS.filter((f) => formatos.has(f)),
+            output_dir: pasta.trim() || null,
+            overwrite,
+            csv_separator: separador,
+            decimal_comma: virgulaDecimal,
+            neutralize_formulas: neutralizar,
+          },
         }),
       );
       setEstado({ tipo: "pronto", resultado });
@@ -46,6 +59,12 @@ export function Exportar({ projeto, aoFechar }: { projeto: string; aoFechar: () 
       return n;
     });
 
+  const ocupado = estado.tipo === "exportando";
+  const formulas =
+    estado.tipo === "pronto" && !estado.resultado.neutralized
+      ? (estado.resultado.formula_cells ?? 0)
+      : 0;
+
   return (
     <div className="dialogo-fundo">
       <form
@@ -59,33 +78,61 @@ export function Exportar({ projeto, aoFechar }: { projeto: string; aoFechar: () 
         }}
       >
         <h2>{T.exportar.titulo}</h2>
-        <fieldset disabled={estado.tipo === "exportando"}>
+        <fieldset disabled={ocupado}>
           <legend>{T.exportar.formatos}</legend>
-          {DISPONIVEIS.map((f) => (
+          {FORMATOS.map((f) => (
             <label key={f} className="opcao">
               <input type="checkbox" checked={formatos.has(f)} onChange={() => alternar(f)} />
               {T.exportar.nomes[f]}
             </label>
           ))}
-          {EM_BREVE.map((f) => (
-            <label key={f} className="opcao desabilitada">
-              <input type="checkbox" disabled />
-              {T.exportar.nomes[f]} <em className="etiqueta">{T.exportar.emBreve}</em>
-            </label>
-          ))}
         </fieldset>
+
+        {formatos.has("csv") && (
+          <fieldset disabled={ocupado}>
+            <legend>{T.exportar.opcoesCsv}</legend>
+            <label className="opcao">
+              {T.exportar.separador}
+              <select value={separador} onChange={(e) => setSeparador(e.target.value as Separador)}>
+                {SEPARADORES.map((s) => (
+                  <option key={s} value={s}>
+                    {T.exportar.separadores[s]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="opcao">
+              <input
+                type="checkbox"
+                checked={virgulaDecimal}
+                onChange={(e) => setVirgulaDecimal(e.target.checked)}
+              />
+              {T.exportar.virgulaDecimal}
+            </label>
+            <label className="opcao">
+              <input
+                type="checkbox"
+                checked={neutralizar}
+                onChange={(e) => setNeutralizar(e.target.checked)}
+              />
+              {T.exportar.neutralizar}
+            </label>
+            <small className="dica">{T.exportar.neutralizarDica}</small>
+          </fieldset>
+        )}
+
         <label className="campo">
           <span className="rotulo">{T.exportar.pasta}</span>
           <input
             type="text"
             value={pasta}
             onChange={(e) => setPasta(e.target.value)}
-            disabled={estado.tipo === "exportando"}
+            disabled={ocupado}
           />
           <small className="dica">{T.exportar.pastaDica}</small>
         </label>
 
-        {estado.tipo === "exportando" && <Carregando texto={T.exportar.exportando} />}
+        {ocupado && <Carregando texto={T.exportar.exportando} />}
         {estado.tipo === "erro" && <CaixaErro erro={estado.erro} />}
         {estado.tipo === "existe" && (
           <div className="estado aviso" role="alert">
@@ -114,17 +161,18 @@ export function Exportar({ projeto, aoFechar }: { projeto: string; aoFechar: () 
             </ul>
           </div>
         )}
+        {formulas > 0 && (
+          <div className="estado aviso" role="alert">
+            {T.exportar.avisoFormulas(formulas)}
+          </div>
+        )}
         {formatos.size === 0 && <p className="dica">{T.exportar.nenhumFormato}</p>}
 
         <div className="acoes">
           <button type="button" onClick={aoFechar}>
             {T.comum.fechar}
           </button>
-          <button
-            type="submit"
-            className="primario"
-            disabled={formatos.size === 0 || estado.tipo === "exportando"}
-          >
+          <button type="submit" className="primario" disabled={formatos.size === 0 || ocupado}>
             {T.exportar.exportar}
           </button>
         </div>

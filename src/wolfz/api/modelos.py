@@ -134,6 +134,9 @@ class ReceitaSalva(_Resposta):
 class Exportacao(_Resposta):
     files: list[str]
     rows: int | None = None
+    # Células de texto que começam com =, +, -, @… (None: só código exportado).
+    formula_cells: int | None = None
+    neutralized: bool = False
 
 
 class Operacao(_Resposta):

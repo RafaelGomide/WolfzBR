@@ -25,17 +25,25 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
   - painel da receita: adicionar, editar, remover, reordenar (arrastando ou com setas) e desativar passos; o formulário de cada passo é gerado do JSON Schema da operação;
   - passo que falha fica destacado, com a mensagem e as colunas disponíveis naquele ponto;
   - perfil da coluna ao clicar no cabeçalho do grid;
-  - exportação (CSV, Parquet, Power Query M e script Python) com pasta de saída e confirmação antes de sobrescrever;
+  - exportação (CSV, Excel, Parquet, Power Query M e script Python) com opções do CSV, pasta de saída e confirmação antes de sobrescrever;
   - salvamento automático a cada edição, com aviso quando a receita mudou em outra aba;
   - todos os textos em português, num arquivo só (`frontend/src/textos.ts`).
 - O token de sessão é lido do fragmento da URL e fica só na memória da página (nada de `localStorage` ou cookie).
 - Passo desativado (`"enabled": false`): fica na receita, mas não roda no motor, no preview nem nas exportações. Receita sem passo desativado continua com os mesmos bytes.
 - `POST /sheets`: lista as abas de uma planilha sem criar projeto.
 - Respostas da API tipadas no OpenAPI; o cliente TypeScript da interface é gerado dele (`scripts/gerar_openapi.py` e `npm run api`).
+- Exportação de dados (`wolfz.export.dados`), usada pela API, pela interface e pelo `wolfz run`:
+  - CSV sempre em UTF-8 com BOM, com separador (`,`, `;` ou tabulação) e vírgula decimal opcionais. Na interface, o padrão é `;` com vírgula decimal, que abre direto no Excel em português;
+  - Excel limpo (`.xlsx`) com os tipos da tabela: data como data (`DD/MM/AAAA`), número como número, sim/não como booleano, cabeçalho em negrito e congelado. Texto é sempre célula de texto, então `=SOMA(...)` nunca vira fórmula. Tabela acima do limite do Excel (linhas, colunas ou texto por célula) dá erro claro, sem gerar arquivo;
+  - Parquet com compressão zstd;
+  - opção de neutralizar fórmulas no CSV (F0.A9), desligada por padrão: prefixa com `'` o texto que começa com `=`, `+`, `-`, `@`, tabulação ou `\r`. A exportação conta essas células, e a interface e a CLI avisam quando a opção está desligada;
+  - build-then-swap para qualquer combinação de arquivos: tudo é gerado numa pasta temporária e só movido no fim. Se algum formato falhar, nenhum arquivo existente é tocado.
+- `wolfz run --format xlsx`, `--sep`, `--decimal-comma` e `--neutralize-formulas`.
 - Testes de ponta a ponta com Playwright: importar, editar e exportar; erro de passo; reabrir projeto; escolher aba; ajustar a área.
 
 ### Alterado
 
+- O CSV exportado (API e `wolfz run`) passa a ter BOM UTF-8, para o Excel reconhecer a acentuação.
 - `httpx` entra nas dependências de desenvolvimento (cliente de teste do FastAPI).
 - O wheel e o sdist levam a interface compilada (`src/wolfz/static/`); o build do pacote falha se ela não tiver sido compilada (`hatch_build.py`). O usuário final não precisa de Node.
 - CI ganha o job "Interface": ESLint, Prettier, tipos, build e Playwright.

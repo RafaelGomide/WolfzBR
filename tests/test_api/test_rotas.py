@@ -308,6 +308,52 @@ def test_exportar_formatos(client, projeto, tmp_path):
     assert not [p for p in destino.iterdir() if p.name.startswith(".wolfz-export")]  # sem temporários
 
 
+def test_exportar_xlsx_e_csv_para_excel(client, projeto, tmp_path):
+    pedido = {
+        "formats": ["xlsx", "csv"],
+        "output_dir": str(tmp_path),
+        "csv_separator": ";",
+        "decimal_comma": True,
+    }
+    r = client.post(_url(projeto, "exports"), json=pedido)
+    assert r.status_code == 200, r.text
+    assert r.json()["formula_cells"] == 0 and r.json()["neutralized"] is False
+    from openpyxl import load_workbook
+
+    ws = load_workbook(tmp_path / "receita_municipal.xlsx").active
+    assert ws.max_row == 13 and ws["A1"].value == "Código"
+    cabecalho = (tmp_path / "receita_municipal.csv").read_bytes()
+    assert cabecalho.startswith(b"\xef\xbb\xbfC") and b";" in cabecalho.splitlines()[0]
+
+
+def test_exportar_conta_e_neutraliza_formulas(client, projeto, tmp_path):
+    receita = projeto["recipe"]
+    passos = [
+        *receita["steps"],
+        {"id": "s9", "op": "replace", "cols": ["Código"], "old": "1.1.1.2.50.0.0", "new": "=1+1"},
+    ]
+    r = client.put(
+        _url(projeto, "recipe"), json={**receita, "steps": passos}, headers={"If-Match": projeto["etag"]}
+    )
+    assert r.status_code == 200, r.text
+    pedido = {"formats": ["csv"], "output_dir": str(tmp_path)}
+    r = client.post(_url(projeto, "exports"), json=pedido)
+    assert r.json()["formula_cells"] == 1 and r.json()["neutralized"] is False
+    r = client.post(_url(projeto, "exports"), json={**pedido, "overwrite": True, "neutralize_formulas": True})
+    assert r.json()["neutralized"] is True
+    assert "\n'=1+1," in (tmp_path / "receita_municipal.csv").read_text(encoding="utf-8-sig")
+
+
+def test_exportar_que_nao_cabe_e_422(client, projeto, tmp_path, monkeypatch):
+    from wolfz.export import dados
+
+    monkeypatch.setattr(dados, "MAX_LINHAS_XLSX", 5)
+    saida = tmp_path / "saida"
+    r = client.post(_url(projeto, "exports"), json={"formats": ["csv", "xlsx"], "output_dir": str(saida)})
+    assert r.status_code == 422 and "Excel aceita" in r.json()["detail"]
+    assert list(saida.iterdir()) == []  # nem o CSV foi gravado
+
+
 def test_exportar_sobre_arquivo_existente(client, projeto, tmp_path):
     pedido = {"formats": ["csv"], "output_dir": str(tmp_path)}
     assert client.post(_url(projeto, "exports"), json=pedido).status_code == 200
@@ -326,7 +372,8 @@ def test_exportar_na_pasta_do_projeto(client, settings, projeto):
 @pytest.mark.parametrize(
     ("pedido", "trecho"),
     [
-        ({"formats": ["xlsx"]}, "ainda não disponível"),
+        ({"formats": ["hyper"]}, "ainda não disponível"),
+        ({"formats": ["csv"], "csv_separator": "|"}, "csv_separator"),
         ({"formats": ["csv"], "output_dir": "relativo/pasta"}, "absoluto"),
         ({"formats": []}, "formats"),
         ({"formats": ["docx"]}, "formats"),

@@ -77,7 +77,7 @@ export interface paths {
      * Exportar
      * @description Gera os arquivos. Pasta com arquivo do mesmo nome: falha, a não ser
      *     com ``overwrite`` (F0.A6). Tudo é gerado numa pasta temporária e movido
-     *     no fim (build-then-swap, §9).
+     *     no fim (build-then-swap, F1.I4).
      */
     post: operations["exportar_api_projects__project_id__exports_post"];
     delete?: never;
@@ -276,6 +276,13 @@ export interface components {
     Exportacao: {
       /** Files */
       files: string[];
+      /** Formula Cells */
+      formula_cells?: number | null;
+      /**
+       * Neutralized
+       * @default false
+       */
+      neutralized: boolean;
       /** Rows */
       rows?: number | null;
     } & {
@@ -349,8 +356,27 @@ export interface components {
     };
     /** PedidoExportacao */
     PedidoExportacao: {
+      /**
+       * Csv Separator
+       * @description Separador do CSV: ',', ';' ou tabulação.
+       * @default ,
+       * @enum {string}
+       */
+      csv_separator: "," | ";" | "\t";
+      /**
+       * Decimal Comma
+       * @description Número no CSV com vírgula decimal (1234,5).
+       * @default false
+       */
+      decimal_comma: boolean;
       /** Formats */
       formats: ("csv" | "parquet" | "xlsx" | "powerquery" | "python" | "hyper" | "pbip")[];
+      /**
+       * Neutralize Formulas
+       * @description Prefixa com ' o texto do CSV que começa com =, +, -, @ (injeção de fórmula, F0.A9).
+       * @default false
+       */
+      neutralize_formulas: boolean;
       /** Output Dir */
       output_dir?: string | null;
       /**

@@ -25,6 +25,7 @@ from wolfz.core.ingest import IngestError
 from wolfz.core.profile import ColumnProfile, LoadedTable, TableProfile, load_table, profile_table
 from wolfz.core.profile.column import SAMPLE_SIZE
 from wolfz.core.recipe import RecipeError, load_recipe, recipe_json_schema
+from wolfz.export.dados import ExportError, OpcoesCsv, celulas_formula, escritor, gravar_juntos
 
 
 class ExitCode(IntEnum):
@@ -37,6 +38,13 @@ class ExitCode(IntEnum):
 class Formato(StrEnum):
     csv = "csv"
     parquet = "parquet"
+    xlsx = "xlsx"
+
+
+class Sep(StrEnum):
+    virgula = ","
+    ponto_e_virgula = ";"
+    tab = "tab"
 
 
 app = typer.Typer(
@@ -82,21 +90,6 @@ def _output_path(saida: str, arquivo: Path, formato: Formato) -> Path:
     return Path(saida)
 
 
-def _write(df: pl.DataFrame, path: Path, formato: Formato) -> None:
-    """Grava em arquivo temporário e renomeia: uma falha no meio nunca deixa
-    uma saída pela metade (§9)."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.tmp")
-    try:
-        if formato is Formato.csv:
-            df.write_csv(tmp)
-        else:
-            df.write_parquet(tmp)
-        tmp.replace(path)
-    finally:
-        tmp.unlink(missing_ok=True)
-
-
 _EPILOG = (
     "Códigos de saída: 0 ok · 1 um passo falhou neste arquivo · "
     "2 receita inválida ou uso incorreto · 3 arquivo de entrada ilegível."
@@ -118,6 +111,19 @@ def run(
     formato: Annotated[Formato, typer.Option("--format", "-f", help="Formato da saída.")] = Formato.csv,
     overwrite: Annotated[
         bool, typer.Option("--overwrite", help="Sobrescreve a saída se ela já existir.")
+    ] = False,
+    sep: Annotated[
+        Sep, typer.Option("--sep", help="Separador do CSV (';' abre direto no Excel em português).")
+    ] = Sep.virgula,
+    decimal_comma: Annotated[
+        bool, typer.Option("--decimal-comma", help="Número no CSV com vírgula decimal (1234,5).")
+    ] = False,
+    neutralizar: Annotated[
+        bool,
+        typer.Option(
+            "--neutralize-formulas",
+            help="Prefixa com ' o texto do CSV que começa com =, +, -, @ (evita injeção de fórmula).",
+        ),
     ] = False,
 ) -> None:
     """Aplica uma receita a uma planilha e grava a tabela limpa.
@@ -157,8 +163,19 @@ def run(
             "Nada foi gravado.",
         )
 
-    _write(result, destino, formato)
+    opcoes = OpcoesCsv(separator="\t" if sep is Sep.tab else sep.value, decimal_comma=decimal_comma)
+    try:
+        gravar_juntos({destino: escritor(formato.value, result, opcoes, neutralizar, aba=recipe.name)})
+    except ExportError as exc:
+        _fail(ExitCode.INVALID_RECIPE, str(exc), "Nada foi gravado.")
     typer.echo(f"{result.height} linhas, {result.width} colunas -> {destino}")
+    formulas = celulas_formula(result)
+    if formulas and formato is Formato.csv and not neutralizar:
+        typer.echo(
+            f"Atenção: {formulas} células de texto começam com =, +, -, @ e podem virar fórmula ao abrir "
+            "o CSV numa planilha. Use --neutralize-formulas se o arquivo vier de fonte não confiável.",
+            err=True,
+        )
 
 
 @app.command()

@@ -31,12 +31,19 @@ test("importar → editar → exportar", async ({ page }) => {
   await page.getByRole("button", { name: "Exportar" }).click();
   const dialogo = page.getByRole("dialog", { name: "Exportar" });
   await dialogo.getByLabel("Power Query (M)").check();
+  await dialogo.getByLabel("Excel (.xlsx)").check();
+  // Padrão do CSV: ponto e vírgula e vírgula decimal (Excel em português).
+  await expect(dialogo.getByLabel("Separador")).toHaveValue(";");
+  await expect(dialogo.getByLabel("Vírgula decimal (1234,56)")).toBeChecked();
   await dialogo.getByLabel("Pasta de saída").fill(saida);
   await dialogo.getByRole("button", { name: "Exportar" }).click();
   await expect(dialogo.getByText("Pronto: 12 linhas")).toBeVisible();
   const csv = readFileSync(join(saida, "receita_municipal.csv"), "utf-8");
   expect(csv.split("\n")[0]).not.toContain("Código");
+  expect(csv.charCodeAt(0)).toBe(0xfeff); // UTF-8 com BOM
+  expect(csv.split("\n")[0]).toContain(";");
   expect(existsSync(join(saida, "receita_municipal.pq"))).toBe(true);
+  expect(existsSync(join(saida, "receita_municipal.xlsx"))).toBe(true);
 
   // Exportar de novo: avisa que os arquivos existem e só sobrescreve se confirmar.
   await dialogo.getByRole("button", { name: "Exportar" }).click();
