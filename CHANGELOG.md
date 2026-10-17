@@ -6,6 +6,17 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 
 ## [Não publicado]
 
+### Adicionado
+
+- Ingestão de `.xlsx` (`fastexcel`), `.xls` e `.ods` (`python-calamine`): todos os valores como texto, na posição original da planilha (colunas `A`, `B`, …; linha *i* = linha *i* + 1 do Excel).
+- Metadados estruturais (`structure.json`): mesclagens, negrito, fórmulas e tipos, lidos só nas primeiras 50 e nas últimas 20 linhas, com `openpyxl` em modo `read_only`. No `.xls` e no `.ods` só há tipos (e mesclagens no `.xls`); a importação avisa.
+- `CellMatrix` (valor, tipo, mesclada, negrito) para a detecção.
+- Listagem de abas com dimensão estimada e visibilidade (oculta e muito oculta).
+- CSV acima de 50 MB lido em streaming, sem carregar o arquivo inteiro na memória.
+- Limites na importação: 100 MB por arquivo, tamanho descompactado de `.xlsx`/`.ods` (zip bomb) e 200 abas.
+- Erros de importação com mensagem para o usuário (`IngestError`, Problem Details): arquivo aberto no Excel, arquivo temporário `~$` do Excel, protegido por senha, corrompido, vazio, extensão que não bate com o conteúdo (inclusive HTML salvo como `.xls`) e formato não suportado.
+- `import_file`: grava `project.json`, `raw.parquet` e `structure.json` em `~/.wolfz/projects/<ulid>/` (ou em `WOLFZ_HOME`) e reaproveita o `raw.parquet` de um projeto anterior quando o arquivo, pelo hash, e a aba são os mesmos.
+
 ## [0.1.0] - 2026-10-16
 
 Primeira versão: receita, três operações e `wolfz run`. Ainda não publicada no PyPI.
