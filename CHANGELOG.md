@@ -6,6 +6,10 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 
 ## [Não publicado]
 
+## [0.2.0] - 2026-10-16
+
+Ingestão completa de planilhas, corpus de testes e `wolfz inspect`. Primeira versão no TestPyPI. O `wolfz run` continua lendo só CSV: aplicar receita a planilha depende da detecção de cabeçalho (0.3.0).
+
 ### Adicionado
 
 - Ingestão de `.xlsx` (`fastexcel`), `.xls` e `.ods` (`python-calamine`): todos os valores como texto, na posição original da planilha (colunas `A`, `B`, …; linha *i* = linha *i* + 1 do Excel).
@@ -21,13 +25,13 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 - Testes do corpus: estrutura das pastas, limite de 1 MB, cobertura mínima por categoria, ingestão de todo original, sintéticos em dia com o gerador e execução das receitas que já têm todas as operações implementadas.
 - `scripts/baixar_corpus.py` para arquivos públicos acima de 1 MB, que ficam fora do Git e são baixados com conferência de hash.
 - 9 arquivos públicos reais no corpus (IBGE, ANP e Câmara dos Deputados): estimativas de população 2021 (`.xls`) e 2024 (`.ods`), série histórica do IPCA, LSPA, perfil municipal da PPM, população do Censo 2022, áreas territoriais 2022 (externo, acima de 1 MB), preços de GLP da ANP (recortado) e órgãos da Câmara (`.ods`). Origem, recorte e gabarito de cada um em `scripts/corpus_publico.py`.
-
 - Perfil de coluna (`ColumnProfile`, `profile_table`): tipo brasileiro inferido, % de nulos, % de marcadores de nulo, distintos, formas mais comuns, exemplos e mínimo/máximo convertidos para número, moeda, percentual e data. Tabelas grandes são perfiladas numa amostra determinística de até 10 mil linhas, e o perfil diz quando é amostra.
 - Comando `wolfz inspect ARQUIVO [--sheet] [--header-row] [--sample] [--json]`: perfil das colunas de CSV, `.xlsx`, `.xls` ou `.ods` numa tabela no terminal, ou em JSON.
 
 ### Alterado
 
 - Hook `check-added-large-files` do pre-commit passou de 2 MB para 1 MB, o limite do corpus.
+- Arquivos do corpus ficam fora da conversão de fim de linha do Git (`.gitattributes`) e do hook `end-of-file-fixer`: são comparados byte a byte.
 
 ## [0.1.0] - 2026-10-16
 
@@ -49,5 +53,6 @@ Primeira versão: receita, três operações e `wolfz run`. Ainda não publicada
 
 - `clean_cnpj` descartava CNPJ alfanumérico válido que parecia notação científica (ex.: `00.000.000/000E-20`).
 
-[Não publicado]: https://github.com/RafaelGomide/WolfzBR/compare/v0.1.0...HEAD
+[Não publicado]: https://github.com/RafaelGomide/WolfzBR/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/RafaelGomide/WolfzBR/releases/tag/v0.1.0
