@@ -6,6 +6,10 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 
 ## [Não publicado]
 
+## [0.3.0] - 2026-10-16
+
+Detecção de estrutura, catálogo de 31 operações e preview com cache. O `wolfz run` passa a ler `.xlsx`, `.xls` e `.ods`. Ainda sem interface: ela chega na 0.4.0, junto com a API local.
+
 ### Adicionado
 
 - Detecção de estrutura v1 (`wolfz.core.detect`): métricas por linha (% preenchida, % valor, % texto, negrito, mesclagem), região de dados, cabeçalho de uma linha, totais e subtotais (por palavra-chave ou por negrito raro), título e notas de rodapé, e `fill_down` sugerido por mesclagem vertical. O resultado é uma lista de passos (`select_range`, `header_rows`, `drop_rows_where`, `fill_down`) para a receita inicial; nada é aplicado.
@@ -20,7 +24,6 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
   - linhas: `filter` (DSL pequena e traduzível para M), `dedupe`, `fill_null`, `sort`.
 - `wolfz.run` e `wolfz run` leem `.xlsx`, `.xls` e `.ods` (a aba da receita, ou a primeira que casa com `sheet_name_regex`). Planilha vem como grade (colunas `A`, `B`, …); CSV vem com cabeçalho, ou como grade quando a receita começa por `select_range` ou `header_rows`.
 - As receitas esperadas do corpus rodam de ponta a ponta e são comparadas com o gabarito (72 hoje); a receita inicial proposta pela detecção roda em todos os arquivos do corpus.
-
 - Preview paginado com cache (`wolfz.core.engine.preview`): devolve a página `offset..offset+limit` da tabela depois de qualquer passo, materializando só essa página. Checkpoints por passo em `<projeto>/checkpoints/`, endereçados por uma chave encadeada (hash do raw + passos até ali, sem o `id`): editar o passo N invalida de N em diante sem lógica de invalidação.
 - Checkpoint completo para passos caros de recalcular (`unpivot`, `dedupe`, `sort` e os que rodam função Python por valor, como `parse_date_br`); os passos seguintes partem dele.
 - Limpeza do cache em LRU até 2 GB no workspace inteiro, pulando projetos abertos (lock ativo) e o projeto em edição; `raw.parquet` e receita nunca são recolhidos.
@@ -78,6 +81,7 @@ Primeira versão: receita, três operações e `wolfz run`. Ainda não publicada
 
 - `clean_cnpj` descartava CNPJ alfanumérico válido que parecia notação científica (ex.: `00.000.000/000E-20`).
 
-[Não publicado]: https://github.com/RafaelGomide/WolfzBR/compare/v0.2.0...HEAD
+[Não publicado]: https://github.com/RafaelGomide/WolfzBR/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/RafaelGomide/WolfzBR/releases/tag/v0.1.0
