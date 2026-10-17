@@ -1,0 +1,1413 @@
+{
+  "components": {
+    "schemas": {
+      "Aba": {
+        "additionalProperties": true,
+        "properties": {
+          "columns": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Columns"
+          },
+          "hidden": {
+            "title": "Hidden",
+            "type": "boolean"
+          },
+          "index": {
+            "title": "Index",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
+          "visibility": {
+            "title": "Visibility",
+            "type": "string"
+          }
+        },
+        "required": [
+          "index",
+          "name",
+          "visibility",
+          "hidden"
+        ],
+        "title": "Aba",
+        "type": "object"
+      },
+      "Body_criar_projeto_api_projects_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "description": "Planilha ou CSV.",
+            "title": "File",
+            "type": "string"
+          },
+          "sheet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sheet"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_criar_projeto_api_projects_post",
+        "type": "object"
+      },
+      "Body_listar_abas_api_sheets_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "description": "Planilha.",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_listar_abas_api_sheets_post",
+        "type": "object"
+      },
+      "ColunaPreview": {
+        "additionalProperties": true,
+        "properties": {
+          "dtype": {
+            "title": "Dtype",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "dtype"
+        ],
+        "title": "ColunaPreview",
+        "type": "object"
+      },
+      "Deteccao": {
+        "additionalProperties": true,
+        "description": "Estrutura detectada, em linhas e letras do Excel.",
+        "properties": {
+          "cabecalho": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cabecalho"
+          },
+          "colunas": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Colunas",
+            "type": "array"
+          },
+          "dados": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Dados",
+            "type": "array"
+          },
+          "fill_down": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Fill Down",
+            "type": "array"
+          },
+          "notas": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Notas",
+            "type": "array"
+          },
+          "titulo": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Titulo",
+            "type": "array"
+          },
+          "totais": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Totais",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dados",
+          "colunas"
+        ],
+        "title": "Deteccao",
+        "type": "object"
+      },
+      "Estrutura": {
+        "additionalProperties": true,
+        "properties": {
+          "detection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Deteccao"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "structure": {
+            "additionalProperties": true,
+            "title": "Structure",
+            "type": "object"
+          }
+        },
+        "required": [
+          "structure"
+        ],
+        "title": "Estrutura",
+        "type": "object"
+      },
+      "Exportacao": {
+        "additionalProperties": true,
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          }
+        },
+        "required": [
+          "files"
+        ],
+        "title": "Exportacao",
+        "type": "object"
+      },
+      "Fonte": {
+        "additionalProperties": true,
+        "properties": {
+          "format": {
+            "title": "Format",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "sheet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sheet"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          },
+          "uploaded": {
+            "default": false,
+            "title": "Uploaded",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "format",
+          "size"
+        ],
+        "title": "Fonte",
+        "type": "object"
+      },
+      "FormaValor": {
+        "additionalProperties": true,
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "shape": {
+            "title": "Shape",
+            "type": "string"
+          }
+        },
+        "required": [
+          "shape",
+          "count"
+        ],
+        "title": "FormaValor",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "Operacao": {
+        "additionalProperties": true,
+        "properties": {
+          "doc": {
+            "title": "Doc",
+            "type": "string"
+          },
+          "examples": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Examples",
+            "type": "array"
+          },
+          "full_checkpoint": {
+            "title": "Full Checkpoint",
+            "type": "boolean"
+          },
+          "op": {
+            "title": "Op",
+            "type": "string"
+          },
+          "schema": {
+            "additionalProperties": true,
+            "title": "Schema",
+            "type": "object"
+          }
+        },
+        "required": [
+          "op",
+          "doc",
+          "schema",
+          "full_checkpoint",
+          "examples"
+        ],
+        "title": "Operacao",
+        "type": "object"
+      },
+      "Pagina": {
+        "additionalProperties": true,
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/ColunaPreview"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "items": {},
+              "type": "array"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "total_rows": {
+            "title": "Total Rows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "columns",
+          "rows",
+          "total_rows",
+          "offset"
+        ],
+        "title": "Pagina",
+        "type": "object"
+      },
+      "PedidoExportacao": {
+        "properties": {
+          "formats": {
+            "items": {
+              "enum": [
+                "csv",
+                "parquet",
+                "xlsx",
+                "powerquery",
+                "python",
+                "hyper",
+                "pbip"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Formats",
+            "type": "array"
+          },
+          "output_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Dir"
+          },
+          "overwrite": {
+            "default": false,
+            "title": "Overwrite",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "formats"
+        ],
+        "title": "PedidoExportacao",
+        "type": "object"
+      },
+      "Perfil": {
+        "additionalProperties": true,
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/PerfilColuna"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "is_sample": {
+            "title": "Is Sample",
+            "type": "boolean"
+          },
+          "sampled_rows": {
+            "title": "Sampled Rows",
+            "type": "integer"
+          },
+          "total_rows": {
+            "title": "Total Rows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_rows",
+          "sampled_rows",
+          "is_sample",
+          "columns"
+        ],
+        "title": "Perfil",
+        "type": "object"
+      },
+      "PerfilColuna": {
+        "additionalProperties": true,
+        "properties": {
+          "distinct": {
+            "title": "Distinct",
+            "type": "integer"
+          },
+          "examples": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Examples",
+            "type": "array"
+          },
+          "inferred_type": {
+            "title": "Inferred Type",
+            "type": "string"
+          },
+          "maximum": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maximum"
+          },
+          "minimum": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "null_marker_pct": {
+            "title": "Null Marker Pct",
+            "type": "number"
+          },
+          "null_markers": {
+            "title": "Null Markers",
+            "type": "integer"
+          },
+          "null_pct": {
+            "title": "Null Pct",
+            "type": "number"
+          },
+          "nulls": {
+            "title": "Nulls",
+            "type": "integer"
+          },
+          "rows": {
+            "title": "Rows",
+            "type": "integer"
+          },
+          "top_shapes": {
+            "items": {
+              "$ref": "#/components/schemas/FormaValor"
+            },
+            "title": "Top Shapes",
+            "type": "array"
+          },
+          "type_rate": {
+            "title": "Type Rate",
+            "type": "number"
+          }
+        },
+        "required": [
+          "name",
+          "inferred_type",
+          "type_rate",
+          "rows",
+          "nulls",
+          "null_markers",
+          "distinct",
+          "top_shapes",
+          "examples",
+          "null_pct",
+          "null_marker_pct"
+        ],
+        "title": "PerfilColuna",
+        "type": "object"
+      },
+      "Projeto": {
+        "additionalProperties": true,
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "raw": {
+            "$ref": "#/components/schemas/Raw"
+          },
+          "recipe": {
+            "additionalProperties": true,
+            "title": "Recipe",
+            "type": "object"
+          },
+          "sheets": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Aba"
+            },
+            "title": "Sheets",
+            "type": "array"
+          },
+          "source": {
+            "$ref": "#/components/schemas/Fonte"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "source",
+          "raw",
+          "recipe",
+          "etag"
+        ],
+        "title": "Projeto",
+        "type": "object"
+      },
+      "ProjetoCriado": {
+        "additionalProperties": true,
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "detection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Deteccao"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "raw": {
+            "$ref": "#/components/schemas/Raw"
+          },
+          "recipe": {
+            "additionalProperties": true,
+            "title": "Recipe",
+            "type": "object"
+          },
+          "reused_raw": {
+            "title": "Reused Raw",
+            "type": "boolean"
+          },
+          "sheets": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Aba"
+            },
+            "title": "Sheets",
+            "type": "array"
+          },
+          "source": {
+            "$ref": "#/components/schemas/Fonte"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "source",
+          "raw",
+          "recipe",
+          "etag",
+          "reused_raw"
+        ],
+        "title": "ProjetoCriado",
+        "type": "object"
+      },
+      "ProjetoResumo": {
+        "additionalProperties": true,
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Format"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "open_elsewhere": {
+            "title": "Open Elsewhere",
+            "type": "boolean"
+          },
+          "open_here": {
+            "title": "Open Here",
+            "type": "boolean"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
+          "sheet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sheet"
+          }
+        },
+        "required": [
+          "id",
+          "open_here",
+          "open_elsewhere"
+        ],
+        "title": "ProjetoResumo",
+        "type": "object"
+      },
+      "Raw": {
+        "additionalProperties": true,
+        "properties": {
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "rows": {
+            "title": "Rows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "columns"
+        ],
+        "title": "Raw",
+        "type": "object"
+      },
+      "ReceitaSalva": {
+        "additionalProperties": true,
+        "properties": {
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "recipe": {
+            "additionalProperties": true,
+            "title": "Recipe",
+            "type": "object"
+          }
+        },
+        "required": [
+          "etag",
+          "recipe"
+        ],
+        "title": "ReceitaSalva",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "WolfzBR Local API"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/ops": {
+      "get": {
+        "description": "Operações registradas, com o JSON Schema dos parâmetros: a\ninterface monta os formulários dos passos a partir disto.",
+        "operationId": "catalogo_api_ops_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Operacao"
+                  },
+                  "title": "Response Catalogo Api Ops Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Catalogo"
+      }
+    },
+    "/api/projects": {
+      "get": {
+        "operationId": "listar_projetos_api_projects_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProjetoResumo"
+                  },
+                  "title": "Response Listar Projetos Api Projects Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Listar Projetos"
+      },
+      "post": {
+        "description": "Importa o arquivo, detecta a estrutura e grava a receita inicial.",
+        "operationId": "criar_projeto_api_projects_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_criar_projeto_api_projects_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjetoCriado"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Criar Projeto"
+      }
+    },
+    "/api/projects/{project_id}": {
+      "delete": {
+        "operationId": "apagar_projeto_api_projects__project_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Apagar Projeto"
+      },
+      "get": {
+        "operationId": "abrir_projeto_api_projects__project_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Projeto"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Abrir Projeto"
+      }
+    },
+    "/api/projects/{project_id}/exports": {
+      "post": {
+        "description": "Gera os arquivos. Pasta com arquivo do mesmo nome: falha, a não ser\ncom ``overwrite`` (F0.A6). Tudo é gerado numa pasta temporária e movido\nno fim (build-then-swap, §9).",
+        "operationId": "exportar_api_projects__project_id__exports_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PedidoExportacao"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Exportacao"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Exportar"
+      }
+    },
+    "/api/projects/{project_id}/preview": {
+      "get": {
+        "operationId": "ver_preview_api_projects__project_id__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Passo; omitido = receita inteira; \"raw\" = antes.",
+            "in": "query",
+            "name": "step",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Passo; omitido = receita inteira; \"raw\" = antes.",
+              "title": "Step"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Colunas, separadas por vírgula.",
+            "in": "query",
+            "name": "columns",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Colunas, separadas por vírgula.",
+              "title": "Columns"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Pagina"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ver Preview"
+      }
+    },
+    "/api/projects/{project_id}/profile": {
+      "get": {
+        "operationId": "perfil_api_projects__project_id__profile_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Passo; omitido = receita inteira; \"raw\" = antes.",
+            "in": "query",
+            "name": "step",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Passo; omitido = receita inteira; \"raw\" = antes.",
+              "title": "Step"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sample",
+            "required": false,
+            "schema": {
+              "default": 10000,
+              "maximum": 100000,
+              "minimum": 1,
+              "title": "Sample",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Perfil"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Perfil"
+      }
+    },
+    "/api/projects/{project_id}/recipe": {
+      "get": {
+        "operationId": "ler_receita_api_projects__project_id__recipe_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Ler Receita Api Projects  Project Id  Recipe Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ler Receita"
+      },
+      "put": {
+        "description": "Substitui a receita inteira. Salvamento automático: a interface\nchama a cada edição, e a gravação é atômica.",
+        "operationId": "salvar_receita_api_projects__project_id__recipe_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "if-match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Corpo",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceitaSalva"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Salvar Receita"
+      }
+    },
+    "/api/projects/{project_id}/structure": {
+      "get": {
+        "operationId": "estrutura_api_projects__project_id__structure_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Estrutura"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Estrutura"
+      }
+    },
+    "/api/sheets": {
+      "post": {
+        "description": "Abas da planilha, sem criar projeto: a interface pergunta qual\nimportar quando há mais de uma. CSV não tem aba (lista vazia).",
+        "operationId": "listar_abas_api_sheets_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_listar_abas_api_sheets_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Aba"
+                  },
+                  "title": "Response Listar Abas Api Sheets Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Listar Abas"
+      }
+    }
+  }
+}

@@ -75,11 +75,19 @@ Documentation = "https://github.com/RafaelGomide/WolfzBR/blob/main/docs/system_d
 [project.scripts]
 wolfz = "wolfz.cli:app"
 
+[tool.hatch.build]
+# A interface compilada (npm run build em frontend/) fica fora do Git, mas
+# entra no wheel e no sdist: o usuário final não precisa de Node (F1.H14).
+artifacts = ["src/wolfz/static/**"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/wolfz"]
 
+# hatch_build.py: recusa gerar o wheel sem a interface compilada.
+[tool.hatch.build.targets.wheel.hooks.custom]
+
 [tool.hatch.build.targets.sdist]
-include = ["src/wolfz", "README.md", "LICENSE"]
+include = ["src/wolfz", "README.md", "LICENSE", "hatch_build.py"]
 
 [tool.ruff]
 line-length = 110

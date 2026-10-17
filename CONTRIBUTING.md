@@ -21,6 +21,45 @@ uv run lint-imports
 uv run pytest
 ```
 
+## Interface (`frontend/`)
+
+Requisitos: Node.js 24. A interface compilada vai para `src/wolfz/static/` (fora do Git) e entra no wheel.
+
+```bash
+cd frontend
+npm ci --ignore-scripts
+npm run build          # gera src/wolfz/static/
+```
+
+Desenvolvimento com recarga automática: suba a API local numa porta fixa e o Vite repassa `/api` para ela.
+
+```bash
+python scripts/servidor_teste.py --port 8799     # imprime a URL com o token
+cd frontend && npm run dev                        # abra http://localhost:5173/#token=<token>
+```
+
+Mudou alguma rota ou resposta da API? Regere o cliente TypeScript (o pytest e o CI conferem):
+
+```bash
+python scripts/gerar_openapi.py
+cd frontend && npm run api
+```
+
+Antes de abrir um PR que mexe na interface:
+
+```bash
+cd frontend
+npm run lint
+npm run format:check
+npm run build
+npx playwright install chromium   # só na primeira vez
+npm run e2e
+```
+
+Textos da interface ficam só em `frontend/src/textos.ts`.
+
+Gerar o pacote (`uv build`) exige a interface compilada antes; para um wheel sem ela, de propósito, `WOLFZ_SEM_INTERFACE=1`.
+
 ## Mensagens de commit
 
 O projeto segue [Conventional Commits](https://www.conventionalcommits.org/pt-br/v1.0.0/):

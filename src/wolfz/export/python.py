@@ -120,7 +120,7 @@ def recipe_to_python(recipe: Recipe) -> str:
     """Script Python autônomo com a função ``transform(lf)`` que aplica
     todos os passos da receita."""
     helpers: list[Callable[..., Any]] = []
-    for step in recipe.steps:
+    for step in recipe.active_steps:
         helpers.extend(h for h in step.python_helpers if h not in helpers)
     stdlib, helper_code = bundle(helpers)
     # stdlib primeiro (import, depois from), Polars por último
@@ -128,7 +128,7 @@ def recipe_to_python(recipe: Recipe) -> str:
     imports = [*stdlib, "", "import polars as pl"] if stdlib else ["import polars as pl"]
 
     body = []
-    for step in recipe.steps:
+    for step in recipe.active_steps:
         body.append(f"# {step.id}: {step.op}")
         body.extend(step.to_python().splitlines())
     body.append("return lf")

@@ -49,7 +49,7 @@ def run(recipe: Recipe, lf: pl.LazyFrame) -> pl.LazyFrame:
     de cada passo (barato, não lê dados) para que o erro aponte o passo
     certo, e não apareça só no ``collect`` sem dizer de onde veio."""
     previous: Op | None = None
-    for step in recipe.steps:
+    for step in recipe.active_steps:
         columns = lf.collect_schema().names()
         try:
             lf = step.to_polars(lf)
@@ -73,7 +73,7 @@ def collect(recipe: Recipe, lf: pl.LazyFrame) -> pl.DataFrame:
         original = exc
     partial = lf
     previous: Op | None = None
-    for step in recipe.steps:
+    for step in recipe.active_steps:
         columns = partial.collect_schema().names()
         partial = step.to_polars(partial)
         try:
@@ -113,7 +113,7 @@ def read_input(recipe: Recipe, input_path: str | Path) -> pl.DataFrame:
     path, fmt, _ = open_file(input_path)
     if fmt != "csv":
         return read_sheet_raw(path, _sheet(recipe, path))
-    if recipe.steps and recipe.steps[0].op in _PASSOS_DE_GRADE:
+    if recipe.active_steps and recipe.active_steps[0].op in _PASSOS_DE_GRADE:
         with open_csv_lazy(path, has_header=False) as lf:
             return lf.collect()
     return read_csv_raw(path)

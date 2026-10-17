@@ -23,8 +23,10 @@ from pydantic import (
     ConfigDict,
     Field,
     SerializeAsAny,
+    SerializerFunctionWrapHandler,
     create_model,
     field_validator,
+    model_serializer,
     model_validator,
 )
 
@@ -61,6 +63,18 @@ class Op(_Model, ABC):
 
     id: str = Field(pattern=STEP_ID_PATTERN, description="Identificador do passo: s1, s2, …")
     op: str
+    enabled: bool = Field(
+        default=True, description="Passo ativo. Desativado, ele continua na receita, mas não roda."
+    )
+
+    @model_serializer(mode="wrap")
+    def _omite_enabled(self, handler: SerializerFunctionWrapHandler) -> Any:
+        # Só o passo desativado grava o campo: receitas que nunca desativaram
+        # nada continuam com os mesmos bytes (e as mesmas chaves de cache).
+        data = handler(self)
+        if self.enabled and isinstance(data, dict):
+            data.pop("enabled", None)
+        return data
 
     @abstractmethod
     def to_polars(self, lf: pl.LazyFrame) -> pl.LazyFrame:
@@ -122,6 +136,11 @@ class Recipe(_Model):
                 raise ValueError(f"id de passo repetido: {step.id!r}")
             seen.add(step.id)
         return self
+
+    @property
+    def active_steps(self) -> list[Op]:
+        """Passos que rodam: todos, menos os desativados na interface."""
+        return [s for s in self.steps if s.enabled]
 
 
 # ---------------------------------------------------------------------------

@@ -54,15 +54,15 @@ class Page:
 
 def _passos(recipe: Recipe, step: str | None) -> list[Op]:
     """Passos até ``step`` (inclusive). ``None``: a receita inteira;
-    ``"raw"``: nenhum."""
+    ``"raw"``: nenhum. Passos desativados ficam de fora."""
     if step is None:
-        return list(recipe.steps)
+        return recipe.active_steps
     if step == "raw":
         return []
     ids = [s.id for s in recipe.steps]
     if step not in ids:
         raise ValueError(f"a receita não tem o passo {step!r} (passos: {', '.join(ids) or 'nenhum'})")
-    return list(recipe.steps[: ids.index(step) + 1])
+    return [s for s in recipe.steps[: ids.index(step) + 1] if s.enabled]
 
 
 def _sub(recipe: Recipe, passos: list[Op]) -> Recipe:

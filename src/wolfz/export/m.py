@@ -48,17 +48,17 @@ def m_field(column: str, row: str = "_") -> str:
 
 def recipe_to_m(recipe: Recipe) -> str:
     """Função M que aplica todos os passos da receita a uma tabela."""
-    if not recipe.steps:
+    if not recipe.active_steps:
         return "(Fonte as table) as table => Fonte\n"
     helpers: dict[str, str] = {}
-    for step in recipe.steps:
+    for step in recipe.active_steps:
         for name, definition in step.m_helpers.items():
             if helpers.setdefault(name, definition) != definition:
                 raise ValueError(f"duas definições diferentes para a função M {name!r}")
 
     lines = [f"{name} = {definition.strip()}" for name, definition in helpers.items()]
     prev = "Fonte"
-    for step in recipe.steps:
+    for step in recipe.active_steps:
         lines.append(f"// {step.id}: {step.op}\n" + step.to_m(prev, step.id))
         prev = step.id
 

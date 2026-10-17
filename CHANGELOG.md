@@ -18,10 +18,27 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 - Erros da API no formato Problem Details (RFC 9457), com `step_id` e `available_columns` quando o erro é de um passo; erro inesperado responde `500` sem detalhe, para não vazar valor de célula.
 - Lock por projeto (lock de arquivo do sistema operacional): projeto aberto em outra instância do WolfzBR responde `423` com o endereço dela; o lock é liberado ao fechar o projeto ou encerrar o processo.
 - Handlers pesados em threadpool e um preview por projeto por vez.
+- Interface web (`frontend/`, React + Vite + Glide Data Grid), servida pela API local:
+  - tela inicial com área para arrastar o arquivo e projetos recentes; planilha com mais de uma aba pergunta qual importar;
+  - visão bruta da planilha com a estrutura em cores (título, cabeçalho, dados, totais, rodapé) e ajuste da área clicando e arrastando, que atualiza o passo `select_range`;
+  - grades antes e depois de cada passo, com rolagem virtualizada e páginas pedidas sob demanda (debounce e cancelamento dos pedidos que ficaram para trás);
+  - painel da receita: adicionar, editar, remover, reordenar (arrastando ou com setas) e desativar passos; o formulário de cada passo é gerado do JSON Schema da operação;
+  - passo que falha fica destacado, com a mensagem e as colunas disponíveis naquele ponto;
+  - perfil da coluna ao clicar no cabeçalho do grid;
+  - exportação (CSV, Parquet, Power Query M e script Python) com pasta de saída e confirmação antes de sobrescrever;
+  - salvamento automático a cada edição, com aviso quando a receita mudou em outra aba;
+  - todos os textos em português, num arquivo só (`frontend/src/textos.ts`).
+- O token de sessão é lido do fragmento da URL e fica só na memória da página (nada de `localStorage` ou cookie).
+- Passo desativado (`"enabled": false`): fica na receita, mas não roda no motor, no preview nem nas exportações. Receita sem passo desativado continua com os mesmos bytes.
+- `POST /sheets`: lista as abas de uma planilha sem criar projeto.
+- Respostas da API tipadas no OpenAPI; o cliente TypeScript da interface é gerado dele (`scripts/gerar_openapi.py` e `npm run api`).
+- Testes de ponta a ponta com Playwright: importar, editar e exportar; erro de passo; reabrir projeto; escolher aba; ajustar a área.
 
 ### Alterado
 
 - `httpx` entra nas dependências de desenvolvimento (cliente de teste do FastAPI).
+- O wheel e o sdist levam a interface compilada (`src/wolfz/static/`); o build do pacote falha se ela não tiver sido compilada (`hatch_build.py`). O usuário final não precisa de Node.
+- CI ganha o job "Interface": ESLint, Prettier, tipos, build e Playwright.
 
 ## [0.3.0] - 2026-10-16
 

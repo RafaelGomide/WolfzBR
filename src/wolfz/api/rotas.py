@@ -12,6 +12,8 @@ import json
 import re
 import shutil
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -20,13 +22,14 @@ import polars as pl
 from fastapi import APIRouter, File, Form, Header, Query, Response, UploadFile
 from pydantic import BaseModel, Field
 
+from wolfz.api import modelos as m
 from wolfz.api.problems import Problem
 from wolfz.api.projetos import Projetos
 from wolfz.api.security import Settings
 from wolfz.core.detect import detect_structure
 from wolfz.core.engine import collect, run
 from wolfz.core.engine.preview import LIMITE_PAGINA, preview_project
-from wolfz.core.ingest import SheetStructure, import_file
+from wolfz.core.ingest import SheetStructure, import_file, list_sheets, open_file
 from wolfz.core.profile import profile_table
 from wolfz.core.recipe import Recipe, dumps_recipe, load_recipe, recipe_from_dict, registered_ops, save_recipe
 from wolfz.core.recipe.migrate import CURRENT_VERSION
@@ -72,24 +75,39 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
     def receita(pasta: Path) -> Recipe:
         return load_recipe(pasta / RECIPE_FILE)
 
+    @contextmanager
+    def _upload_temporario(file: UploadFile) -> Iterator[Path]:
+        """O upload numa pasta temporária do workspace, apagada no fim."""
+        temporaria = Path(tempfile.mkdtemp(prefix="upload-", dir=_pasta_uploads(ws)))
+        destino = temporaria / _nome_seguro(file.filename or "arquivo")
+        try:
+            _copia_com_limite(file, destino, settings.limits.max_file_bytes)
+            yield destino
+        finally:
+            shutil.rmtree(temporaria, ignore_errors=True)
+
     # -----------------------------------------------------------------------
     # Projetos
     # -----------------------------------------------------------------------
 
-    @api.post("/projects", status_code=201)
+    @api.post("/sheets", response_model=list[m.Aba])
+    def listar_abas(file: Annotated[UploadFile, File(description="Planilha.")]) -> list[dict[str, Any]]:
+        """Abas da planilha, sem criar projeto: a interface pergunta qual
+        importar quando há mais de uma. CSV não tem aba (lista vazia)."""
+        with _upload_temporario(file) as caminho:
+            _, fmt, _ = open_file(caminho, settings.limits)  # mesmos erros da importação
+            if fmt == "csv":
+                return []
+            return [s.to_dict() for s in list_sheets(caminho, fmt, settings.limits)]
+
+    @api.post("/projects", status_code=201, response_model=m.ProjetoCriado)
     def criar_projeto(
         file: Annotated[UploadFile, File(description="Planilha ou CSV.")],
         sheet: Annotated[str | None, Form()] = None,
     ) -> dict[str, Any]:
         """Importa o arquivo, detecta a estrutura e grava a receita inicial."""
-        nome = _nome_seguro(file.filename or "arquivo")
-        temporaria = Path(tempfile.mkdtemp(prefix="upload-", dir=_pasta_uploads(ws)))
-        destino = temporaria / nome
-        try:
-            _copia_com_limite(file, destino, settings.limits.max_file_bytes)
-            resultado = import_file(destino, sheet=sheet, workspace=ws, limits=settings.limits)
-        finally:
-            shutil.rmtree(temporaria, ignore_errors=True)
+        with _upload_temporario(file) as caminho:
+            resultado = import_file(caminho, sheet=sheet, workspace=ws, limits=settings.limits)
 
         pasta = resultado.path
         projeto = resultado.project
@@ -123,7 +141,7 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
             "etag": _etag(inicial),
         }
 
-    @api.get("/projects")
+    @api.get("/projects", response_model=list[m.ProjetoResumo])
     def listar_projetos() -> list[dict[str, Any]]:
         saida = []
         for project_id, meta in ws.projects():
@@ -142,7 +160,7 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
             )
         return saida
 
-    @api.get("/projects/{project_id}")
+    @api.get("/projects/{project_id}", response_model=m.Projeto)
     def abrir_projeto(project_id: str, response: Response) -> dict[str, Any]:
         pasta = projetos.abrir(project_id)
         atual = receita(pasta)
@@ -156,7 +174,7 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
         shutil.rmtree(pasta)
         return Response(status_code=204)
 
-    @api.get("/projects/{project_id}/structure")
+    @api.get("/projects/{project_id}/structure", response_model=m.Estrutura)
     def estrutura(project_id: str) -> dict[str, Any]:
         pasta = projetos.abrir(project_id)
         deteccao = pasta / DETECTION_FILE
@@ -165,7 +183,7 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
             "detection": _ler_json(deteccao) if deteccao.is_file() else None,
         }
 
-    @api.get("/projects/{project_id}/profile")
+    @api.get("/projects/{project_id}/profile", response_model=m.Perfil)
     def perfil(
         project_id: str,
         step: Annotated[
@@ -194,7 +212,7 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
         response.headers["ETag"] = _etag(atual)
         return _receita_json(atual)
 
-    @api.put("/projects/{project_id}/recipe")
+    @api.put("/projects/{project_id}/recipe", response_model=m.ReceitaSalva)
     def salvar_receita(
         project_id: str,
         corpo: dict[str, Any],
@@ -224,7 +242,7 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
     # Preview
     # -----------------------------------------------------------------------
 
-    @api.get("/projects/{project_id}/preview")
+    @api.get("/projects/{project_id}/preview", response_model=m.Pagina)
     def ver_preview(
         project_id: str,
         step: Annotated[
@@ -251,7 +269,7 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
     # Exportação
     # -----------------------------------------------------------------------
 
-    @api.post("/projects/{project_id}/exports")
+    @api.post("/projects/{project_id}/exports", response_model=m.Exportacao)
     def exportar(project_id: str, pedido: PedidoExportacao) -> dict[str, Any]:
         """Gera os arquivos. Pasta com arquivo do mesmo nome: falha, a não ser
         com ``overwrite`` (F0.A6). Tudo é gerado numa pasta temporária e movido
@@ -304,7 +322,7 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
     # Catálogo
     # -----------------------------------------------------------------------
 
-    @api.get("/ops")
+    @api.get("/ops", response_model=list[m.Operacao])
     def catalogo() -> list[dict[str, Any]]:
         """Operações registradas, com o JSON Schema dos parâmetros: a
         interface monta os formulários dos passos a partir disto."""

@@ -62,3 +62,62 @@ jobs:
         run: |
           echo "## Cobertura" >> "$GITHUB_STEP_SUMMARY"
           uv run coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
+
+  # Interface (frontend/): um job só, em Linux. Lint, tipos, build e os
+  # fluxos do Playwright contra a API local de verdade (F1.H15).
+  interface:
+    name: Interface
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependências
+        run: |
+          uv sync --locked
+          npm ci --ignore-scripts --no-audit --no-fund
+
+      # O schema.d.ts é gerado do openapi.json (que o pytest confere contra a API).
+      - name: Cliente da API em dia
+        run: |
+          npm run api
+          git diff --exit-code src/api/schema.d.ts
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Prettier
+        run: npm run format:check
+
+      - name: Build (inclui a checagem de tipos)
+        run: npm run build
+
+      - name: Instalar o Chromium do Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Playwright
+        run: npx playwright test
+
+      - name: Relatório do Playwright
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report
+          retention-days: 7

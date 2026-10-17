@@ -5,7 +5,7 @@ from pathlib import Path
 
 import polars as pl
 import pytest
-from apoio_api import CORPUS, PORTA, TOKEN, cliente, enviar
+from apoio_api import CORPUS, PORTA, TOKEN, XLSX, cliente, enviar
 
 import wolfz
 from wolfz.api.security import Settings
@@ -43,6 +43,31 @@ def test_criar_projeto_com_aba_escolhida(client):
     assert r.status_code == 201, r.text
     assert r.json()["source"]["sheet"] == "Legenda"
     assert r.json()["recipe"]["source"] == {"type": "ods", "sheet": "Legenda"}
+
+
+def _abas(client, nome, arquivo):
+    caminho = CORPUS / nome / arquivo
+    with caminho.open("rb") as f:
+        return client.post("/api/sheets", files={"file": (nome + caminho.suffix, f, XLSX)})
+
+
+def test_listar_abas_sem_criar_projeto(client, settings):
+    r = _abas(client, "licitacoes_ods", "original.ods")
+    assert r.status_code == 200, r.text
+    assert [a["name"] for a in r.json()] == ["Licitações", "Legenda"]
+    assert all(a["hidden"] is False for a in r.json())
+    assert client.get("/api/projects").json() == []  # nada foi criado
+    assert list((settings.workspace.root / "uploads").iterdir()) == []  # temporário apagado
+
+
+def test_listar_abas_de_csv_e_vazio(client):
+    r = client.post("/api/sheets", files={"file": ("a.csv", b"a;b\n1;2\n", "text/csv")})
+    assert r.status_code == 200 and r.json() == []
+
+
+def test_listar_abas_de_arquivo_ruim(client):
+    r = client.post("/api/sheets", files={"file": ("extrato.xls", b"<html></html>", "x")})
+    assert r.status_code == 422 and r.json()["code"] == "extension_mismatch"
 
 
 def test_criar_projeto_com_arquivo_ruim_e_problem_details(client):
@@ -145,6 +170,20 @@ def test_put_salva_e_troca_a_etag(client, settings, projeto):
         == 409
     )
     assert client.put(_url(projeto, "recipe"), json=nova, headers={"If-Match": etag}).status_code == 200
+
+
+def test_passo_desativado_nao_roda_no_preview(client, projeto):
+    receita = projeto["recipe"]
+    assert [p["op"] for p in receita["steps"]][:2] == ["select_range", "header_rows"]
+    passos = [{**p, "enabled": p["op"] != "header_rows"} for p in receita["steps"]]
+    r = client.put(
+        _url(projeto, "recipe"), json={**receita, "steps": passos}, headers={"If-Match": projeto["etag"]}
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["recipe"]["steps"][1]["enabled"] is False
+    assert "enabled" not in r.json()["recipe"]["steps"][0]
+    colunas = [c["name"] for c in client.get(_url(projeto, "preview")).json()["columns"]]
+    assert colunas[0] == "A"  # sem o cabeçalho, a grade continua com as letras
 
 
 def test_put_receita_invalida_aponta_o_passo(client, projeto):

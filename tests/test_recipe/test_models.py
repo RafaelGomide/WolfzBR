@@ -3,7 +3,7 @@ from typing import Literal
 
 import polars as pl
 import pytest
-from conftest import RemoverDeTeste, RenomearDeTeste
+from ops_de_teste import RemoverDeTeste, RenomearDeTeste
 
 from wolfz.core.recipe import (
     Op,
