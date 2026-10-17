@@ -16,6 +16,15 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 - Limites na importação: 100 MB por arquivo, tamanho descompactado de `.xlsx`/`.ods` (zip bomb) e 200 abas.
 - Erros de importação com mensagem para o usuário (`IngestError`, Problem Details): arquivo aberto no Excel, arquivo temporário `~$` do Excel, protegido por senha, corrompido, vazio, extensão que não bate com o conteúdo (inclusive HTML salvo como `.xls`) e formato não suportado.
 - `import_file`: grava `project.json`, `raw.parquet` e `structure.json` em `~/.wolfz/projects/<ulid>/` (ou em `WOLFZ_HOME`) e reaproveita o `raw.parquet` de um projeto anterior quando o arquivo, pelo hash, e a aba são os mesmos.
+- Corpus de testes em `tests/corpus/`: uma pasta por arquivo com `original.*`, `receita_esperada.wolfz.json`, `saida_esperada.parquet` e `FONTE.md`, mais um `README.md` com as regras.
+- 30 arquivos sintéticos cobrindo as 15 categorias do corpus (`.xlsx`, `.xls`, `.ods` e `.csv`), gerados por `scripts/gerar_sinteticos.py`. Imitam a estrutura de fontes públicas e de ERPs; os dados são inventados.
+- Testes do corpus: estrutura das pastas, limite de 1 MB, cobertura mínima por categoria, ingestão de todo original, sintéticos em dia com o gerador e execução das receitas que já têm todas as operações implementadas.
+- `scripts/baixar_corpus.py` para arquivos públicos acima de 1 MB, que ficam fora do Git e são baixados com conferência de hash.
+- 9 arquivos públicos reais no corpus (IBGE, ANP e Câmara dos Deputados): estimativas de população 2021 (`.xls`) e 2024 (`.ods`), série histórica do IPCA, LSPA, perfil municipal da PPM, população do Censo 2022, áreas territoriais 2022 (externo, acima de 1 MB), preços de GLP da ANP (recortado) e órgãos da Câmara (`.ods`). Origem, recorte e gabarito de cada um em `scripts/corpus_publico.py`.
+
+### Alterado
+
+- Hook `check-added-large-files` do pre-commit passou de 2 MB para 1 MB, o limite do corpus.
 
 ## [0.1.0] - 2026-10-16
 

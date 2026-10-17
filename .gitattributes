@@ -1,0 +1,3 @@
+# Corpus de testes: os arquivos são comparados byte a byte (originais
+# baixados e sintéticos gerados). Nenhuma conversão de fim de linha.
+tests/corpus/** -text

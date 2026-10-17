@@ -1,0 +1,39 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "anuario tabelas lado a lado",
+  "source": {
+    "sheet": "Educação",
+    "type": "excel"
+  },
+  "steps": [
+    {
+      "end": "C10",
+      "id": "s1",
+      "op": "select_range",
+      "start": "A2"
+    },
+    {
+      "id": "s2",
+      "n": 1,
+      "op": "header_rows"
+    },
+    {
+      "id": "s3",
+      "mapping": {
+        "Município": "municipio",
+        "Rural": "rural",
+        "Urbana": "urbana"
+      },
+      "op": "rename"
+    },
+    {
+      "id": "s4",
+      "op": "cast",
+      "types": {
+        "rural": "int",
+        "urbana": "int"
+      }
+    }
+  ],
+  "wolfz_version": "0.1"
+}

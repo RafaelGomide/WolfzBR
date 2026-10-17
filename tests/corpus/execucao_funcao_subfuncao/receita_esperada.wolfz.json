@@ -1,0 +1,61 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "execucao funcao subfuncao",
+  "source": {
+    "sheet": "Execução",
+    "type": "excel"
+  },
+  "steps": [
+    {
+      "end_detect": "auto",
+      "id": "s1",
+      "op": "select_range",
+      "start": "A3"
+    },
+    {
+      "id": "s2",
+      "n": 1,
+      "op": "header_rows"
+    },
+    {
+      "col": "Função / Subfunção",
+      "id": "s3",
+      "match": "in",
+      "op": "drop_rows_where",
+      "value": [
+        "10 - Saúde",
+        "12 - Educação",
+        "04 - Administração",
+        "15 - Urbanismo",
+        "TOTAL"
+      ]
+    },
+    {
+      "id": "s4",
+      "mapping": {
+        "Dotação Atualizada": "dotacao_atualizada",
+        "Empenhado": "empenhado",
+        "Função / Subfunção": "subfuncao",
+        "Liquidado": "liquidado"
+      },
+      "op": "rename"
+    },
+    {
+      "cols": [
+        "subfuncao"
+      ],
+      "id": "s5",
+      "op": "trim"
+    },
+    {
+      "id": "s6",
+      "op": "cast",
+      "types": {
+        "dotacao_atualizada": "float",
+        "empenhado": "float",
+        "liquidado": "float"
+      }
+    }
+  ],
+  "wolfz_version": "0.1"
+}

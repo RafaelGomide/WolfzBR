@@ -1,0 +1,37 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "anuario tabelas empilhadas",
+  "source": {
+    "sheet": "Território",
+    "type": "excel"
+  },
+  "steps": [
+    {
+      "end": "B10",
+      "id": "s1",
+      "op": "select_range",
+      "start": "A2"
+    },
+    {
+      "id": "s2",
+      "n": 1,
+      "op": "header_rows"
+    },
+    {
+      "id": "s3",
+      "mapping": {
+        "Município": "municipio",
+        "Área (km²)": "area_km2"
+      },
+      "op": "rename"
+    },
+    {
+      "id": "s4",
+      "op": "cast",
+      "types": {
+        "area_km2": "float"
+      }
+    }
+  ],
+  "wolfz_version": "0.1"
+}

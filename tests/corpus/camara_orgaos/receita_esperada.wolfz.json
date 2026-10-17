@@ -1,0 +1,52 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "camara orgaos",
+  "source": {
+    "type": "ods"
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "n": 1,
+      "op": "header_rows"
+    },
+    {
+      "cols": [
+        "uri",
+        "apelido",
+        "nomePublicacao",
+        "dataInstalacao",
+        "dataFimOriginal",
+        "codSituacao",
+        "sala",
+        "urlWebsite"
+      ],
+      "id": "s2",
+      "op": "drop_cols"
+    },
+    {
+      "id": "s3",
+      "mapping": {
+        "casa": "casa",
+        "codTipoOrgao": "cod_tipo_orgao",
+        "dataFim": "data_fim",
+        "dataInicio": "data_inicio",
+        "descricaoSituacao": "situacao",
+        "nome": "nome",
+        "sigla": "sigla",
+        "tipoOrgao": "tipo_orgao"
+      },
+      "op": "rename"
+    },
+    {
+      "id": "s4",
+      "op": "cast",
+      "types": {
+        "cod_tipo_orgao": "int",
+        "data_fim": "date",
+        "data_inicio": "date"
+      }
+    }
+  ],
+  "wolfz_version": "0.1"
+}

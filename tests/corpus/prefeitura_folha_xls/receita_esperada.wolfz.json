@@ -1,0 +1,47 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "prefeitura folha xls",
+  "source": {
+    "sheet": "Folha",
+    "type": "excel"
+  },
+  "steps": [
+    {
+      "end_detect": "auto",
+      "id": "s1",
+      "op": "select_range",
+      "start": "A2"
+    },
+    {
+      "id": "s2",
+      "n": 1,
+      "op": "header_rows"
+    },
+    {
+      "cols": [
+        "Secretaria"
+      ],
+      "id": "s3",
+      "op": "fill_down"
+    },
+    {
+      "id": "s4",
+      "mapping": {
+        "Cargo": "cargo",
+        "Secretaria": "secretaria",
+        "Servidores": "servidores",
+        "Total bruto (R$)": "total_bruto"
+      },
+      "op": "rename"
+    },
+    {
+      "id": "s5",
+      "op": "cast",
+      "types": {
+        "servidores": "int",
+        "total_bruto": "float"
+      }
+    }
+  ],
+  "wolfz_version": "0.1"
+}

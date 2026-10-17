@@ -1,0 +1,70 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "tabnet obitos",
+  "source": {
+    "sheet": "Óbitos",
+    "type": "excel"
+  },
+  "steps": [
+    {
+      "end_detect": "auto",
+      "id": "s1",
+      "op": "select_range",
+      "start": "A5"
+    },
+    {
+      "id": "s2",
+      "n": 1,
+      "op": "header_rows"
+    },
+    {
+      "col": "Município",
+      "id": "s3",
+      "match": "equals",
+      "op": "drop_rows_where",
+      "value": "Total"
+    },
+    {
+      "cols": [
+        "Total"
+      ],
+      "id": "s4",
+      "op": "drop_cols"
+    },
+    {
+      "id": "s5",
+      "mapping": {
+        "2019": "ano_2019",
+        "2020": "ano_2020",
+        "2021": "ano_2021",
+        "2022": "ano_2022",
+        "2023": "ano_2023",
+        "Município": "municipio"
+      },
+      "op": "rename"
+    },
+    {
+      "cols": [
+        "ano_2019",
+        "ano_2020",
+        "ano_2021",
+        "ano_2022",
+        "ano_2023"
+      ],
+      "id": "s6",
+      "op": "parse_ibge"
+    },
+    {
+      "id": "s7",
+      "op": "cast",
+      "types": {
+        "ano_2019": "int",
+        "ano_2020": "int",
+        "ano_2021": "int",
+        "ano_2022": "int",
+        "ano_2023": "int"
+      }
+    }
+  ],
+  "wolfz_version": "0.1"
+}

@@ -1,0 +1,47 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "sidra ppm rebanho",
+  "source": {
+    "sheet": "Tabela 3939",
+    "type": "excel"
+  },
+  "steps": [
+    {
+      "end_detect": "auto",
+      "id": "s1",
+      "op": "select_range",
+      "start": "A4"
+    },
+    {
+      "id": "s2",
+      "n": 1,
+      "op": "header_rows"
+    },
+    {
+      "id": "s3",
+      "mapping": {
+        "Bovino": "bovino",
+        "Bubalino": "bubalino",
+        "Caprino": "caprino",
+        "Equino": "equino",
+        "Galináceos - total": "galinaceos_total",
+        "Município": "municipio",
+        "Suíno - total": "suino_total"
+      },
+      "op": "rename"
+    },
+    {
+      "cols": [
+        "bovino",
+        "bubalino",
+        "equino",
+        "suino_total",
+        "caprino",
+        "galinaceos_total"
+      ],
+      "id": "s4",
+      "op": "parse_ibge"
+    }
+  ],
+  "wolfz_version": "0.1"
+}

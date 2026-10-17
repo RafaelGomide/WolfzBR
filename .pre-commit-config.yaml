@@ -11,6 +11,8 @@ repos:
     hooks:
       - id: check-yaml
       - id: end-of-file-fixer
-      # 2 MB: nenhuma planilha grande entra no repositório por engano.
+        # O corpus é comparado byte a byte com a fonte e com o gerador.
+        exclude: ^tests/corpus/
+      # 1 MB: limite de arquivo do corpus (F1.B2); nada maior entra por engano.
       - id: check-added-large-files
-        args: [--maxkb=2048]
+        args: [--maxkb=1024]

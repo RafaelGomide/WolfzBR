@@ -1,0 +1,39 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "cnpj estabelecimentos",
+  "source": {
+    "type": "csv"
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "n": 0,
+      "names": [
+        "cnpj_basico",
+        "cnpj_ordem",
+        "cnpj_dv",
+        "identificador_matriz_filial",
+        "nome_fantasia",
+        "situacao_cadastral",
+        "data_situacao_cadastral",
+        "motivo_situacao_cadastral",
+        "data_inicio_atividade",
+        "cnae_fiscal_principal",
+        "cep",
+        "uf",
+        "municipio"
+      ],
+      "op": "header_rows"
+    },
+    {
+      "cols": [
+        "data_situacao_cadastral",
+        "data_inicio_atividade"
+      ],
+      "eight_digits": "ymd",
+      "id": "s2",
+      "op": "parse_date_br"
+    }
+  ],
+  "wolfz_version": "0.1"
+}

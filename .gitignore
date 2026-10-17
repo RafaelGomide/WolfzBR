@@ -46,6 +46,9 @@ saida/
 *.parquet
 !tests/corpus/**
 !src/wolfz/br/data/*.parquet
+# Download pela metade de scripts/baixar_corpus.py. O original baixado é
+# ignorado pelo .gitignore da própria pasta do corpus (F1.B2).
+tests/corpus/**/.original.*.tmp
 
 # Excel: arquivos temporários de lock
 ~$*

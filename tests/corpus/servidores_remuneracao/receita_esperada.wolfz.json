@@ -1,0 +1,33 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "servidores remuneracao",
+  "source": {
+    "type": "csv"
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "mapping": {
+        "ANO": "ano",
+        "CPF": "cpf",
+        "GRATIFICAÇÃO NATALINA (R$)": "gratificacao_natalina",
+        "Id_SERVIDOR_PORTAL": "id_servidor",
+        "MES": "mes",
+        "NOME": "nome",
+        "REMUNERAÇÃO BÁSICA BRUTA (R$)": "remuneracao_basica",
+        "TOTAL DE VERBAS INDENIZATÓRIAS (R$)": "verbas_indenizatorias"
+      },
+      "op": "rename"
+    },
+    {
+      "cols": [
+        "remuneracao_basica",
+        "gratificacao_natalina",
+        "verbas_indenizatorias"
+      ],
+      "id": "s2",
+      "op": "parse_brl"
+    }
+  ],
+  "wolfz_version": "0.1"
+}

@@ -1,0 +1,41 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "vendas regiao mesclada",
+  "source": {
+    "sheet": "Vendas",
+    "type": "excel"
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "n": 1,
+      "op": "header_rows"
+    },
+    {
+      "cols": [
+        "Região",
+        "UF"
+      ],
+      "id": "s2",
+      "op": "fill_down"
+    },
+    {
+      "id": "s3",
+      "mapping": {
+        "Região": "regiao",
+        "UF": "uf",
+        "Vendas (R$)": "vendas",
+        "Vendedor": "vendedor"
+      },
+      "op": "rename"
+    },
+    {
+      "id": "s4",
+      "op": "cast",
+      "types": {
+        "vendas": "float"
+      }
+    }
+  ],
+  "wolfz_version": "0.1"
+}

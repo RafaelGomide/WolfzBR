@@ -1,0 +1,60 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "anp precos",
+  "source": {
+    "type": "csv"
+  },
+  "steps": [
+    {
+      "cols": [
+        "Nome da Rua",
+        "Numero Rua",
+        "Complemento",
+        "Bairro",
+        "Cep"
+      ],
+      "id": "s1",
+      "op": "drop_cols"
+    },
+    {
+      "id": "s2",
+      "mapping": {
+        "Bandeira": "bandeira",
+        "CNPJ da Revenda": "cnpj",
+        "Data da Coleta": "data_coleta",
+        "Estado - Sigla": "uf",
+        "Municipio": "municipio",
+        "Produto": "produto",
+        "Regiao - Sigla": "regiao",
+        "Revenda": "revenda",
+        "Unidade de Medida": "unidade",
+        "Valor de Compra": "valor_compra",
+        "Valor de Venda": "valor_venda"
+      },
+      "op": "rename"
+    },
+    {
+      "cols": [
+        "cnpj"
+      ],
+      "id": "s3",
+      "op": "clean_cnpj"
+    },
+    {
+      "cols": [
+        "data_coleta"
+      ],
+      "id": "s4",
+      "op": "parse_date_br"
+    },
+    {
+      "cols": [
+        "valor_venda",
+        "valor_compra"
+      ],
+      "id": "s5",
+      "op": "parse_decimal_br"
+    }
+  ],
+  "wolfz_version": "0.1"
+}

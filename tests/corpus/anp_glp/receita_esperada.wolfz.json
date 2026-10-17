@@ -1,0 +1,32 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "anp glp",
+  "source": {
+    "type": "csv"
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "mapping": {
+        "Bandeira": "bandeira",
+        "Data da Coleta": "data_coleta",
+        "Estado - Sigla": "uf",
+        "Municipio": "municipio",
+        "Produto": "produto",
+        "Regiao - Sigla": "regiao",
+        "Revenda": "revenda",
+        "Unidade de Medida": "unidade",
+        "Valor de Venda": "valor_venda"
+      },
+      "op": "rename"
+    },
+    {
+      "cols": [
+        "valor_venda"
+      ],
+      "id": "s2",
+      "op": "parse_brl"
+    }
+  ],
+  "wolfz_version": "0.1"
+}

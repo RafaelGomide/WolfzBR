@@ -1,0 +1,56 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "despesa por orgao",
+  "source": {
+    "sheet": "Despesa",
+    "type": "excel"
+  },
+  "steps": [
+    {
+      "end_detect": "auto",
+      "id": "s1",
+      "op": "select_range",
+      "start": "A3"
+    },
+    {
+      "id": "s2",
+      "n": 1,
+      "op": "header_rows"
+    },
+    {
+      "col": "Órgão",
+      "id": "s3",
+      "match": "starts_with",
+      "op": "drop_rows_where",
+      "value": "Subtotal"
+    },
+    {
+      "col": "Órgão",
+      "id": "s4",
+      "match": "equals",
+      "op": "drop_rows_where",
+      "value": "Total Geral"
+    },
+    {
+      "id": "s5",
+      "mapping": {
+        "Elemento de Despesa": "elemento",
+        "Empenhado": "empenhado",
+        "Liquidado": "liquidado",
+        "Pago": "pago",
+        "Órgão": "orgao"
+      },
+      "op": "rename"
+    },
+    {
+      "id": "s6",
+      "op": "cast",
+      "types": {
+        "empenhado": "float",
+        "liquidado": "float",
+        "pago": "float"
+      }
+    }
+  ],
+  "wolfz_version": "0.1"
+}

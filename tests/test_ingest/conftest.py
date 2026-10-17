@@ -1,5 +1,5 @@
 """Planilhas de teste geradas na hora (o ``.xls`` não tem gerador no
-ambiente de desenvolvimento e fica em ``tests/corpus/ingest/``)."""
+ambiente de desenvolvimento e fica em ``tests/corpus/_fixtures/``)."""
 
 import datetime as dt
 import zipfile
@@ -12,7 +12,7 @@ from openpyxl.styles import Font
 
 from wolfz.core.workspace import Workspace
 
-CORPUS = Path(__file__).parents[1] / "corpus" / "ingest"
+CORPUS = Path(__file__).parents[1] / "corpus" / "_fixtures"
 
 
 @pytest.fixture

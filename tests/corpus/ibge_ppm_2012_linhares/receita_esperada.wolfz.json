@@ -1,0 +1,63 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "ibge ppm 2012 linhares",
+  "source": {
+    "sheet": "Tabela 36",
+    "type": "excel"
+  },
+  "steps": [
+    {
+      "end_detect": "auto",
+      "id": "s1",
+      "op": "select_range",
+      "start": "A6"
+    },
+    {
+      "id": "s2",
+      "n": 0,
+      "names": [
+        "especificacao",
+        "quantidade",
+        "part_estadual",
+        "part_mesorregional",
+        "part_microrregional",
+        "valor"
+      ],
+      "op": "header_rows"
+    },
+    {
+      "cols": [
+        "especificacao"
+      ],
+      "id": "s3",
+      "op": "trim"
+    },
+    {
+      "col": "especificacao",
+      "id": "s4",
+      "match": "in",
+      "op": "drop_rows_where",
+      "value": [
+        "Categorias",
+        "Efetivo dos rebanhos em 31.12",
+        "Grande porte",
+        "Médio porte",
+        "Pequeno porte",
+        "Produtos",
+        "Produção animal"
+      ]
+    },
+    {
+      "cols": [
+        "quantidade",
+        "part_estadual",
+        "part_mesorregional",
+        "part_microrregional",
+        "valor"
+      ],
+      "id": "s5",
+      "op": "parse_ibge"
+    }
+  ],
+  "wolfz_version": "0.1"
+}

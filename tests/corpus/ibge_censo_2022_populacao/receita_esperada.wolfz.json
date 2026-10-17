@@ -1,0 +1,44 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "ibge censo 2022 populacao",
+  "source": {
+    "sheet": "Municípios",
+    "type": "excel"
+  },
+  "steps": [
+    {
+      "end_detect": "auto",
+      "id": "s1",
+      "op": "select_range",
+      "start": "B3"
+    },
+    {
+      "id": "s2",
+      "n": 1,
+      "op": "header_rows"
+    },
+    {
+      "id": "s3",
+      "mapping": {
+        "COD. MUNIC": "cod_munic",
+        "COD. UF": "cod_uf",
+        "NOME DO MUNICÍPIO": "nome_municipio",
+        "POP. COLETADA": "pop_coletada",
+        "POP. IMPUTADA": "pop_imputada",
+        "POP. TOTAL": "pop_total",
+        "UF": "uf"
+      },
+      "op": "rename"
+    },
+    {
+      "id": "s4",
+      "op": "cast",
+      "types": {
+        "pop_coletada": "int",
+        "pop_imputada": "int",
+        "pop_total": "int"
+      }
+    }
+  ],
+  "wolfz_version": "0.1"
+}

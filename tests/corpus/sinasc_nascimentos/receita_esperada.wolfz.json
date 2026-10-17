@@ -1,0 +1,37 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "sinasc nascimentos",
+  "source": {
+    "type": "csv"
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "mapping": {
+        "CODMUNNASC": "codmunnasc",
+        "DTCADASTRO": "dtcadastro",
+        "DTNASC": "dtnasc",
+        "PESO": "peso",
+        "SEXO": "sexo"
+      },
+      "op": "rename"
+    },
+    {
+      "cols": [
+        "dtnasc",
+        "dtcadastro"
+      ],
+      "eight_digits": "dmy",
+      "id": "s2",
+      "op": "parse_date_br"
+    },
+    {
+      "id": "s3",
+      "op": "cast",
+      "types": {
+        "peso": "int"
+      }
+    }
+  ],
+  "wolfz_version": "0.1"
+}

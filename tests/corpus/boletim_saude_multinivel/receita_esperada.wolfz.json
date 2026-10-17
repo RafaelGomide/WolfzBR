@@ -1,0 +1,55 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "boletim saude multinivel",
+  "source": {
+    "sheet": "Dengue",
+    "type": "excel"
+  },
+  "steps": [
+    {
+      "end_detect": "auto",
+      "id": "s1",
+      "op": "select_range",
+      "start": "A3"
+    },
+    {
+      "id": "s2",
+      "joiner": " ",
+      "n": 2,
+      "op": "header_rows"
+    },
+    {
+      "col": "Região de Saúde",
+      "id": "s3",
+      "match": "equals",
+      "op": "drop_rows_where",
+      "value": "Total"
+    },
+    {
+      "id": "s4",
+      "mapping": {
+        "Fevereiro Feminino": "fevereiro_feminino",
+        "Fevereiro Masculino": "fevereiro_masculino",
+        "Janeiro Feminino": "janeiro_feminino",
+        "Janeiro Masculino": "janeiro_masculino",
+        "Março Feminino": "marco_feminino",
+        "Março Masculino": "marco_masculino",
+        "Região de Saúde": "regiao_de_saude"
+      },
+      "op": "rename"
+    },
+    {
+      "id": "s5",
+      "op": "cast",
+      "types": {
+        "fevereiro_feminino": "int",
+        "fevereiro_masculino": "int",
+        "janeiro_feminino": "int",
+        "janeiro_masculino": "int",
+        "marco_feminino": "int",
+        "marco_masculino": "int"
+      }
+    }
+  ],
+  "wolfz_version": "0.1"
+}

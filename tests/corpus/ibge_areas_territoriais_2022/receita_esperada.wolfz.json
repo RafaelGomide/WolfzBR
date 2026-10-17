@@ -1,0 +1,43 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "ibge areas territoriais 2022",
+  "source": {
+    "sheet": "AR_BR_MUN_2022",
+    "type": "excel"
+  },
+  "steps": [
+    {
+      "end_detect": "auto",
+      "id": "s1",
+      "op": "select_range",
+      "start": "A1"
+    },
+    {
+      "id": "s2",
+      "n": 1,
+      "op": "header_rows"
+    },
+    {
+      "id": "s3",
+      "mapping": {
+        "AR_MUN_2022": "area_km2",
+        "CD_MUN": "cd_mun",
+        "CD_UF": "cd_uf",
+        "ID": "id",
+        "NM_MUN": "nm_mun",
+        "NM_UF": "nm_uf",
+        "NM_UF_SIGLA": "sigla_uf"
+      },
+      "op": "rename"
+    },
+    {
+      "id": "s4",
+      "op": "cast",
+      "types": {
+        "area_km2": "float",
+        "id": "int"
+      }
+    }
+  ],
+  "wolfz_version": "0.1"
+}

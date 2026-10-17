@@ -1,0 +1,101 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "ibge ipca serie historica",
+  "source": {
+    "sheet": "Série Histórica IPCA",
+    "type": "excel"
+  },
+  "steps": [
+    {
+      "end_detect": "auto",
+      "id": "s1",
+      "op": "select_range",
+      "start": "A9"
+    },
+    {
+      "id": "s2",
+      "n": 0,
+      "names": [
+        "ano",
+        "mes",
+        "numero_indice",
+        "var_mes",
+        "var_3_meses",
+        "var_6_meses",
+        "var_ano",
+        "var_12_meses"
+      ],
+      "op": "header_rows"
+    },
+    {
+      "col": "mes",
+      "id": "s3",
+      "match": "in",
+      "op": "filter",
+      "value": [
+        "JAN",
+        "FEV",
+        "MAR",
+        "ABR",
+        "MAI",
+        "JUN",
+        "JUL",
+        "AGO",
+        "SET",
+        "OUT",
+        "NOV",
+        "DEZ"
+      ]
+    },
+    {
+      "cols": [
+        "ano"
+      ],
+      "id": "s4",
+      "op": "fill_down"
+    },
+    {
+      "cols": [
+        "mes",
+        "ano"
+      ],
+      "id": "s5",
+      "into": "data",
+      "op": "merge_cols",
+      "separator": "/"
+    },
+    {
+      "cols": [
+        "data"
+      ],
+      "id": "s6",
+      "op": "parse_month_year"
+    },
+    {
+      "cols": [
+        "data",
+        "numero_indice",
+        "var_mes",
+        "var_3_meses",
+        "var_6_meses",
+        "var_ano",
+        "var_12_meses"
+      ],
+      "id": "s7",
+      "op": "reorder"
+    },
+    {
+      "id": "s8",
+      "op": "cast",
+      "types": {
+        "numero_indice": "float",
+        "var_12_meses": "float",
+        "var_3_meses": "float",
+        "var_6_meses": "float",
+        "var_ano": "float",
+        "var_mes": "float"
+      }
+    }
+  ],
+  "wolfz_version": "0.1"
+}

@@ -1,0 +1,48 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "erp sap lancamentos",
+  "source": {
+    "type": "csv"
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "mapping": {
+        "Data lançamento": "data_lancamento",
+        "Empresa": "empresa",
+        "Moeda": "moeda",
+        "Montante em MI": "montante",
+        "Nº documento": "documento",
+        "Texto": "texto",
+        "Tipo doc.": "tipo_doc",
+        "Vencimento líquido": "vencimento"
+      },
+      "op": "rename"
+    },
+    {
+      "cols": [
+        "vencimento"
+      ],
+      "id": "s2",
+      "new": null,
+      "old": "31.12.9999",
+      "op": "replace"
+    },
+    {
+      "cols": [
+        "data_lancamento",
+        "vencimento"
+      ],
+      "id": "s3",
+      "op": "parse_date_br"
+    },
+    {
+      "cols": [
+        "montante"
+      ],
+      "id": "s4",
+      "op": "parse_brl"
+    }
+  ],
+  "wolfz_version": "0.1"
+}

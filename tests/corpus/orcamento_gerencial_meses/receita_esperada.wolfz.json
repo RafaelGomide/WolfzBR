@@ -1,0 +1,61 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "orcamento gerencial meses",
+  "source": {
+    "sheet": "Orçamento",
+    "type": "excel"
+  },
+  "steps": [
+    {
+      "end_detect": "auto",
+      "id": "s1",
+      "op": "select_range",
+      "start": "A3"
+    },
+    {
+      "id": "s2",
+      "n": 1,
+      "op": "header_rows"
+    },
+    {
+      "cols": [
+        "Total"
+      ],
+      "id": "s3",
+      "op": "drop_cols"
+    },
+    {
+      "col": "Centro de Custo",
+      "id": "s4",
+      "match": "equals",
+      "op": "drop_rows_where",
+      "value": "Total"
+    },
+    {
+      "id": "s5",
+      "mapping": {
+        "Centro de Custo": "centro_custo",
+        "Conta": "conta"
+      },
+      "op": "rename"
+    },
+    {
+      "id": "s6",
+      "index": [
+        "centro_custo",
+        "conta"
+      ],
+      "op": "unpivot",
+      "value_name": "valor",
+      "variable_name": "mes"
+    },
+    {
+      "id": "s7",
+      "op": "cast",
+      "types": {
+        "valor": "float"
+      }
+    }
+  ],
+  "wolfz_version": "0.1"
+}
