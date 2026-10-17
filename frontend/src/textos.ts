@@ -112,6 +112,8 @@ export const T = {
   form: {
     lista: "lista",
     adicionarItem: "Adicionar",
+    adicionarTodas: (n: number) => `Adicionar todas (${n})`,
+    limpar: "Limpar",
     removerItem: "Remover",
     nenhumItem: "nenhum",
     chave: "de",

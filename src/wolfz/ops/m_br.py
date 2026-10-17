@@ -95,6 +95,30 @@ ESPACOS_M = f"""
     )
 """
 
+# decimal_provavel: devolve a cultura ("en-US" para ponto decimal, "pt-BR"
+# para vírgula) a partir dos valores da coluna inteira.
+DECIMAL_PROVAVEL = """
+(valores as list) as text =>
+    let
+        digitos = {"0".."9"},
+        textos = List.Transform(
+            List.Select(valores, each _ <> null and not (_ is number) and not (_ is logical)),
+            each Text.Trim(Text.From(_))
+        ),
+        temVirgula = List.AnyTrue(List.Transform(textos, each Text.Contains(_, ","))),
+        pontoDecimal = (t as text) as logical =>
+            let partes = Text.Split(t, ".")
+            in List.Count(partes) = 2
+                and Text.Length(partes{0}) > 0
+                and List.Contains(digitos, Text.End(partes{0}, 1))
+                and Text.Length(partes{1}) > 0
+                and Text.Select(partes{1}, digitos) = partes{1}
+                and Text.Length(partes{1}) <> 3,
+        temPonto = List.AnyTrue(List.Transform(textos, pontoDecimal))
+    in
+        if temVirgula then "pt-BR" else if temPonto then "en-US" else "pt-BR"
+"""
+
 PERCENTUAL = """
 (v as any, pontos as logical) as nullable number =>
     if v = null then null

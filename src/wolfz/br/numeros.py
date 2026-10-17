@@ -107,6 +107,40 @@ def parse_number_br(
     return -number if negative else number
 
 
+_DIGITOS = frozenset("0123456789")
+
+
+def decimal_provavel(valores: list) -> str:
+    """Separador decimal de uma coluna de números em texto, decidido pela
+    coluna inteira (``parse_decimal_br`` com ``decimal="auto"``).
+
+    ``"."`` quando nenhum valor tem vírgula e algum tem um único ponto
+    seguido de 1, 2 ou 4 ou mais dígitos ('8725.3480', '0.5'): esse ponto
+    não pode ser separador de milhar. É o caso de número do Excel lido como
+    texto. Senão, ``","`` (padrão brasileiro).
+
+    Coluna em que todo ponto tem exatamente 3 dígitos depois ('104.000') é
+    ambígua e fica com ``","``: escolha ``decimal="."`` se a fonte publica
+    ponto decimal."""
+    ponto = False
+    for v in valores:
+        if v is None or isinstance(v, (bool, int, float)):
+            continue
+        t = str(v).strip()
+        if "," in t:
+            return ","
+        if not ponto and t.count(".") == 1:
+            antes, depois = t.split(".")
+            ponto = (
+                bool(antes)
+                and antes[-1] in _DIGITOS
+                and bool(depois)
+                and set(depois) <= _DIGITOS
+                and len(depois) != 3
+            )
+    return "." if ponto else ","
+
+
 def parse_brl(value: object, debit_negative: bool = False) -> float | None:
     """Moeda brasileira: 'R$ 1.234,56', '(1.234,56)', 'R$ -' (= 0).
 

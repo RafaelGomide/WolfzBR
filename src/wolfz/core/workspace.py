@@ -12,6 +12,7 @@ import json
 import os
 import re
 import shutil
+import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -40,13 +41,29 @@ def file_sha256(path: str | Path, chunk: int = 1 << 20) -> str:
     return digest.hexdigest()
 
 
+def replace_atomic(tmp: Path, dest: Path, tentativas: int = 40, espera: float = 0.025) -> None:
+    """``tmp.replace(dest)`` que aguenta leitor concorrente no Windows.
+
+    No Windows, renomear por cima de um arquivo que outra thread está lendo
+    falha com ``PermissionError`` (acesso negado). A API lê a receita a cada
+    preview enquanto o salvamento automático grava: a leitura dura
+    milissegundos, então basta tentar de novo por um instante (até ~1 s)."""
+    for _ in range(tentativas - 1):
+        try:
+            tmp.replace(dest)
+            return
+        except PermissionError:
+            time.sleep(espera)
+    tmp.replace(dest)
+
+
 def write_json_atomic(path: Path, data: Any) -> None:
     """Grava em temporário e renomeia: uma falha no meio nunca deixa um JSON
     pela metade (§9)."""
     tmp = path.with_name(f".{path.name}.tmp")
     try:
         tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        tmp.replace(path)
+        replace_atomic(tmp, path)
     finally:
         tmp.unlink(missing_ok=True)
 

@@ -61,6 +61,15 @@ export function padrao(s: Schema, defs: Defs): unknown {
 }
 
 /** Parâmetros iniciais de um passo novo, a partir dos padrões do schema. */
+// Valores iniciais de passo novo criado na interface, quando diferem do
+// padrão da operação. O padrão da operação não muda porque receitas antigas
+// que omitem o parâmetro dependem dele.
+const INICIAIS: Record<string, Record<string, unknown>> = {
+  // A coluna decide entre vírgula e ponto: número do Excel chega como
+  // texto com ponto decimal ('8725.3480').
+  parse_decimal_br: { decimal: "auto" },
+};
+
 export function passoNovo(op: Operacao, id: string): Passo {
   const schema = op.schema as { properties?: Record<string, Schema>; $defs?: Defs };
   const passo: Passo = { id, op: op.op };
@@ -69,5 +78,5 @@ export function passoNovo(op: Operacao, id: string): Passo {
       const v = padrao(s, schema.$defs ?? {});
       if (v !== null) passo[k] = v;
     }
-  return passo;
+  return { ...passo, ...INICIAIS[op.op] };
 }

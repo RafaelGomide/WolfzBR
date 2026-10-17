@@ -37,6 +37,7 @@ import polars as pl
 from filelock import FileLock, Timeout
 
 from wolfz.core.recipe import Op
+from wolfz.core.workspace import replace_atomic
 
 LIMITE_CACHE = 2 * 1024**3  # 2 GB (F0.A3, §8.4)
 PASTA = "checkpoints"
@@ -64,7 +65,7 @@ def _grava_atomico(destino: Path, escrever) -> None:
     tmp = destino.with_name(f".{destino.name}.tmp")
     try:
         escrever(tmp)
-        tmp.replace(destino)
+        replace_atomic(tmp, destino)
     finally:
         tmp.unlink(missing_ok=True)
 

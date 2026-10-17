@@ -143,6 +143,25 @@ def test_ano_como_rotulo_de_coluna():
     assert detect_structure(df).header_row == 0
 
 
+@pytest.mark.parametrize("mes", ["1997-01-01 00:00:00", "1997-01-01", "1997-01-01 00:00"])
+def test_data_como_rotulo_de_coluna(mes):
+    # Série com meses nas colunas: o Excel entrega a célula de data como ISO.
+    linhas = [
+        ["Tabela 1.1. Resultado primário"],
+        ["Discriminação", mes, "1997-02-01 00:00:00", "1997-03-01 00:00:00"],
+        ["1. Receita total", "12290.48", "11596.25", "13069.05"],
+        ["1.1 Receita administrada", "7771.68", "7412.76", "8772.09"],
+        ["2. Transferências", "1520.3", "1622.8", "1700.1"],
+    ]
+    det = detect_structure(grade(linhas))
+    assert (det.header_row, det.first_row) == (1, 2)
+
+
+def test_coluna_de_datas_nao_vira_cabecalho():
+    linhas = [["2024-01-01", "10"], ["2024-02-01", "12"], ["2024-03-01", "9"]]
+    assert detect_structure(grade(linhas)).first_row == 0
+
+
 def test_bloco_maior_vence():
     linhas = [["A", "B"], ["1", "2"], [None], [None], ["C", "D"], ["1", "2"], ["3", "4"], ["5", "6"]]
     det = detect_structure(grade(linhas))

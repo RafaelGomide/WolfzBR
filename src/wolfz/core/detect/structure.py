@@ -41,6 +41,7 @@ TOTAL = r"(?i)^\s*(sub-?\s*)?total(\b|$)|^\s*soma\b|-\s*total\s*$"
 MAX_SECAO = 2  # linhas de seção seguidas que não quebram a região
 DOMINANCIA = 0.6  # fração de valores para a coluna ser "de valor"
 ANO = re.compile(r"(19|20)\d{2}")
+DATA_ISO = re.compile(r"(19|20)\d{2}-\d{2}-\d{2}( \d{2}:\d{2}(:\d{2})?)?")
 NEGRITO_RARO = 0.4  # negrito em até 40% das linhas de dados marca total
 
 
@@ -155,15 +156,24 @@ def _ano(v: object) -> bool:
     return v is not None and bool(ANO.fullmatch(str(v).strip()))
 
 
+def _periodo(v: object) -> bool:
+    """Ano ('2019') ou data ISO, com ou sem hora ('1997-01-01 00:00:00',
+    que é como uma célula de data do Excel chega à grade)."""
+    return v is not None and (_ano(v) or bool(DATA_ISO.fullmatch(str(v).strip())))
+
+
 def _parece_cabecalho(df: pl.DataFrame, kinds: pl.DataFrame, r: int, de_valor: set[str]) -> bool:
-    """Maioria de texto nas colunas de valor. Ano ('2019') conta como
-    rótulo quando a célula de baixo não é ano: é o cabeçalho de série
-    histórica (TabNet, SIDRA), não um dado."""
+    """Maioria de texto nas colunas de valor. Período (ano ou data) conta
+    como rótulo quando a célula de baixo não é período: é o cabeçalho de
+    série histórica com anos ou meses nas colunas (TabNet, SIDRA, séries
+    do Tesouro), não um dado."""
     linha = kinds.row(r, named=True)
     valores = df.row(r, named=True)
     abaixo = df.row(r + 1, named=True) if r + 1 < df.height else {}
     marcadas = [c for c in de_valor if linha[c] != 0]
-    rotulos = sum(linha[c] == TEXTO or (_ano(valores[c]) and not _ano(abaixo.get(c))) for c in marcadas)
+    rotulos = sum(
+        linha[c] == TEXTO or (_periodo(valores[c]) and not _periodo(abaixo.get(c))) for c in marcadas
+    )
     return bool(marcadas) and rotulos / len(marcadas) > 0.5
 
 

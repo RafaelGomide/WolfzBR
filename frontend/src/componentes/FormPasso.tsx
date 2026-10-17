@@ -85,6 +85,20 @@ function Lista({
             </datalist>
           )}
         </div>
+        {(sugestoes.length > 1 || valor.length > 0) && (
+          <div className="linha">
+            {sugestoes.length > 1 && (
+              <button type="button" onClick={() => mudar([...valor, ...sugestoes])}>
+                {T.form.adicionarTodas(sugestoes.length)}
+              </button>
+            )}
+            {valor.length > 0 && (
+              <button type="button" onClick={() => mudar([])}>
+                {T.form.limpar}
+              </button>
+            )}
+          </div>
+        )}
         {sugestoes.length > 0 && sugestoes.length <= 40 && (
           <div className="sugestoes">
             {sugestoes.map((c) => (

@@ -19,6 +19,11 @@ test("importar → editar → exportar", async ({ page }) => {
   await passo(page, "s2").getByRole("button", { name: "Definir o cabeçalho" }).click();
   await adicionarPasso(page, "drop_cols", "Remover colunas");
   const form = page.getByRole("form", { name: "Novo passo" });
+  // "Adicionar todas" põe as 4 colunas de uma vez; "Limpar" desfaz.
+  await form.getByRole("button", { name: "Adicionar todas (4)" }).click();
+  await expect(form.locator(".ficha")).toHaveCount(4);
+  await form.getByRole("button", { name: "Limpar" }).click();
+  await expect(form.locator(".ficha")).toHaveCount(0);
   await form.getByRole("button", { name: "+ Código" }).click();
   await form.getByRole("button", { name: "Aplicar" }).click();
   await expect(passo(page, "s3")).toContainText("Código");

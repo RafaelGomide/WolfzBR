@@ -168,7 +168,7 @@ export function GradeDados(props: PropsGrade) {
         id: c.name,
         title: c.name,
         icon: icone(c.dtype),
-        width: larguras[c.name] ?? Math.min(260, Math.max(90, c.name.length * 9 + 40)),
+        width: larguras[c.name] ?? Math.min(180, Math.max(90, c.name.length * 8 + 40)),
       })),
     [info, larguras],
   );

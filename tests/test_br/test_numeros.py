@@ -1,6 +1,7 @@
 import pytest
 
 from wolfz.br.numeros import (
+    decimal_provavel,
     format_brl,
     parse_brl,
     parse_ibge_value,
@@ -138,3 +139,23 @@ def test_scale_from_unit(unit, expected):
 )
 def test_parse_ibge_value(value, expected):
     assert parse_ibge_value(value) == expected
+
+
+@pytest.mark.parametrize(
+    ("valores", "esperado"),
+    [
+        (["8725.3480", "0.125", "1"], "."),  # número do Excel lido como texto
+        (["0.5", "12"], "."),
+        (["-29.06944444"], "."),
+        (["R$ 1.5"], "."),
+        (["1.234", "2,5"], ","),  # tem vírgula: padrão brasileiro
+        (["1.234", "1.234.567"], ","),  # todo ponto com 3 dígitos: milhar
+        (["104.000", "55.180"], ","),  # ambíguo: fica o padrão (use decimal=".")
+        (["1.5E+3"], ","),
+        (["abc.de", "v1.2x"], ","),
+        ([None, "", "  ", 1.5, True], ","),
+        ([], ","),
+    ],
+)
+def test_decimal_provavel(valores, esperado):
+    assert decimal_provavel(valores) == esperado

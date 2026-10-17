@@ -17,6 +17,7 @@ from pydantic import ValidationError
 
 from wolfz.core.recipe.migrate import RecipeVersionError, migrate
 from wolfz.core.recipe.models import Recipe, recipe_validator
+from wolfz.core.workspace import replace_atomic
 
 
 class RecipeError(ValueError):
@@ -162,7 +163,7 @@ def save_recipe(recipe: Recipe, path: str | Path) -> None:
     path = Path(path)
     tmp = path.with_name(f".{path.name}.tmp")
     tmp.write_bytes(dumps_recipe(recipe).encode("utf-8"))
-    tmp.replace(path)
+    replace_atomic(tmp, path)  # aguenta leitor concorrente no Windows
 
 
 def recipe_json_schema() -> dict[str, Any]:

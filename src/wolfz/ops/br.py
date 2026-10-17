@@ -13,7 +13,7 @@ from wolfz.br.booleanos import parse_bool_br
 from wolfz.br.datas import parse_date_br, parse_month_year
 from wolfz.br.documentos import clean_cep, clean_cnpj, clean_cpf, cnpj_is_valid, cpf_is_valid
 from wolfz.br.geo import normalize_uf
-from wolfz.br.numeros import parse_brl, parse_number_br, parse_percent_br
+from wolfz.br.numeros import decimal_provavel, parse_brl, parse_number_br, parse_percent_br
 from wolfz.core.recipe import Op, register_op
 from wolfz.export.m import m_field, m_text
 from wolfz.ops import m_br
@@ -177,18 +177,24 @@ class ParseDecimalBr(_ValorBr):
     negativo contábil '(1,5)', menos no fim (SAP), símbolo de moeda,
     espaço como milhar e notação científica. Valor com '%' vira nulo (use
     ``parse_percent``). ``decimal='.'`` para bases que publicam ponto
-    decimal."""
+    decimal; ``decimal='auto'`` decide pela coluna inteira (ponto quando
+    algum valor só faz sentido com ponto decimal, como número do Excel lido
+    como texto: '8725.3480')."""
 
     op: Literal["parse_decimal_br"]
-    decimal: Literal[",", "."] = ","
+    decimal: Literal[",", ".", "auto"] = ","
     dash_is_zero: bool = False
     debit_negative: bool = False
 
     funcao = parse_number_br
     dtype = "Float64"
     m_tipo = "type nullable number"
-    python_helpers = (parse_number_br,)
-    m_helpers = {**m_br.BASE, "WolfzNumeroBr": m_br.NUMERO_BR}  # noqa: RUF012
+    python_helpers = (parse_number_br, decimal_provavel)
+    m_helpers = {  # noqa: RUF012
+        **m_br.BASE,
+        "WolfzNumeroBr": m_br.NUMERO_BR,
+        "WolfzDecimalProvavel": m_br.DECIMAL_PROVAVEL,
+    }
     examples = (
         {
             "step": {"cols": ["v"]},
@@ -200,22 +206,78 @@ class ParseDecimalBr(_ValorBr):
             "input": {"v": ["1.234", "1,234.5", "-"]},
             "expected": {"v": [1.234, 1234.5, 0.0]},
         },
+        {
+            # "0.125" com decimal="," viraria 125: a coluna tem "8725.3480",
+            # que só pode ser ponto decimal. A coluna w é brasileira.
+            "step": {"cols": ["v", "w"], "decimal": "auto"},
+            "input": {
+                "v": ["8725.3480", "0.125", "1", None],
+                "w": ["1.234", "2,5", "1.234.567", None],
+            },
+            "expected": {"v": [8725.348, 0.125, 1.0, None], "w": [1234.0, 2.5, 1234567.0, None]},
+        },
     )
 
     def _kwargs(self) -> dict[str, Any]:
         kwargs: dict[str, Any] = {}
-        if self.decimal != ",":
-            kwargs["decimal"] = self.decimal
+        if self.decimal == ".":
+            kwargs["decimal"] = "."
         if self.dash_is_zero:
             kwargs["dash_is_zero"] = True
         if self.debit_negative:
             kwargs["debit_negative"] = True
         return kwargs
 
-    def _m(self, valor: str) -> str:
-        cultura = "pt-BR" if self.decimal == "," else "en-US"
+    def _m(self, valor: str, cultura: str | None = None) -> str:
+        if cultura is None:
+            cultura = '"pt-BR"' if self.decimal == "," else '"en-US"'
         traco, debito = str(self.dash_is_zero).lower(), str(self.debit_negative).lower()
-        return f'WolfzNumeroBr({valor}, {traco}, {debito}, "{cultura}")'
+        return f"WolfzNumeroBr({valor}, {traco}, {debito}, {cultura})"
+
+    def to_polars(self, lf: pl.LazyFrame) -> pl.LazyFrame:
+        if self.decimal != "auto":
+            return super().to_polars(lf)
+        kwargs = self._kwargs()
+
+        def aplicar(s: pl.Series) -> pl.Series:
+            decimal = decimal_provavel(s.drop_nulls().unique().to_list())
+            return map_unique(lambda v: parse_number_br(v, decimal=decimal, **kwargs), pl.Float64)(s)
+
+        return lf.with_columns(
+            pl.col(c).map_batches(aplicar, return_dtype=pl.Float64).alias(c) for c in self.cols
+        )
+
+    def to_python(self) -> str:
+        if self.decimal != "auto":
+            return super().to_python()
+        extra = "".join(f", {k}={v!r}" for k, v in self._kwargs().items())
+        # A decisão é pela coluna inteira: decimal_provavel olha todos os
+        # valores antes de converter.
+        return (
+            "lf = lf.with_columns(\n"
+            "    pl.col(c).map_batches(\n"
+            "        lambda s: (lambda d: s.map_elements(\n"
+            f"            lambda v: parse_number_br(v, decimal=d{extra}), return_dtype=pl.Float64\n"
+            "        ))(decimal_provavel(s.to_list())),\n"
+            "        return_dtype=pl.Float64,\n"
+            "    )\n"
+            f"    for c in {self.cols!r}\n"
+            ")"
+        )
+
+    def to_m(self, prev: str, name: str) -> str:
+        if self.decimal != "auto":
+            return super().to_m(prev, name)
+        culturas = ",\n".join(
+            f"        cultura{i} = WolfzDecimalProvavel(Table.Column({prev}, {m_text(c)}))"
+            for i, c in enumerate(self.cols)
+        )
+        transforms = ", ".join(
+            f"{{{m_text(c)}, each {self._m('_', f'cultura{i}')}, {self.m_tipo}}}"
+            for i, c in enumerate(self.cols)
+        )
+        tabela = f"Table.TransformColumns({prev}, {{{transforms}}})"
+        return f"{name} = let\n{culturas}\n    in\n        {tabela}"
 
 
 @register_op
