@@ -9,16 +9,22 @@ texto (§5.4).
 from __future__ import annotations
 
 import json
+from datetime import date
 from enum import IntEnum, StrEnum
 from pathlib import Path
 from typing import Annotated, NoReturn
 
 import polars as pl
 import typer
+from rich.console import Console
+from rich.table import Table
 
 from wolfz import __version__
 from wolfz.core.engine import StepError, collect
+from wolfz.core.ingest import IngestError
 from wolfz.core.ingest.csv import read_csv_raw
+from wolfz.core.profile import ColumnProfile, LoadedTable, TableProfile, load_table, profile_table
+from wolfz.core.profile.column import SAMPLE_SIZE
 from wolfz.core.recipe import RecipeError, load_recipe, recipe_json_schema
 
 
@@ -165,3 +171,119 @@ def schema() -> None:
     """Imprime o JSON Schema da receita (wolfz schema > recipe.schema.json)."""
     # ASCII puro: redirecionar para arquivo no Windows não depende do encoding do console.
     typer.echo(json.dumps(recipe_json_schema(), indent=2, sort_keys=True))
+
+
+# ---------------------------------------------------------------------------
+# wolfz inspect
+# ---------------------------------------------------------------------------
+
+
+def _int_br(n: int) -> str:
+    return f"{n:,}".replace(",", ".")
+
+
+def _pct(x: float) -> str:
+    return "0%" if x == 0 else f"{x * 100:.1f}%".replace(".", ",")
+
+
+def _valor(v: float | date | None) -> str:
+    if v is None:
+        return ""
+    if isinstance(v, date):
+        return v.strftime("%d/%m/%Y")
+    if float(v).is_integer():
+        return _int_br(int(v))
+    return f"{v:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+
+
+def _cabecalho(t: LoadedTable, p: TableProfile) -> list[str]:
+    linhas = [f"[bold]{t.path.name}[/bold] ({t.format})"]
+    if t.sheet is not None:
+        outras = [f"{s.name} (oculta)" if s.hidden else s.name for s in t.sheets]
+        linhas.append(f"Aba: {t.sheet} · abas: {', '.join(outras)}")
+        linhas.append(f"Cabeçalho na linha {t.header_row} (mude com --header-row)")
+    linhas.append(f"{_int_br(p.total_rows)} linhas, {len(p.columns)} colunas")
+    if p.is_sample:
+        linhas.append(f"[yellow]Perfil numa amostra de {_int_br(p.sampled_rows)} linhas.[/yellow]")
+    return linhas
+
+
+def _tabela(perfil: TableProfile) -> Table:
+    tabela = Table(show_lines=False, header_style="bold")
+    for nome, justify in [
+        ("Coluna", "left"),
+        ("Tipo", "left"),
+        ("Nulos", "right"),
+        ("Marcadores", "right"),
+        ("Distintos", "right"),
+        ("Formas", "left"),
+        ("Exemplos", "left"),
+        ("Mín.", "right"),
+        ("Máx.", "right"),
+    ]:
+        # Em terminal estreito o texto quebra em vez de virar "Munic…".
+        tabela.add_column(nome, justify=justify, overflow="fold")  # type: ignore[arg-type]
+    for c in perfil.columns:
+        tabela.add_row(*_linha(c))
+    return tabela
+
+
+def _linha(c: ColumnProfile) -> list[str]:
+    tipo = c.inferred_type if c.type_rate >= 0.999 else f"{c.inferred_type} ({_pct(c.type_rate)})"
+    formas = "\n".join(f"{s} ({_int_br(n)})" for s, n in c.top_shapes)
+    return [
+        c.name,
+        tipo,
+        _pct(c.null_pct),
+        _pct(c.null_marker_pct),
+        _int_br(c.distinct),
+        formas,
+        "\n".join(c.examples),
+        _valor(c.minimum),
+        _valor(c.maximum),
+    ]
+
+
+@app.command()
+def inspect(
+    arquivo: Annotated[Path, typer.Argument(help="Planilha ou CSV.", show_default=False)],
+    sheet: Annotated[
+        str | None,
+        typer.Option("--sheet", "-s", help="Aba (padrão: a primeira visível).", show_default=False),
+    ] = None,
+    header_row: Annotated[
+        int | None,
+        typer.Option(
+            "--header-row",
+            min=1,
+            help="Linha do cabeçalho (padrão: a primeira não vazia).",
+            show_default=False,
+        ),
+    ] = None,
+    amostra: Annotated[int, typer.Option("--sample", min=1, help="Tamanho máximo da amostra.")] = SAMPLE_SIZE,
+    como_json: Annotated[bool, typer.Option("--json", help="Saída em JSON, para scripts.")] = False,
+) -> None:
+    """Mostra o perfil de cada coluna: tipo, nulos, formas, exemplos, mínimo e máximo."""
+    try:
+        tabela = load_table(arquivo, sheet, header_row)
+    except IngestError as exc:
+        _fail(ExitCode.UNREADABLE_INPUT, f"{exc.title}: {exc.message}")
+    except ValueError as exc:
+        _fail(ExitCode.INVALID_RECIPE, f"Uso incorreto: {exc}")
+    perfil = profile_table(tabela.frame, amostra)
+
+    if como_json:
+        dados = {
+            "arquivo": str(tabela.path),
+            "formato": tabela.format,
+            "aba": tabela.sheet,
+            "linha_cabecalho": tabela.header_row,
+            **perfil.to_dict(),
+        }
+        # ASCII puro: redirecionar para arquivo no Windows não depende do encoding do console.
+        typer.echo(json.dumps(dados, indent=2))
+        return
+    console = Console(highlight=False)
+    for linha in _cabecalho(tabela, perfil):
+        console.print(linha)
+    console.print(_tabela(perfil))

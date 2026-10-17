@@ -190,3 +190,90 @@ def test_exemplo_de_ponta_a_ponta(tmp_path):
         "valor": [1234.56, -10.0, 0.0, None],
         "obs": [None, "estorno", "sem venda no mês", "dado não informado"],
     }
+
+
+# ---------------------------------------------------------------------------
+# wolfz inspect
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def csv_brasileiro(tmp_path):
+    path = tmp_path / "vendas.csv"
+    linhas = ["Município;Valor;Data"] + [
+        f"Cidade {i};R$ {i},00;{i % 28 + 1:02d}/01/2025" for i in range(1, 31)
+    ]
+    path.write_bytes("\n".join(linhas).encode("cp1252"))
+    return path
+
+
+def test_inspect_csv(csv_brasileiro):
+    result = runner.invoke(app, ["inspect", str(csv_brasileiro)], env={"COLUMNS": "250"})
+    assert result.exit_code == 0, result.output
+    assert "vendas.csv (csv)" in result.output
+    assert "30 linhas, 3 colunas" in result.output
+    assert "amostra" not in result.output
+    for trecho in ["Município", "moeda", "data", "01/01/2025", "28/01/2025"]:
+        assert trecho in result.output
+
+
+def test_inspect_amostra(csv_brasileiro):
+    result = runner.invoke(app, ["inspect", str(csv_brasileiro), "--sample", "10"], env={"COLUMNS": "250"})
+    assert result.exit_code == 0
+    assert "Perfil numa amostra de 10 linhas" in result.output
+
+
+def test_inspect_json(csv_brasileiro):
+    result = runner.invoke(app, ["inspect", str(csv_brasileiro), "--json"])
+    assert result.exit_code == 0
+    dados = json.loads(result.output)
+    assert dados["formato"] == "csv"
+    assert dados["linha_cabecalho"] == 1
+    assert dados["total_rows"] == 30
+    valor = dados["columns"][1]
+    assert (valor["name"], valor["inferred_type"], valor["minimum"], valor["maximum"]) == (
+        "Valor",
+        "moeda",
+        1.0,
+        30.0,
+    )
+
+
+def test_inspect_planilha_com_aba_e_cabecalho(tmp_path):
+    import openpyxl
+
+    wb = openpyxl.Workbook()
+    wb.active["A1"] = "Título"
+    outra = wb.create_sheet("Oculta")
+    outra.sheet_state = "hidden"
+    outra["A1"] = "x"
+    dados = wb.create_sheet("Dados")
+    dados.append(["Relatório"])
+    dados.append(["CPF", "Valor"])
+    dados.append(["123.456.789-09", 10])
+    path = tmp_path / "rel.xlsx"
+    wb.save(path)
+    result = runner.invoke(
+        app, ["inspect", str(path), "--sheet", "Dados", "--header-row", "2"], terminal_width=250
+    )
+    assert result.exit_code == 0, result.output
+    assert "Aba: Dados" in result.output
+    assert "Oculta (oculta)" in result.output
+    assert "Cabeçalho na linha 2" in result.output
+    assert "cpf" in result.output
+
+
+def test_inspect_arquivo_ilegivel(tmp_path):
+    path = tmp_path / "falso.xls"
+    path.write_bytes(b"<html><table><tr><td>1</td></tr></table></html>")
+    result = runner.invoke(app, ["inspect", str(path)])
+    assert result.exit_code == 3
+    assert "Extensão não bate com o conteúdo" in result.output
+
+
+def test_inspect_cabecalho_invalido(tmp_path):
+    path = tmp_path / "a.csv"
+    path.write_text("a;b\n1;2\n", encoding="utf-8")
+    result = runner.invoke(app, ["inspect", str(path), "--header-row", "3"])
+    assert result.exit_code == 2
+    assert "Uso incorreto" in result.output
