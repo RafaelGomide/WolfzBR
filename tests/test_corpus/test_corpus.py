@@ -7,6 +7,7 @@ e passam a rodar sozinhas quando a peça que falta entrar.
 """
 
 import importlib.util
+import zipfile
 from collections import Counter
 
 import polars as pl
@@ -213,11 +214,15 @@ SINTETICOS = [e for e in ENTRADAS if e.fonte.get("origem") == "sintetico"]
 
 
 def _conteudo(path):
-    """O que importa de um original: bytes para CSV e ODS (gerados de forma
-    determinística); valores e estrutura de cada aba para .xlsx/.xls, cujo
-    zip carrega data de gravação."""
-    if path.suffix in (".csv", ".ods"):
+    """O que importa de um original: bytes para CSV; conteúdo de cada entrada
+    do zip para ODS (o cabeçalho do zip e a compressão variam com o SO e a
+    zlib); valores e estrutura de cada aba para .xlsx/.xls, cujo zip carrega
+    data de gravação."""
+    if path.suffix == ".csv":
         return path.read_bytes()
+    if path.suffix == ".ods":
+        with zipfile.ZipFile(path) as zf:
+            return b"".join(n.encode() + b"\0" + zf.read(n) for n in zf.namelist())
     return [(s.name, read_sheet(path, s.name)) for s in list_sheets(path)]
 
 

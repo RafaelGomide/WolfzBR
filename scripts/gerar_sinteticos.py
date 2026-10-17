@@ -297,6 +297,7 @@ def escrever_ods(path: Path, abas: list[Aba]) -> None:
         ]:
             info = zipfile.ZipInfo(nome, date_time=(2026, 1, 1, 0, 0, 0))
             info.compress_type = metodo
+            info.create_system = 0  # o padrão depende do SO (0 no Windows, 3 no Linux)
             zf.writestr(info, dados)
 
 
