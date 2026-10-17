@@ -90,7 +90,7 @@ CAMPOS_FONTE = {
     "sintetico": {"origem", "gerador", "licenca", "categorias"},
     "publico": {"origem", "url", "baixado_em", "licenca", "categorias"},
 }
-ARQUIVOS_PERMITIDOS = {"FONTE.md", "externo.json", ".gitignore"}
+ARQUIVOS_PERMITIDOS = {"FONTE.md", "estrutura_esperada.json", "externo.json", ".gitignore"}
 
 
 def ler_fonte(path: Path) -> dict[str, Any]:
@@ -145,6 +145,11 @@ class Entrada:
     @cached_property
     def fonte(self) -> dict[str, Any]:
         return ler_fonte(self.pasta / "FONTE.md")
+
+    @property
+    def estrutura(self) -> dict[str, Any]:
+        """``estrutura_esperada.json``: gabarito da detecção (F1.C8)."""
+        return json.loads((self.pasta / "estrutura_esperada.json").read_text(encoding="utf-8"))
 
     @property
     def externo(self) -> dict[str, Any] | None:

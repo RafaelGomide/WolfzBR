@@ -6,6 +6,13 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 
 ## [Não publicado]
 
+### Adicionado
+
+- Detecção de estrutura v1 (`wolfz.core.detect`): métricas por linha (% preenchida, % valor, % texto, negrito, mesclagem), região de dados, cabeçalho de uma linha, totais e subtotais (por palavra-chave ou por negrito raro), título e notas de rodapé, e `fill_down` sugerido por mesclagem vertical. O resultado é uma lista de passos (`select_range`, `header_rows`, `drop_rows_where`, `fill_down`) para a receita inicial; nada é aplicado.
+- `estrutura_esperada.json` em cada arquivo do corpus: o gabarito da detecção (cabeçalho, área, colunas, totais e `fill_down`).
+- `scripts/medir_deteccao.py`: compara a detecção com o gabarito e imprime uma tabela em Markdown para colar no PR. Na v1: área 95%, cabeçalho 87%, totais 90%, `fill_down` 100% e tudo certo em 77% dos 39 arquivos.
+- Teste de regressão da detecção: um arquivo que passa a errar reprova o build; as falhas conhecidas ficam listadas com o motivo.
+
 ## [0.2.0] - 2026-10-16
 
 Ingestão completa de planilhas, corpus de testes e `wolfz inspect`. Primeira versão no TestPyPI. O `wolfz run` continua lendo só CSV: aplicar receita a planilha depende da detecção de cabeçalho (0.3.0).

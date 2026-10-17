@@ -1,0 +1,27 @@
+{
+  "aba": "Execução",
+  "tabelas": [
+    {
+      "cabecalho": [
+        3,
+        3
+      ],
+      "dados": [
+        4,
+        17
+      ],
+      "colunas": [
+        "A",
+        "D"
+      ],
+      "totais": [
+        4,
+        8,
+        11,
+        14,
+        17
+      ],
+      "fill_down": []
+    }
+  ]
+}

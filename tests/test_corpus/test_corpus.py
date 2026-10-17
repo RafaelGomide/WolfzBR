@@ -71,6 +71,7 @@ def test_estrutura(entrada):
         assert entrada.original.suffix in FORMATOS
 
     assert entrada.pares, "falta receita_esperada.wolfz.json"
+    _confere_estrutura(entrada)
     for par in entrada.pares:
         assert par.saida.exists(), f"falta {par.saida.name}"
     saidas = {p.name for p in entrada.pasta.glob("saida_esperada*.parquet")}
@@ -88,6 +89,22 @@ def test_estrutura(entrada):
         assert entrada.nome in publicos().PUBLICOS, (
             "arquivo público sem gabarito em scripts/corpus_publico.py"
         )
+
+
+def _confere_estrutura(entrada):
+    estrutura = entrada.estrutura
+    assert estrutura.keys() == {"aba", "tabelas"}
+    assert len(estrutura["tabelas"]) == len(entrada.pares), "uma estrutura por receita esperada"
+    for tabela in estrutura["tabelas"]:
+        assert tabela.keys() == {"cabecalho", "dados", "colunas", "totais", "fill_down"}
+        primeira, ultima = tabela["dados"]
+        assert 1 <= primeira <= ultima
+        if tabela["cabecalho"] is not None:
+            topo, base = tabela["cabecalho"]
+            assert 1 <= topo <= base < primeira, "cabeçalho acima dos dados"
+        assert all(primeira <= r <= ultima for r in tabela["totais"]), "total fora da área de dados"
+        assert tabela["totais"] == sorted(set(tabela["totais"]))
+        assert len(tabela["colunas"]) == 2
 
 
 @pytest.mark.parametrize("entrada", [e for e in ENTRADAS if e.externo], ids=lambda e: e.nome)
@@ -231,7 +248,7 @@ def test_sintetico_em_dia_com_o_gerador(entrada, tmp_path):
     if entrada.original.suffix == ".xls" and not TEM_XLWT:
         pytest.skip("gerar .xls precisa do xlwt")
     novo = gerador().gravar(gerador().SINTETICOS[entrada.nome](), tmp_path)
-    for nome in ["FONTE.md", *(p.receita.name for p in entrada.pares)]:
+    for nome in ["FONTE.md", "estrutura_esperada.json", *(p.receita.name for p in entrada.pares)]:
         assert (novo / nome).read_text(encoding="utf-8") == (entrada.pasta / nome).read_text(encoding="utf-8")
     for par in entrada.pares:
         assert_frame_equal(pl.read_parquet(novo / par.saida.name), pl.read_parquet(par.saida))
@@ -260,6 +277,8 @@ def test_publico_em_dia_com_o_gabarito(entrada, tmp_path):
     p = script.PUBLICOS[entrada.nome]
     assert (entrada.pasta / "FONTE.md").read_text(encoding="utf-8") == script.fonte_md(p)
     saidas = p.gabarito(entrada.original)
+    gravada = (entrada.pasta / "estrutura_esperada.json").read_text(encoding="utf-8")
+    assert gravada == script.estrutura_json(saidas)
     assert len(saidas) == len(entrada.pares)
     for saida, par in zip(saidas, entrada.pares, strict=True):
         assert_frame_equal(saida.tabela, pl.read_parquet(par.saida))

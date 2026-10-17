@@ -11,10 +11,31 @@ tests/corpus/<nome>/
 ├── original.xlsx                  # a planilha como veio (.xlsx, .xls, .ods ou .csv)
 ├── receita_esperada.wolfz.json    # os passos que a limpam
 ├── saida_esperada.parquet         # a tabela limpa (o gabarito)
+├── estrutura_esperada.json        # onde estão cabeçalho, dados e totais (gabarito da detecção)
 └── FONTE.md                       # origem, licença e categorias
 ```
 
-Arquivo com duas tabelas tem também `receita_esperada_2.wolfz.json` e `saida_esperada_2.parquet`.
+Arquivo com duas tabelas tem também `receita_esperada_2.wolfz.json` e `saida_esperada_2.parquet`, e duas entradas em `estrutura_esperada.json`.
+
+### `estrutura_esperada.json`
+
+Linhas e colunas como aparecem no Excel (linha 1 é a primeira), uma entrada por tabela:
+
+```json
+{
+  "aba": "Receita",
+  "tabelas": [
+    {"cabecalho": [4, 4], "dados": [5, 16], "colunas": ["A", "D"], "totais": [16], "fill_down": []}
+  ]
+}
+```
+
+- `cabecalho`: primeira e última linha do cabeçalho (`null` se a tabela não tem).
+- `dados`: primeira e última linha de dados, incluindo totais e linhas de seção que estejam no meio ou no fim.
+- `totais`: linhas que saem da tabela por serem total, subtotal ou saldo.
+- `fill_down`: colunas com categoria mesclada na vertical.
+
+`python scripts/medir_deteccao.py` compara a detecção com esse gabarito e imprime uma tabela em Markdown. Rode a cada PR que mexer em `wolfz/core/detect/` e cole o resultado no PR. O teste `test_deteccao_corpus.py` reprova o build se algum arquivo passar a errar; as falhas conhecidas da versão atual ficam listadas nele, com o motivo.
 
 Pastas que começam com `_` não são do corpus: `_fixtures/` guarda arquivos usados por testes específicos. `minimo.csv`, solto na raiz, é o exemplo do README.
 

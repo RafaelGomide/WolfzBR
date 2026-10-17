@@ -1,0 +1,21 @@
+{
+  "aba": "Série Histórica IPCA",
+  "tabelas": [
+    {
+      "cabecalho": [
+        4,
+        7
+      ],
+      "dados": [
+        9,
+        474
+      ],
+      "colunas": [
+        "A",
+        "H"
+      ],
+      "totais": [],
+      "fill_down": []
+    }
+  ]
+}

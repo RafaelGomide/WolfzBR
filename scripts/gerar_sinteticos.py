@@ -322,6 +322,34 @@ class Saida:
     tabela: pl.DataFrame
     passos: list[dict]
     aba: str | None = None
+    estrutura: dict | None = None  # gabarito da detecção (estrutura_esperada.json)
+
+
+def est(
+    cabecalho: int | tuple[int, int] | None,
+    dados: tuple[int, int],
+    colunas: str | tuple[str, str],
+    totais: list[int] | tuple[int, ...] = (),
+    fill_down: str | tuple[str, ...] = (),
+) -> dict:
+    """Estrutura esperada de uma tabela, em linhas do Excel (1-based):
+    linhas do cabeçalho, primeira e última linha de dados (inclusive totais
+    que estejam dentro ou no fim), primeira e última coluna, linhas de
+    total e colunas com mesclagem vertical. ``colunas="AD"`` é A até D."""
+    if isinstance(cabecalho, int):
+        cabecalho = (cabecalho, cabecalho)
+    return {
+        "cabecalho": list(cabecalho) if cabecalho else None,
+        "dados": list(dados),
+        "colunas": list(colunas),
+        "totais": sorted(totais),
+        "fill_down": list(fill_down),
+    }
+
+
+def estrutura_json(saidas: list[Saida]) -> str:
+    dados = {"aba": saidas[0].aba, "tabelas": [s.estrutura for s in saidas]}
+    return json.dumps(dados, ensure_ascii=False, indent=2) + "\n"
 
 
 @dataclass
@@ -392,6 +420,10 @@ def gravar(s: Sintetico, destino: Path = CORPUS) -> Path:
         sufixo = "" if i == 0 else f"_{i + 1}"
         saida.tabela.write_parquet(pasta / f"saida_esperada{sufixo}.parquet")
         (pasta / f"receita_esperada{sufixo}.wolfz.json").write_text(receita_json(s, saida), encoding="utf-8")
+    estruturas = ESTRUTURAS[s.nome](s)
+    for saida, estrutura in zip(s.saidas, estruturas, strict=True):
+        saida.estrutura = estrutura
+    (pasta / "estrutura_esperada.json").write_text(estrutura_json(s.saidas), encoding="utf-8")
     (pasta / "FONTE.md").write_text(fonte_md(s), encoding="utf-8")
     return pasta
 
@@ -2239,6 +2271,50 @@ def escolas_mojibake() -> Sintetico:
 
 
 # --------------------------------------------------------------------------
+
+
+# --------------------------------------------------------------------------
+# Estrutura esperada (gabarito da detecção, F1.C8)
+# --------------------------------------------------------------------------
+
+
+def _uma(*args, **kwargs) -> Callable[[Sintetico], list[dict]]:
+    return lambda s: [est(*args, **kwargs)]
+
+
+ESTRUTURAS: dict[str, Callable[[Sintetico], list[dict]]] = {
+    "receita_municipal": _uma(4, (5, 16), "AD"),
+    "despesa_por_orgao": _uma(3, (4, 16), "AE", totais=[7, 11, 15, 16]),
+    "convenios_estaduais": _uma(4, (5, 15), "AF", totais=[15]),
+    "sidra_pam_area": _uma((2, 3), (4, 13), "AE"),
+    "boletim_saude_multinivel": _uma((3, 4), (5, 9), "AG", totais=[9]),
+    "sidra_ppm_rebanho": _uma(4, (5, 14), "AG"),
+    "censo_populacao_sinais": _uma(4, (5, 16), "AE"),
+    "execucao_funcao_subfuncao": _uma(3, (4, 17), "AD", totais=[4, 8, 11, 14, 17]),
+    "vendas_regiao_mesclada": lambda s: [est(1, (2, 1 + s.saidas[0].tabela.height), "AD", fill_down="AB")],
+    "estoque_categoria_mesclada": _uma(3, (4, 12), "AD", fill_down="A"),
+    "prefeitura_folha_xls": _uma(2, (3, 11), "AD", fill_down="A"),
+    "tabnet_obitos": _uma(5, (6, 16), "AG", totais=[16]),
+    "ceis_sancoes": _uma(1, (2, 13), "AH"),
+    "servidores_remuneracao": _uma(1, (2, 16), "AH"),
+    "anp_precos": _uma(1, (2, 16), "AP"),
+    "anp_glp": _uma(1, (2, 11), "AI"),
+    "cnpj_estabelecimentos": _uma(None, (1, 12), "AM"),
+    "sinasc_nascimentos": _uma(1, (2, 16), "AE"),
+    "clientes_cpf_cep": _uma(1, (2, 13), "AE"),
+    "fornecedores_cnpj": _uma(1, (2, 13), "AE"),
+    "bcb_serie_mensal": _uma(3, (4, 7), "AH"),
+    "orcamento_gerencial_meses": _uma(3, (4, 10), "AG", totais=[10]),
+    "erp_sap_lancamentos": _uma(1, (2, 15), "AH"),
+    # 'SALDO ANTERIOR' (linha 7) também sai da tabela, como os totais.
+    "erp_totvs_razao": _uma(6, (7, 20), "AF", totais=[7, 20]),
+    "transparencia_contratos_ods": _uma(3, (4, 13), "AF"),
+    "licitacoes_ods": _uma(4, (5, 14), "AF"),
+    "anuario_tabelas_empilhadas": lambda s: [est(2, (3, 10), "AB"), est(15, (16, 23), "AC")],
+    "anuario_tabelas_lado_a_lado": lambda s: [est(2, (3, 10), "AC"), est(2, (3, 10), "EG")],
+    "cadastro_mojibake": _uma(1, (2, 13), "AD"),
+    "escolas_mojibake": _uma(1, (2, 13), "AC"),
+}
 
 
 def main(argv: list[str] | None = None) -> int:

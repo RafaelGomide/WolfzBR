@@ -1,0 +1,23 @@
+{
+  "aba": "Orçamento",
+  "tabelas": [
+    {
+      "cabecalho": [
+        3,
+        3
+      ],
+      "dados": [
+        4,
+        10
+      ],
+      "colunas": [
+        "A",
+        "G"
+      ],
+      "totais": [
+        10
+      ],
+      "fill_down": []
+    }
+  ]
+}

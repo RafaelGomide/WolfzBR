@@ -1,0 +1,23 @@
+{
+  "aba": "Óbitos",
+  "tabelas": [
+    {
+      "cabecalho": [
+        5,
+        5
+      ],
+      "dados": [
+        6,
+        16
+      ],
+      "colunas": [
+        "A",
+        "G"
+      ],
+      "totais": [
+        16
+      ],
+      "fill_down": []
+    }
+  ]
+}

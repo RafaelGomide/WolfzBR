@@ -1,0 +1,37 @@
+{
+  "aba": "Educação",
+  "tabelas": [
+    {
+      "cabecalho": [
+        2,
+        2
+      ],
+      "dados": [
+        3,
+        10
+      ],
+      "colunas": [
+        "A",
+        "C"
+      ],
+      "totais": [],
+      "fill_down": []
+    },
+    {
+      "cabecalho": [
+        2,
+        2
+      ],
+      "dados": [
+        3,
+        10
+      ],
+      "colunas": [
+        "E",
+        "G"
+      ],
+      "totais": [],
+      "fill_down": []
+    }
+  ]
+}

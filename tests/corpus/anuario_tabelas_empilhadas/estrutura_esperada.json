@@ -1,0 +1,37 @@
+{
+  "aba": "Território",
+  "tabelas": [
+    {
+      "cabecalho": [
+        2,
+        2
+      ],
+      "dados": [
+        3,
+        10
+      ],
+      "colunas": [
+        "A",
+        "B"
+      ],
+      "totais": [],
+      "fill_down": []
+    },
+    {
+      "cabecalho": [
+        15,
+        15
+      ],
+      "dados": [
+        16,
+        23
+      ],
+      "colunas": [
+        "A",
+        "C"
+      ],
+      "totais": [],
+      "fill_down": []
+    }
+  ]
+}

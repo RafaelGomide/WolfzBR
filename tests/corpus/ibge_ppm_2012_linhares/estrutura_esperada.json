@@ -1,0 +1,25 @@
+{
+  "aba": "Tabela 36",
+  "tabelas": [
+    {
+      "cabecalho": [
+        4,
+        5
+      ],
+      "dados": [
+        6,
+        30
+      ],
+      "colunas": [
+        "A",
+        "F"
+      ],
+      "totais": [
+        8,
+        14,
+        18
+      ],
+      "fill_down": []
+    }
+  ]
+}

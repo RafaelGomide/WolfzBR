@@ -1,0 +1,28 @@
+{
+  "aba": "BRASIL_E_UFs",
+  "tabelas": [
+    {
+      "cabecalho": [
+        2,
+        2
+      ],
+      "dados": [
+        3,
+        35
+      ],
+      "colunas": [
+        "A",
+        "B"
+      ],
+      "totais": [
+        3,
+        4,
+        12,
+        22,
+        27,
+        31
+      ],
+      "fill_down": []
+    }
+  ]
+}

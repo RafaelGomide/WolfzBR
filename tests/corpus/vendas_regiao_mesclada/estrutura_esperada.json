@@ -1,0 +1,24 @@
+{
+  "aba": "Vendas",
+  "tabelas": [
+    {
+      "cabecalho": [
+        1,
+        1
+      ],
+      "dados": [
+        2,
+        15
+      ],
+      "colunas": [
+        "A",
+        "D"
+      ],
+      "totais": [],
+      "fill_down": [
+        "A",
+        "B"
+      ]
+    }
+  ]
+}

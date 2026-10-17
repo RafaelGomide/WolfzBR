@@ -1,0 +1,28 @@
+{
+  "aba": "Var mensal área",
+  "tabelas": [
+    {
+      "cabecalho": [
+        4,
+        5
+      ],
+      "dados": [
+        6,
+        41
+      ],
+      "colunas": [
+        "A",
+        "J"
+      ],
+      "totais": [
+        6,
+        8,
+        14,
+        19,
+        25,
+        33
+      ],
+      "fill_down": []
+    }
+  ]
+}

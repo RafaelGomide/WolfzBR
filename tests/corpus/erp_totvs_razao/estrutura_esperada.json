@@ -1,0 +1,24 @@
+{
+  "aba": "Razão",
+  "tabelas": [
+    {
+      "cabecalho": [
+        6,
+        6
+      ],
+      "dados": [
+        7,
+        20
+      ],
+      "colunas": [
+        "A",
+        "F"
+      ],
+      "totais": [
+        7,
+        20
+      ],
+      "fill_down": []
+    }
+  ]
+}

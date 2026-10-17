@@ -1,0 +1,21 @@
+{
+  "aba": "Escolas",
+  "tabelas": [
+    {
+      "cabecalho": [
+        1,
+        1
+      ],
+      "dados": [
+        2,
+        13
+      ],
+      "colunas": [
+        "A",
+        "C"
+      ],
+      "totais": [],
+      "fill_down": []
+    }
+  ]
+}

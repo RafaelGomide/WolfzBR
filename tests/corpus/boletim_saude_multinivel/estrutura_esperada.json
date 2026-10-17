@@ -1,0 +1,23 @@
+{
+  "aba": "Dengue",
+  "tabelas": [
+    {
+      "cabecalho": [
+        3,
+        4
+      ],
+      "dados": [
+        5,
+        9
+      ],
+      "colunas": [
+        "A",
+        "G"
+      ],
+      "totais": [
+        9
+      ],
+      "fill_down": []
+    }
+  ]
+}

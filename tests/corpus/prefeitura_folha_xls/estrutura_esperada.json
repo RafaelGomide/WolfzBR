@@ -1,0 +1,23 @@
+{
+  "aba": "Folha",
+  "tabelas": [
+    {
+      "cabecalho": [
+        2,
+        2
+      ],
+      "dados": [
+        3,
+        11
+      ],
+      "colunas": [
+        "A",
+        "D"
+      ],
+      "totais": [],
+      "fill_down": [
+        "A"
+      ]
+    }
+  ]
+}

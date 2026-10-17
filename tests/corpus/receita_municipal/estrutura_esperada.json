@@ -1,0 +1,21 @@
+{
+  "aba": "Receita",
+  "tabelas": [
+    {
+      "cabecalho": [
+        4,
+        4
+      ],
+      "dados": [
+        5,
+        16
+      ],
+      "colunas": [
+        "A",
+        "D"
+      ],
+      "totais": [],
+      "fill_down": []
+    }
+  ]
+}

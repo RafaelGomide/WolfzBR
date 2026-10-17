@@ -1,0 +1,21 @@
+{
+  "aba": "Clientes",
+  "tabelas": [
+    {
+      "cabecalho": [
+        1,
+        1
+      ],
+      "dados": [
+        2,
+        13
+      ],
+      "colunas": [
+        "A",
+        "E"
+      ],
+      "totais": [],
+      "fill_down": []
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "aba": "Estoque",
+  "tabelas": [
+    {
+      "cabecalho": [
+        3,
+        3
+      ],
+      "dados": [
+        4,
+        12
+      ],
+      "colunas": [
+        "A",
+        "D"
+      ],
+      "totais": [],
+      "fill_down": [
+        "A"
+      ]
+    }
+  ]
+}

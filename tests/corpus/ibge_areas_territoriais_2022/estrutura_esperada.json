@@ -1,0 +1,21 @@
+{
+  "aba": "AR_BR_MUN_2022",
+  "tabelas": [
+    {
+      "cabecalho": [
+        1,
+        1
+      ],
+      "dados": [
+        2,
+        5573
+      ],
+      "colunas": [
+        "A",
+        "G"
+      ],
+      "totais": [],
+      "fill_down": []
+    }
+  ]
+}

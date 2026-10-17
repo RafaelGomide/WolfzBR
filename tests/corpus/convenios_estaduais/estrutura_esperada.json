@@ -1,0 +1,23 @@
+{
+  "aba": null,
+  "tabelas": [
+    {
+      "cabecalho": [
+        4,
+        4
+      ],
+      "dados": [
+        5,
+        15
+      ],
+      "colunas": [
+        "A",
+        "F"
+      ],
+      "totais": [
+        15
+      ],
+      "fill_down": []
+    }
+  ]
+}

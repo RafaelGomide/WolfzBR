@@ -38,6 +38,9 @@ from typing import Any
 import polars as pl
 from python_calamine import CalamineWorkbook
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from gerar_sinteticos import est, estrutura_json
+
 RAIZ = Path(__file__).resolve().parents[1]
 CORPUS = RAIZ / "tests" / "corpus"
 BAIXADO_EM = "2026-10-16"
@@ -57,6 +60,7 @@ class Saida:
     tabela: pl.DataFrame
     passos: list[dict]
     aba: str | None = None
+    estrutura: dict | None = None  # gabarito da detecção (estrutura_esperada.json)
 
 
 @dataclass
@@ -133,24 +137,27 @@ REGIOES = ["Norte", "Nordeste", "Sudeste", "Sul", "Centro-Oeste"]
 NOTA = re.compile(r"\(\d+\)$")
 
 
-def _populacao_uf(path: Path, aba: str, col_valor: int) -> list[tuple[str, int]]:
+def _populacao_uf(path: Path, aba: str, col_valor: int) -> tuple[list[tuple[str, int]], list[int], int]:
     """UFs da aba 'Brasil e UFs': pula Brasil e as regiões (subtotais) e
-    tira a marca de nota do valor ('3.289.290(1)')."""
+    tira a marca de nota do valor ('3.289.290(1)'). Devolve também as
+    linhas (do Excel) dos subtotais e a última linha da tabela."""
     linhas = grade(path, aba)
     assert str(linhas[1][col_valor]).strip() == "POPULAÇÃO ESTIMADA"
-    ufs = []
-    for linha in linhas[2:]:
+    ufs, subtotais, ultima = [], [], 0
+    for i, linha in enumerate(linhas[2:], start=2):
         nome = texto(linha[0])
         if nome is None:
             break
+        ultima = i + 1
         if nome == "Brasil" or nome in REGIOES or nome.removeprefix("Região ") in REGIOES:
+            subtotais.append(i + 1)
             continue
         valor = linha[col_valor]
         if isinstance(valor, str):
             valor = NOTA.sub("", valor.strip())
         ufs.append((nome, inteiro(valor)))
-    assert len(ufs) == 27, len(ufs)
-    return ufs
+    assert len(ufs) == 27 and len(subtotais) == 6, (len(ufs), subtotais)
+    return ufs, subtotais, ultima
 
 
 def _passos_populacao(regioes: list[str]) -> list[dict]:
@@ -179,10 +186,11 @@ def _passos_populacao(regioes: list[str]) -> list[dict]:
     "grudada ('3.289.290(1)') e notas explicativas no fim.",
 )
 def ibge_estimativa_populacao_2021(path: Path) -> list[Saida]:
-    ufs = _populacao_uf(path, "BRASIL E UFs", 2)
+    ufs, subtotais, ultima = _populacao_uf(path, "BRASIL E UFs", 2)
     saida = tabela(("uf", TXT, [u for u, _ in ufs]), ("populacao", INT, [p for _, p in ufs]))
     regioes = [f"Região {r}" for r in REGIOES]
-    return [Saida(saida, _passos_populacao(regioes), "BRASIL E UFs")]
+    estrutura = est(2, (3, ultima), "AC", totais=subtotais)
+    return [Saida(saida, _passos_populacao(regioes), "BRASIL E UFs", estrutura)]
 
 
 @publico(
@@ -194,9 +202,10 @@ def ibge_estimativa_populacao_2021(path: Path) -> list[Saida]:
     "Brasil e regiões (só o nome, sem 'Região') como subtotais no meio das UFs; fonte no fim.",
 )
 def ibge_estimativa_populacao_2024(path: Path) -> list[Saida]:
-    ufs = _populacao_uf(path, "BRASIL_E_UFs", 1)
+    ufs, subtotais, ultima = _populacao_uf(path, "BRASIL_E_UFs", 1)
     saida = tabela(("uf", TXT, [u for u, _ in ufs]), ("populacao", INT, [p for _, p in ufs]))
-    return [Saida(saida, _passos_populacao(REGIOES), "BRASIL_E_UFs")]
+    estrutura = est(2, (3, ultima), "AB", totais=subtotais)
+    return [Saida(saida, _passos_populacao(REGIOES), "BRASIL_E_UFs", estrutura)]
 
 
 # --------------------------------------------------------------------------
@@ -215,8 +224,8 @@ def ibge_estimativa_populacao_2024(path: Path) -> list[Saida]:
     "cabeçalho repetido a cada página com '(continuação)'.",
 )
 def ibge_ipca_serie_historica(path: Path) -> list[Saida]:
-    linhas, ano = [], None
-    for linha in grade(path):
+    linhas, ano, primeira, ultima = [], None, 0, 0
+    for i, linha in enumerate(grade(path)):
         if isinstance(linha[0], int | float) and not vazio(linha[0]):
             ano = int(linha[0])
         mes = texto(linha[1])
@@ -224,7 +233,8 @@ def ibge_ipca_serie_historica(path: Path) -> list[Saida]:
             continue
         valores = [None if vazio(v) else float(v) for v in linha[2:8]]
         linhas.append((date(ano, MESES.index(mes) + 1, 1), *valores))
-    assert linhas[0][0] == date(1994, 1, 1) and len(linhas) > 380
+        primeira, ultima = primeira or i + 1, i + 1
+    assert linhas[0][0] == date(1994, 1, 1) and len(linhas) > 380 and primeira == 9
     nomes = ["data", "numero_indice", "var_mes", "var_3_meses", "var_6_meses", "var_ano", "var_12_meses"]
     saida = colunas([(nomes[0], DATA), *((n, NUM) for n in nomes[1:])], linhas)
     passos = [
@@ -237,7 +247,9 @@ def ibge_ipca_serie_historica(path: Path) -> list[Saida]:
         {"op": "reorder", "cols": nomes},
         {"op": "cast", "types": dict.fromkeys(nomes[1:], "float")},
     ]
-    return [Saida(saida, passos, "Série Histórica IPCA")]
+    # Cabeçalho nas linhas 4 a 7; o título e o cabeçalho que se repetem a
+    # cada página ficam dentro da área de dados e não são totais.
+    return [Saida(saida, passos, "Série Histórica IPCA", est((4, 7), (9, ultima), "AH"))]
 
 
 # --------------------------------------------------------------------------
@@ -265,12 +277,16 @@ def _lspa_numero(v: Any, decimal: bool) -> float | int | None:
     "milhar separado por espaço ('95 626 753') e '--' para dado inexistente.",
 )
 def ibge_lspa_2025_01(path: Path) -> list[Saida]:
-    linhas = []
-    for linha in grade(path)[6:]:
+    g = grade(path)
+    assert texto(g[5][0]) == "TOTAL"
+    linhas, totais, ultima = [], [6], 0
+    for i, linha in enumerate(g[6:], start=6):
         produto = texto(linha[0])
         if produto is None:
             break
+        ultima = i + 1
         if produto.endswith(" - TOTAL"):
+            totais.append(i + 1)
             continue
         valores = [_lspa_numero(v, decimal=j % 3 == 2) for j, v in enumerate(linha[1:10])]
         linhas.append((produto, *valores))
@@ -292,7 +308,7 @@ def ibge_lspa_2025_01(path: Path) -> list[Saida]:
         {"op": "replace", "cols": [n for n, t in nomes[1:] if t is INT], "old": " ", "new": ""},
         {"op": "cast", "types": {n: "int" if t is INT else "float" for n, t in nomes[1:]}},
     ]
-    return [Saida(saida, passos, "Var mensal área")]
+    return [Saida(saida, passos, "Var mensal área", est((4, 5), (6, ultima), "AJ", totais=totais))]
 
 
 # --------------------------------------------------------------------------
@@ -323,12 +339,15 @@ def _ibge_valor(v: Any) -> float | None:
 def ibge_ppm_2012_linhares(path: Path) -> list[Saida]:
     secoes = {"Efetivo dos rebanhos em 31.12", "Categorias", "Produção animal", "Produtos"}
     portes = {"Grande porte", "Médio porte", "Pequeno porte"}
-    linhas = []
-    for linha in grade(path)[5:]:
+    linhas, totais, ultima = [], [], 0
+    for i, linha in enumerate(grade(path)[5:], start=5):
         nome = texto(linha[0])
         if nome is None:
             break
+        ultima = i + 1
         nome = re.sub(r"\s+", " ", nome)
+        if nome in portes:
+            totais.append(i + 1)
         if nome in secoes or nome in portes:
             continue
         linhas.append((nome, *(_ibge_valor(v) for v in linha[1:6])))
@@ -348,7 +367,9 @@ def ibge_ppm_2012_linhares(path: Path) -> list[Saida]:
         {"op": "drop_rows_where", "col": "especificacao", "match": "in", "value": sorted(secoes | portes)},
         {"op": "parse_ibge", "cols": nomes[1:]},
     ]
-    return [Saida(saida, passos, "Tabela 36")]
+    # Linhas de seção ('Categorias', 'Produtos') ficam na área; só os portes
+    # do rebanho são subtotais.
+    return [Saida(saida, passos, "Tabela 36", est((4, 5), (6, ultima), "AF", totais=totais))]
 
 
 # --------------------------------------------------------------------------
@@ -402,7 +423,8 @@ def ibge_censo_2022_populacao(path: Path) -> list[Saida]:
         {"op": "rename", "mapping": dict(zip(rotulos, [n for n, _ in nomes], strict=True))},
         {"op": "cast", "types": {"pop_coletada": "int", "pop_imputada": "int", "pop_total": "int"}},
     ]
-    return [Saida(colunas(nomes, linhas), passos, "Municípios")]
+    estrutura = est(3, (4, 3 + len(linhas)), "BH")
+    return [Saida(colunas(nomes, linhas), passos, "Municípios", estrutura)]
 
 
 # --------------------------------------------------------------------------
@@ -455,7 +477,8 @@ def ibge_areas_territoriais_2022(path: Path) -> list[Saida]:
         {"op": "rename", "mapping": dict(zip(rotulos, [n for n, _ in nomes], strict=True))},
         {"op": "cast", "types": {"id": "int", "area_km2": "float"}},
     ]
-    return [Saida(colunas(nomes, linhas), passos, "AR_BR_MUN_2022")]
+    estrutura = est(1, (2, 1 + len(linhas)), "AG")
+    return [Saida(colunas(nomes, linhas), passos, "AR_BR_MUN_2022", estrutura)]
 
 
 # --------------------------------------------------------------------------
@@ -544,7 +567,7 @@ def anp_glp_2024_s2(path: Path) -> list[Saida]:
         {"op": "parse_date_br", "cols": ["data_coleta"]},
         {"op": "parse_decimal_br", "cols": ["valor_venda", "valor_compra"]},
     ]
-    return [Saida(colunas(nomes, linhas), passos)]
+    return [Saida(colunas(nomes, linhas), passos, estrutura=est(1, (2, 1 + len(linhas)), "AP"))]
 
 
 # --------------------------------------------------------------------------
@@ -576,10 +599,12 @@ def camara_orgaos(path: Path) -> list[Saida]:
     cab = [texto(v) for v in g[0]]
     assert cab[:4] == ["uri", "sigla", "apelido", "nome"], cab
     idx = {n: cab.index(n) for n in cab}
-    linhas = []
-    for linha in g[1:]:
+    assert len(cab) == 16, cab
+    linhas, ultima = [], 0
+    for i, linha in enumerate(g[1:], start=1):
         if vazio(linha[0]):
             continue
+        ultima = i + 1
         cod = linha[idx["codTipoOrgao"]]
         linhas.append(
             (
@@ -623,7 +648,7 @@ def camara_orgaos(path: Path) -> list[Saida]:
         },
         {"op": "cast", "types": {"cod_tipo_orgao": "int", "data_inicio": "date", "data_fim": "date"}},
     ]
-    return [Saida(colunas(nomes, linhas), passos)]
+    return [Saida(colunas(nomes, linhas), passos, estrutura=est(1, (2, ultima), "AP"))]
 
 
 # --------------------------------------------------------------------------
@@ -684,7 +709,9 @@ def gerar_gabarito(p: Publico, destino: Path = CORPUS) -> Path:
     original = pasta / f"original.{p.extensao}"
     for antigo in [*pasta.glob("saida_esperada*"), *pasta.glob("receita_esperada*")]:
         antigo.unlink()
-    for i, saida in enumerate(p.gabarito(original)):
+    saidas = p.gabarito(original)
+    (pasta / "estrutura_esperada.json").write_text(estrutura_json(saidas), encoding="utf-8")
+    for i, saida in enumerate(saidas):
         sufixo = "" if i == 0 else f"_{i + 1}"
         saida.tabela.write_parquet(pasta / f"saida_esperada{sufixo}.parquet")
         (pasta / f"receita_esperada{sufixo}.wolfz.json").write_text(_receita(p, saida), encoding="utf-8")

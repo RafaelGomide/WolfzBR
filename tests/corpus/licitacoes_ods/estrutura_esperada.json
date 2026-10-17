@@ -1,0 +1,21 @@
+{
+  "aba": "Licitações",
+  "tabelas": [
+    {
+      "cabecalho": [
+        4,
+        4
+      ],
+      "dados": [
+        5,
+        14
+      ],
+      "colunas": [
+        "A",
+        "F"
+      ],
+      "totais": [],
+      "fill_down": []
+    }
+  ]
+}
