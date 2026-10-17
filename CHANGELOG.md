@@ -6,6 +6,23 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 
 ## [Não publicado]
 
+### Adicionado
+
+- API local (`wolfz.api`, FastAPI) com prefixo `/api` e a interface compilada servida na raiz:
+  - `POST /projects` (upload: importa, detecta a estrutura e grava a receita inicial), `GET /projects`, `GET /projects/{id}`, `DELETE /projects/{id}`;
+  - `GET /projects/{id}/structure`, `GET /projects/{id}/profile`, `GET /projects/{id}/preview` (página após qualquer passo, com cache);
+  - `GET`/`PUT /projects/{id}/recipe` com `ETag`/`If-Match` (`409` se a receita mudou em outra aba, `428` sem `If-Match`), gravação atômica a cada edição;
+  - `POST /projects/{id}/exports` (CSV, Parquet, Power Query M e script Python; falha se o arquivo já existe, a não ser com `overwrite`);
+  - `GET /ops`: catálogo de operações com o JSON Schema de cada uma.
+- Segurança da API (§11 do design): bind só em `127.0.0.1` com porta livre aleatória, token de sessão novo a cada start no header `Authorization: Bearer` (na URL de abertura ele vai no fragmento, que o navegador não envia ao servidor), validação do header `Host` contra DNS rebinding, sem CORS (só a origem do Vite com `WOLFZ_DEV=1`) e limite de upload. A documentação interativa da API (`/api/docs`) só existe com `WOLFZ_DEV=1`.
+- Erros da API no formato Problem Details (RFC 9457), com `step_id` e `available_columns` quando o erro é de um passo; erro inesperado responde `500` sem detalhe, para não vazar valor de célula.
+- Lock por projeto (lock de arquivo do sistema operacional): projeto aberto em outra instância do WolfzBR responde `423` com o endereço dela; o lock é liberado ao fechar o projeto ou encerrar o processo.
+- Handlers pesados em threadpool e um preview por projeto por vez.
+
+### Alterado
+
+- `httpx` entra nas dependências de desenvolvimento (cliente de teste do FastAPI).
+
 ## [0.3.0] - 2026-10-16
 
 Detecção de estrutura, catálogo de 31 operações e preview com cache. O `wolfz run` passa a ler `.xlsx`, `.xls` e `.ods`. Ainda sem interface: ela chega na 0.4.0, junto com a API local.

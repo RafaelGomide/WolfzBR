@@ -1,0 +1,359 @@
+"""Rotas da API (``/api``). Só transporte: a regra está no núcleo.
+
+Os handlers que leem arquivo ou rodam o motor são funções síncronas (``def``):
+o FastAPI os executa em threadpool, e um preview pesado não trava o event
+loop que atende o pedido seguinte (§6.4).
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+import shutil
+import tempfile
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Annotated, Any, Literal
+
+import polars as pl
+from fastapi import APIRouter, File, Form, Header, Query, Response, UploadFile
+from pydantic import BaseModel, Field
+
+from wolfz.api.problems import Problem
+from wolfz.api.projetos import Projetos
+from wolfz.api.security import Settings
+from wolfz.core.detect import detect_structure
+from wolfz.core.engine import collect, run
+from wolfz.core.engine.preview import LIMITE_PAGINA, preview_project
+from wolfz.core.ingest import SheetStructure, import_file
+from wolfz.core.profile import profile_table
+from wolfz.core.recipe import Recipe, dumps_recipe, load_recipe, recipe_from_dict, registered_ops, save_recipe
+from wolfz.core.recipe.migrate import CURRENT_VERSION
+from wolfz.core.workspace import PROJECT_FILE, RAW_FILE, STRUCTURE_FILE, write_json_atomic
+from wolfz.export.m import recipe_to_m
+from wolfz.export.python import recipe_to_python
+
+RECIPE_FILE = "recipe.wolfz.json"
+DETECTION_FILE = "detection.json"
+_TIPO_FONTE = {"xlsx": "excel", "xls": "excel", "ods": "ods", "csv": "csv"}
+
+
+class PedidoExportacao(BaseModel):
+    formats: list[Literal["csv", "parquet", "xlsx", "powerquery", "python", "hyper", "pbip"]] = Field(
+        min_length=1
+    )
+    output_dir: str | None = None
+    overwrite: bool = False
+
+
+def _ler_json(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _etag(recipe: Recipe) -> str:
+    return '"' + hashlib.sha256(dumps_recipe(recipe).encode("utf-8")).hexdigest()[:32] + '"'
+
+
+def _receita_json(recipe: Recipe) -> dict[str, Any]:
+    return json.loads(dumps_recipe(recipe))
+
+
+def _nome_seguro(nome: str, padrao: str = "tabela") -> str:
+    """Nome de arquivo sem diretório nem caractere estranho (path traversal)."""
+    base = Path(nome.replace("\\", "/")).name
+    return re.sub(r"[^\w.-]+", "_", base).strip("._") or padrao
+
+
+def router(settings: Settings, projetos: Projetos) -> APIRouter:
+    api = APIRouter(prefix="/api")
+    ws = settings.workspace
+
+    def receita(pasta: Path) -> Recipe:
+        return load_recipe(pasta / RECIPE_FILE)
+
+    # -----------------------------------------------------------------------
+    # Projetos
+    # -----------------------------------------------------------------------
+
+    @api.post("/projects", status_code=201)
+    def criar_projeto(
+        file: Annotated[UploadFile, File(description="Planilha ou CSV.")],
+        sheet: Annotated[str | None, Form()] = None,
+    ) -> dict[str, Any]:
+        """Importa o arquivo, detecta a estrutura e grava a receita inicial."""
+        nome = _nome_seguro(file.filename or "arquivo")
+        temporaria = Path(tempfile.mkdtemp(prefix="upload-", dir=_pasta_uploads(ws)))
+        destino = temporaria / nome
+        try:
+            _copia_com_limite(file, destino, settings.limits.max_file_bytes)
+            resultado = import_file(destino, sheet=sheet, workspace=ws, limits=settings.limits)
+        finally:
+            shutil.rmtree(temporaria, ignore_errors=True)
+
+        pasta = resultado.path
+        projeto = resultado.project
+        # O arquivo veio por upload: o caminho temporário não vale nada depois.
+        projeto["source"]["path"] = None
+        projeto["source"]["uploaded"] = True
+        write_json_atomic(pasta / PROJECT_FILE, projeto)
+
+        deteccao = detect_structure(pl.read_parquet(pasta / RAW_FILE), resultado.structure)
+        write_json_atomic(pasta / DETECTION_FILE, deteccao.to_dict() if deteccao else None)
+        passos = deteccao.to_steps() if deteccao else []
+        fonte: dict[str, Any] = {"type": _TIPO_FONTE[projeto["source"]["format"]]}
+        if projeto["source"]["sheet"]:
+            fonte["sheet"] = projeto["source"]["sheet"]
+        inicial = recipe_from_dict(
+            {
+                "wolfz_version": CURRENT_VERSION,
+                "name": Path(projeto["name"]).stem,
+                "created_at": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
+                "source": fonte,
+                "steps": [{"id": f"s{i}", **p} for i, p in enumerate(passos, 1)],
+            }
+        )
+        save_recipe(inicial, pasta / RECIPE_FILE)
+        projetos.abrir(resultado.project_id)
+        return {
+            **projeto,
+            "reused_raw": resultado.reused,
+            "detection": deteccao.to_dict() if deteccao else None,
+            "recipe": _receita_json(inicial),
+            "etag": _etag(inicial),
+        }
+
+    @api.get("/projects")
+    def listar_projetos() -> list[dict[str, Any]]:
+        saida = []
+        for project_id, meta in ws.projects():
+            pasta = ws.project_dir(project_id)
+            saida.append(
+                {
+                    "id": project_id,
+                    "name": meta.get("name"),
+                    "created_at": meta.get("created_at"),
+                    "format": meta.get("source", {}).get("format"),
+                    "sheet": meta.get("source", {}).get("sheet"),
+                    "rows": meta.get("raw", {}).get("rows"),
+                    "open_here": projetos.aberto_aqui(project_id),
+                    "open_elsewhere": projetos.aberto_em_outra(project_id, pasta),
+                }
+            )
+        return saida
+
+    @api.get("/projects/{project_id}")
+    def abrir_projeto(project_id: str, response: Response) -> dict[str, Any]:
+        pasta = projetos.abrir(project_id)
+        atual = receita(pasta)
+        response.headers["ETag"] = _etag(atual)
+        return {**_ler_json(pasta / PROJECT_FILE), "recipe": _receita_json(atual), "etag": _etag(atual)}
+
+    @api.delete("/projects/{project_id}", status_code=204)
+    def apagar_projeto(project_id: str) -> Response:
+        pasta = projetos.abrir(project_id)  # 423 se estiver aberto em outra instância
+        projetos.fechar(project_id)
+        shutil.rmtree(pasta)
+        return Response(status_code=204)
+
+    @api.get("/projects/{project_id}/structure")
+    def estrutura(project_id: str) -> dict[str, Any]:
+        pasta = projetos.abrir(project_id)
+        deteccao = pasta / DETECTION_FILE
+        return {
+            "structure": SheetStructure.from_dict(_ler_json(pasta / STRUCTURE_FILE)).to_dict(),
+            "detection": _ler_json(deteccao) if deteccao.is_file() else None,
+        }
+
+    @api.get("/projects/{project_id}/profile")
+    def perfil(
+        project_id: str,
+        step: Annotated[
+            str | None, Query(description='Passo; omitido = receita inteira; "raw" = antes.')
+        ] = None,
+        sample: Annotated[int, Query(ge=1, le=100_000)] = 10_000,
+    ) -> dict[str, Any]:
+        pasta = projetos.abrir(project_id)
+        sub = _ate_o_passo(receita(pasta), step)
+        raw = pl.scan_parquet(pasta / RAW_FILE)
+        plano = run(sub, raw)
+        try:
+            tabela = plano.collect()
+        except Exception:
+            collect(sub, raw)  # aponta o passo culpado (StepError)
+            raise
+        return profile_table(tabela, sample).to_dict()
+
+    # -----------------------------------------------------------------------
+    # Receita (ETag / If-Match, §9)
+    # -----------------------------------------------------------------------
+
+    @api.get("/projects/{project_id}/recipe")
+    def ler_receita(project_id: str, response: Response) -> dict[str, Any]:
+        atual = receita(projetos.abrir(project_id))
+        response.headers["ETag"] = _etag(atual)
+        return _receita_json(atual)
+
+    @api.put("/projects/{project_id}/recipe")
+    def salvar_receita(
+        project_id: str,
+        corpo: dict[str, Any],
+        response: Response,
+        if_match: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        """Substitui a receita inteira. Salvamento automático: a interface
+        chama a cada edição, e a gravação é atômica."""
+        pasta = projetos.abrir(project_id)
+        if if_match is None:
+            raise Problem(428, "Envie o cabeçalho If-Match com a ETag da receita que você editou.")
+        atual = receita(pasta)
+        if if_match.strip() != _etag(atual):
+            raise Problem(
+                409,
+                "A receita mudou desde que você a abriu (outra aba?). Recarregue antes de salvar.",
+                title="Receita desatualizada",
+                etag=_etag(atual),
+            )
+        nova = recipe_from_dict(corpo)  # RecipeError -> 422 com o passo e o campo
+        save_recipe(nova, pasta / RECIPE_FILE)
+        etag = _etag(nova)
+        response.headers["ETag"] = etag
+        return {"etag": etag, "recipe": _receita_json(nova)}
+
+    # -----------------------------------------------------------------------
+    # Preview
+    # -----------------------------------------------------------------------
+
+    @api.get("/projects/{project_id}/preview")
+    def ver_preview(
+        project_id: str,
+        step: Annotated[
+            str | None, Query(description='Passo; omitido = receita inteira; "raw" = antes.')
+        ] = None,
+        offset: Annotated[int, Query(ge=0)] = 0,
+        limit: Annotated[int, Query(ge=1, le=LIMITE_PAGINA)] = 200,
+        columns: Annotated[str | None, Query(description="Colunas, separadas por vírgula.")] = None,
+    ) -> dict[str, Any]:
+        pasta = projetos.abrir(project_id)
+        atual = receita(pasta)
+        _ate_o_passo(atual, step)  # 404 se o passo não existe
+        with projetos.lock_preview(project_id):
+            pagina = preview_project(pasta, atual, step, offset, limit)
+        if columns:
+            pedidas = [c for c in columns.split(",") if c]
+            faltam = [c for c in pedidas if c not in pagina.frame.columns]
+            if faltam:
+                raise Problem(422, f"Colunas inexistentes neste passo: {', '.join(faltam)}.")
+            pagina.frame = pagina.frame.select(pedidas)
+        return pagina.to_dict()
+
+    # -----------------------------------------------------------------------
+    # Exportação
+    # -----------------------------------------------------------------------
+
+    @api.post("/projects/{project_id}/exports")
+    def exportar(project_id: str, pedido: PedidoExportacao) -> dict[str, Any]:
+        """Gera os arquivos. Pasta com arquivo do mesmo nome: falha, a não ser
+        com ``overwrite`` (F0.A6). Tudo é gerado numa pasta temporária e movido
+        no fim (build-then-swap, §9)."""
+        pasta = projetos.abrir(project_id)
+        indisponiveis = sorted(set(pedido.formats) - set(_EXTENSOES))
+        if indisponiveis:
+            raise Problem(422, f"Formato ainda não disponível nesta versão: {', '.join(indisponiveis)}.")
+        saida = Path(pedido.output_dir).expanduser() if pedido.output_dir else pasta / "exports"
+        if not saida.is_absolute():
+            raise Problem(422, "output_dir precisa ser um caminho absoluto.")
+        saida = saida.resolve()
+        atual = receita(pasta)
+        base = _nome_seguro(Path(_ler_json(pasta / PROJECT_FILE)["name"]).stem)
+        alvos = {fmt: saida / f"{base}{_EXTENSOES[fmt]}" for fmt in dict.fromkeys(pedido.formats)}
+        existentes = [str(p) for p in alvos.values() if p.exists()]
+        if existentes and not pedido.overwrite:
+            raise Problem(
+                409,
+                f"Já existem arquivos com esses nomes: {', '.join(existentes)}. Confirme para sobrescrever.",
+                title="Arquivo já existe",
+                existing=existentes,
+            )
+        saida.mkdir(parents=True, exist_ok=True)
+        tabela = None
+        if {"csv", "parquet"} & set(alvos):
+            tabela = collect(atual, pl.scan_parquet(pasta / RAW_FILE))
+        trabalho = Path(tempfile.mkdtemp(prefix=".wolfz-export-", dir=saida))
+        try:
+            for fmt, alvo in alvos.items():
+                tmp = trabalho / alvo.name
+                if fmt == "csv":
+                    tabela.write_csv(tmp)
+                elif fmt == "parquet":
+                    tabela.write_parquet(tmp)
+                elif fmt == "powerquery":
+                    tmp.write_text(recipe_to_m(atual), encoding="utf-8")
+                else:
+                    tmp.write_text(recipe_to_python(atual), encoding="utf-8")
+            for alvo in alvos.values():
+                (trabalho / alvo.name).replace(alvo)
+        finally:
+            shutil.rmtree(trabalho, ignore_errors=True)
+        return {
+            "files": [str(p) for p in alvos.values()],
+            "rows": tabela.height if tabela is not None else None,
+        }
+
+    # -----------------------------------------------------------------------
+    # Catálogo
+    # -----------------------------------------------------------------------
+
+    @api.get("/ops")
+    def catalogo() -> list[dict[str, Any]]:
+        """Operações registradas, com o JSON Schema dos parâmetros: a
+        interface monta os formulários dos passos a partir disto."""
+        return [
+            {
+                "op": nome,
+                "doc": " ".join((cls.__doc__ or "").split()),
+                "schema": cls.model_json_schema(),
+                "full_checkpoint": cls.full_checkpoint,
+                "examples": list(cls.examples),
+            }
+            for nome, cls in sorted(registered_ops().items())
+        ]
+
+    return api
+
+
+_EXTENSOES = {"csv": ".csv", "parquet": ".parquet", "powerquery": ".pq", "python": ".py"}
+
+
+def _pasta_uploads(ws) -> Path:
+    pasta = ws.root / "uploads"
+    pasta.mkdir(parents=True, exist_ok=True)
+    return pasta
+
+
+def _copia_com_limite(upload: UploadFile, destino: Path, limite: int) -> None:
+    """Copia o upload em blocos e para no limite, mesmo que o
+    ``Content-Length`` tenha mentido."""
+    total = 0
+    with destino.open("wb") as saida:
+        while bloco := upload.file.read(1 << 20):
+            total += len(bloco)
+            if total > limite:
+                raise Problem(
+                    413, f"O limite de upload é {limite // (1024 * 1024)} MB.", code="file_too_large"
+                )
+            saida.write(bloco)
+
+
+def _ate_o_passo(recipe: Recipe, step: str | None) -> Recipe:
+    if step is None:
+        return recipe
+    if step == "raw":
+        return recipe.model_copy(update={"steps": []})
+    ids = [s.id for s in recipe.steps]
+    if step not in ids:
+        raise Problem(404, f"A receita não tem o passo {step!r}.", title="Passo não encontrado")
+    return recipe.model_copy(update={"steps": recipe.steps[: ids.index(step) + 1]})
+
+
+__all__ = ["RECIPE_FILE", "router"]

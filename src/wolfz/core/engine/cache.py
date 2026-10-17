@@ -132,7 +132,7 @@ def _tamanho(pasta: Path) -> int:
     return sum(p.stat().st_size for p in pasta.rglob("*") if p.is_file())
 
 
-def _travado(projeto: Path) -> bool:
+def projeto_travado(projeto: Path) -> bool:
     """Projeto aberto em alguma instância (lock do SO ativo, §9)."""
     lock_path = projeto / ".lock"
     if not lock_path.exists():
@@ -185,7 +185,7 @@ def recolher(
             break
         if projeto.resolve() in protegidos:
             continue
-        if travados.setdefault(projeto, _travado(projeto)):
+        if travados.setdefault(projeto, projeto_travado(projeto)):
             pulados += 1
             continue
         shutil.rmtree(pasta, ignore_errors=True)
