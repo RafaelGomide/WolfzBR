@@ -12,15 +12,17 @@ Toda falha vira ``StepError``, com o id do passo e as colunas disponíveis.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import polars as pl
 
 from wolfz.core.engine.errors import StepError, missing_column
-from wolfz.core.ingest.csv import read_csv_raw
+from wolfz.core.ingest import list_sheets, open_file, read_sheet_raw
+from wolfz.core.ingest.csv import open_csv_lazy, read_csv_raw
 from wolfz.core.recipe import Op, Recipe, load_recipe
 
-__all__ = ["StepError", "collect", "run", "run_file"]
+__all__ = ["StepError", "collect", "read_input", "run", "run_file"]
 
 
 def _where(previous: Op | None) -> str:
@@ -82,18 +84,49 @@ def collect(recipe: Recipe, lf: pl.LazyFrame) -> pl.DataFrame:
     raise original  # não reproduziu passo a passo: devolve o erro como veio
 
 
+# Passos que trabalham sobre a grade crua: se a receita começa por um deles,
+# o CSV é lido sem cabeçalho, como uma aba de planilha.
+_PASSOS_DE_GRADE = {"select_range", "header_rows"}
+
+
+def _sheet(recipe: Recipe, path: Path) -> str | None:
+    """Aba da receita; se ela não existe no arquivo novo, a primeira que
+    casa com ``source.match.sheet_name_regex`` (o nome mudou de um mês para
+    o outro: 'Vendas 2024' -> 'Vendas 2025')."""
+    sheet, match = recipe.source.sheet, recipe.source.match
+    if match is None or match.sheet_name_regex is None:
+        return sheet
+    nomes = [s.name for s in list_sheets(path)]
+    if sheet in nomes:
+        return sheet
+    return next((n for n in nomes if re.fullmatch(match.sheet_name_regex, n)), sheet)
+
+
+def read_input(recipe: Recipe, input_path: str | Path) -> pl.DataFrame:
+    """Lê o arquivo de entrada como a receita espera, tudo como texto.
+
+    Planilha (``.xlsx``, ``.xls``, ``.ods``) vem como grade: colunas com o
+    nome da letra e linha i = linha i + 1 da planilha. CSV vem com o
+    cabeçalho da primeira linha, a não ser que a receita comece por
+    ``select_range`` ou ``header_rows``; aí também vem como grade. Erros de
+    leitura são ``IngestError``, com mensagem para o usuário."""
+    path, fmt, _ = open_file(input_path)
+    if fmt != "csv":
+        return read_sheet_raw(path, _sheet(recipe, path))
+    if recipe.steps and recipe.steps[0].op in _PASSOS_DE_GRADE:
+        with open_csv_lazy(path, has_header=False) as lf:
+            return lf.collect()
+    return read_csv_raw(path)
+
+
 def run_file(recipe: Recipe | str | Path, input_path: str | Path) -> pl.DataFrame:
     """Aplica a receita a um arquivo e devolve a tabela limpa.
 
     Exposta como ``wolfz.run``::
 
-        df = wolfz.run("vendas.wolfz.json", "vendas_jan.csv")
+        df = wolfz.run("vendas.wolfz.json", "vendas_jan.xlsx")
 
-    Por enquanto lê só CSV (tudo como texto, com encoding e separador
-    detectados). Excel e ODS entram com a ingestão completa (F1.A)."""
+    Lê CSV, ``.xlsx``, ``.xls`` e ``.ods`` (ver ``read_input``)."""
     if not isinstance(recipe, Recipe):
         recipe = load_recipe(recipe)
-    path = Path(input_path)
-    if path.suffix.lower() not in {".csv", ".txt"}:
-        raise ValueError(f"por enquanto só arquivos CSV; {path.suffix or 'sem extensão'} entra na versão 0.2")
-    return collect(recipe, read_csv_raw(path).lazy())
+    return collect(recipe, read_input(recipe, input_path).lazy())

@@ -50,6 +50,13 @@
     },
     {
       "cols": [
+        "produto"
+      ],
+      "id": "s6",
+      "op": "trim"
+    },
+    {
+      "cols": [
         "area_3o_prognostico",
         "area_janeiro",
         "area_var_pct",
@@ -60,7 +67,7 @@
         "rendimento_janeiro",
         "rendimento_var_pct"
       ],
-      "id": "s6",
+      "id": "s7",
       "new": null,
       "old": "--",
       "op": "replace"
@@ -74,13 +81,13 @@
         "rendimento_3o_prognostico",
         "rendimento_janeiro"
       ],
-      "id": "s7",
+      "id": "s8",
       "new": "",
       "old": " ",
       "op": "replace"
     },
     {
-      "id": "s8",
+      "id": "s9",
       "op": "cast",
       "types": {
         "area_3o_prognostico": "int",

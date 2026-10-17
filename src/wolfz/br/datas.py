@@ -64,6 +64,7 @@ def parse_date_br(
       '31/12/2024 14:30:00'                                   hora é descartada
       '31-dez-2024'  '31 de dezembro de 2024'  '15-Mar-24'    mês por extenso
       '20241231' (Receita Federal) / '31122024' (DATASUS)     8 dígitos
+      '1032021'                     DDMMAAAA sem o zero do dia (Excel)
       '45657'                                                 serial do Excel
 
     Datas impossíveis (31/02), zeradas ('00/00/0000', '00000000') e o
@@ -94,6 +95,10 @@ def parse_date_br(
     if m := _DATE_TEXT.fullmatch(k):
         month = MESES.get(m[2])
         return _make_date(_full_year(m[3], century_pivot), month, int(m[1])) if month else None
+    if eight_digits != "ymd" and re.fullmatch(r"\d{7}", k):
+        # DDMMAAAA que passou pelo Excel como número perde o zero do dia:
+        # '1032021' é 01/03/2021. AAAAMMDD nunca tem 7 dígitos.
+        k = "0" + k
     if re.fullmatch(r"\d{8}", k):
         ymd = _make_date(int(k[:4]), int(k[4:6]), int(k[6:]))
         dmy = _make_date(int(k[4:]), int(k[2:4]), int(k[:2]))

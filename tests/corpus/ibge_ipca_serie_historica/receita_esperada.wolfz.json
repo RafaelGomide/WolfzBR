@@ -7,7 +7,6 @@
   },
   "steps": [
     {
-      "end_detect": "auto",
       "id": "s1",
       "op": "select_range",
       "start": "A9"

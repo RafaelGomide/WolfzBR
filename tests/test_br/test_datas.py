@@ -48,6 +48,10 @@ def test_parse_date_br(value, expected):
         ("01022024", "ymd", None),
         ("20240102", "ymd", date(2024, 1, 2)),
         ("20240102", "dmy", None),
+        # DDMMAAAA sem o zero do dia (passou pelo Excel como número)
+        ("1032021", "dmy", date(2021, 3, 1)),
+        ("1032021", "auto", date(2021, 3, 1)),
+        ("1032021", "ymd", None),
     ],
 )
 def test_parse_date_br_eight_digits(value, eight_digits, expected):

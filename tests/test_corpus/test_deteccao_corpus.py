@@ -57,3 +57,46 @@ def test_medicao_em_markdown(resultados):
     assert texto.startswith("| Arquivo | Área | Cabeçalho | Totais | fill_down |")
     assert f"**{len(resultados)} arquivos**" in texto
     assert medir.resumo(resultados)["arquivos"] == len(resultados)
+
+
+def test_passos_da_deteccao_rodam_em_todo_o_corpus():
+    """A detecção propõe a receita inicial (F1.C7); com o catálogo da F1.E,
+    essa receita tem de validar e rodar em todo arquivo do corpus."""
+    import polars as pl
+    from corpus_lib import entradas
+
+    import wolfz
+    from wolfz.core.detect import detect_structure
+    from wolfz.core.ingest import read_sheet
+    from wolfz.core.ingest.csv import open_csv_lazy
+    from wolfz.core.recipe import recipe_from_dict
+
+    falhas = {}
+    for entrada in entradas():
+        if entrada.original is None:
+            continue
+        aba = entrada.estrutura["aba"]
+        if entrada.original.suffix == ".csv":
+            with open_csv_lazy(entrada.original, has_header=False) as lf:
+                df, estrutura, tipo = lf.collect(), None, "csv"
+        else:
+            dados = read_sheet(entrada.original, aba)
+            df, estrutura, tipo = dados.frame, dados.structure, "excel"
+        passos = detect_structure(df, estrutura).to_steps()
+        receita = recipe_from_dict(
+            {
+                "wolfz_version": "0.1",
+                "name": entrada.nome,
+                "created_at": "2026-01-01T00:00:00Z",
+                "source": {"type": tipo, "sheet": aba},
+                "steps": [{"id": f"s{i}", **p} for i, p in enumerate(passos, 1)],
+            }
+        )
+        try:
+            resultado = wolfz.run(receita, entrada.original)
+        except Exception as exc:
+            falhas[entrada.nome] = f"{type(exc).__name__}: {exc}"
+            continue
+        assert isinstance(resultado, pl.DataFrame)
+        assert resultado.height > 0, entrada.nome
+    assert not falhas, falhas

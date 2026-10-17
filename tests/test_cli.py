@@ -158,7 +158,9 @@ def test_run_json_quebrado_sai_com_2(entrada, tmp_path):
     ("nome", "conteudo", "mensagem"),
     [
         ("nao_existe.csv", None, "Arquivo não encontrado"),
-        ("vendas.xlsx", b"PK", "Formato ainda não suportado: .xlsx"),
+        ("vendas.xlsx", b"PK\x03\x04" + b"lixo" * 20, "Arquivo corrompido"),
+        ("vendas.xlsx", b"a;b\n1;2\n", "Extensão não bate com o conteúdo"),
+        ("vendas.xls", b"<html><table></table></html>", "Extensão não bate com o conteúdo"),
     ],
 )
 def test_run_entrada_ilegivel_sai_com_3(receita, tmp_path, nome, conteudo, mensagem):

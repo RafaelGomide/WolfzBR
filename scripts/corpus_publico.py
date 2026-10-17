@@ -238,7 +238,7 @@ def ibge_ipca_serie_historica(path: Path) -> list[Saida]:
     nomes = ["data", "numero_indice", "var_mes", "var_3_meses", "var_6_meses", "var_ano", "var_12_meses"]
     saida = colunas([(nomes[0], DATA), *((n, NUM) for n in nomes[1:])], linhas)
     passos = [
-        {"op": "select_range", "start": "A9", "end_detect": "auto"},
+        {"op": "select_range", "start": "A9"},  # até o fim: há linha em branco entre os anos
         {"op": "header_rows", "n": 0, "names": ["ano", "mes", *nomes[1:]]},
         {"op": "filter", "col": "mes", "match": "in", "value": MESES},
         {"op": "fill_down", "cols": ["ano"]},
@@ -304,6 +304,7 @@ def ibge_lspa_2025_01(path: Path) -> list[Saida]:
         {"op": "rename", "mapping": mapping},
         {"op": "drop_rows_where", "col": "produto", "match": "equals", "value": "TOTAL"},
         {"op": "drop_rows_where", "col": "produto", "match": "contains", "value": " - TOTAL"},
+        {"op": "trim", "cols": ["produto"]},  # "BATATA-INGLESA 1ª safra " vem com espaço no fim
         {"op": "replace", "cols": [n for n, _ in nomes[1:]], "old": "--", "new": None},
         {"op": "replace", "cols": [n for n, t in nomes[1:] if t is INT], "old": " ", "new": ""},
         {"op": "cast", "types": {n: "int" if t is INT else "float" for n, t in nomes[1:]}},

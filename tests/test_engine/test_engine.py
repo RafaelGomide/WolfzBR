@@ -1,11 +1,11 @@
-import re
-
+import openpyxl
 import polars as pl
 import pytest
 
 import wolfz
 from wolfz.core.engine import StepError, collect, run
 from wolfz.core.engine.errors import missing_column
+from wolfz.core.ingest import IngestError
 from wolfz.core.recipe import recipe_from_dict, save_recipe
 
 
@@ -125,10 +125,64 @@ def test_wolfz_run_com_receita_carregada(arquivos):
     assert wolfz.run(wolfz.load_recipe(receita), str(dados)).height == 2
 
 
-def test_wolfz_run_so_csv_por_enquanto(arquivos, tmp_path):
+def test_wolfz_run_arquivo_ilegivel(arquivos, tmp_path):
     receita, _ = arquivos
-    with pytest.raises(ValueError, match=re.escape("só arquivos CSV; .xlsx entra na versão 0.2")):
+    with pytest.raises(IngestError, match="não existe"):
         wolfz.run(receita, tmp_path / "vendas.xlsx")
+
+
+GRADE = [
+    {"op": "select_range", "start": "B3", "end_detect": "auto"},
+    {"op": "header_rows", "n": 1},
+    {"op": "drop_rows_where", "col": "Região", "match": "equals", "value": "Total"},
+    {"op": "parse_decimal_br", "cols": ["Valor"]},
+]
+
+
+def _planilha(path, aba="Vendas"):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = aba
+    ws["B1"] = "Relatório de vendas"
+    ws.append([])
+    for linha in [[None, "Região", "Valor"], [None, "Sul", "1.234,50"], [None, "Total", "1.234,50"]]:
+        ws.append(linha)
+    ws.append([])
+    ws.append([None, "Fonte: sistema"])
+    wb.save(path)
+    return path
+
+
+def test_wolfz_run_le_planilha_como_grade(tmp_path):
+    recipe = _recipe(*GRADE)
+    df = wolfz.run(recipe, _planilha(tmp_path / "vendas.xlsx"))
+    assert df.to_dict(as_series=False) == {"Região": ["Sul"], "Valor": [1234.5]}
+
+
+def test_wolfz_run_le_csv_como_grade_quando_a_receita_recorta(tmp_path):
+    csv = tmp_path / "vendas.csv"
+    linhas = ["Relatório de vendas", "", ";Região;Valor", ";Sul;1.234,50", ";Total;1", ""]
+    csv.write_text("\n".join(linhas), encoding="utf-8")
+    df = wolfz.run(_recipe(*GRADE), csv)
+    assert df.to_dict(as_series=False) == {"Região": ["Sul"], "Valor": [1234.5]}
+
+
+def test_wolfz_run_acha_a_aba_pela_regex(tmp_path):
+    recipe = recipe_from_dict(
+        {
+            "wolfz_version": "0.1",
+            "name": "regex",
+            "created_at": "2026-01-01T00:00:00Z",
+            "source": {
+                "type": "excel",
+                "sheet": "Vendas 2024",
+                "match": {"sheet_name_regex": r"Vendas \d{4}"},
+            },
+            "steps": [{"id": f"s{i}", **p} for i, p in enumerate(GRADE, 1)],
+        }
+    )
+    df = wolfz.run(recipe, _planilha(tmp_path / "vendas.xlsx", aba="Vendas 2025"))
+    assert df["Valor"].to_list() == [1234.5]
 
 
 def test_wolfz_run_erro_de_passo(arquivos, tmp_path):

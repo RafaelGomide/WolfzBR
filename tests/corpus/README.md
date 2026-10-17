@@ -59,9 +59,11 @@ Descrição livre: o que o arquivo tem de difícil.
 - Público exige `url`, `baixado_em` e `licenca`. Sintético exige `gerador` e `licenca`.
 - `categorias`: uma ou mais da tabela abaixo, separadas por vírgula.
 
-### Receitas que ainda não rodam
+### Receitas esperadas
 
-A receita esperada pode citar operações que ainda não existem (`select_range`, `header_rows`, `fill_down`…). O teste confere que o nome está no catálogo planejado (pega erro de digitação) e pula a execução com o motivo. Quando a operação entra, o teste passa a executar a receita sozinho e mostra se os parâmetros do rascunho precisam de ajuste.
+Toda receita esperada roda de ponta a ponta com `wolfz.run` sobre o `original.*`, e o resultado é comparado com a `saida_esperada.parquet`. A receita pode citar uma operação que ainda não existe (hoje: `parse_ibge`, `clean_cpf_cnpj`, `fix_mojibake`, `strip_footnote_marks`): o teste confere que o nome está no catálogo planejado (pega erro de digitação) e pula a execução com o motivo. Quando a operação entra, o teste passa a executar a receita sozinho.
+
+Planilha é lida como grade (colunas `A`, `B`, …; linha 1 é a primeira linha da aba), então a receita começa recortando a tabela com `select_range` e promovendo o cabeçalho com `header_rows`. CSV é lido com cabeçalho, a não ser que a receita comece por um desses dois passos.
 
 ## Política de tamanho
 

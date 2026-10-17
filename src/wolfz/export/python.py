@@ -16,6 +16,7 @@ import re
 import textwrap
 import types
 from collections.abc import Callable, Iterable
+from datetime import date
 from typing import Any
 
 from wolfz import __version__
@@ -67,6 +68,8 @@ def _literal(name: str, value: Any) -> str:
         return f"{name} = {items}" if value else f"{name} = set()"
     if isinstance(value, dict | list | tuple | str | int | float | bool) or value is None:
         return f"{name} = {value!r}"
+    if type(value) is date:
+        return f"{name} = date({value.year}, {value.month}, {value.day})"
     raise TypeError(f"não sei copiar a constante {name} ({type(value).__name__}) para o script")
 
 
@@ -91,7 +94,8 @@ def bundle(functions: Iterable[Callable[..., Any]]) -> tuple[list[str], str]:
                 continue  # builtin ou atributo
             value = fn.__globals__[ref]
             if isinstance(value, types.ModuleType):
-                imports.add(f"import {value.__name__}")
+                if value.__name__ != "polars":  # o script sempre importa polars as pl
+                    imports.add(f"import {value.__name__}")
             elif isinstance(value, types.FunctionType) and value.__module__.startswith("wolfz."):
                 visit(value)
             elif callable(value):
@@ -106,6 +110,8 @@ def bundle(functions: Iterable[Callable[..., Any]]) -> tuple[list[str], str]:
         visit(fn)
     if any("re.compile(" in c for c in constants.values()):
         imports.add("import re")
+    if any(" = date(" in c for c in constants.values()):
+        imports.add("from datetime import date")
     parts = [*constants.values(), *sources.values()]
     return sorted(imports), "\n\n".join(p.rstrip() for p in parts)
 

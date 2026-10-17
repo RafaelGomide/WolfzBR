@@ -195,8 +195,6 @@ def test_saida_esperada(par):
         pytest.skip(f"aguardando operações: {', '.join(faltam)}")
     if par.entrada.original is None:
         pytest.skip("original não baixado (scripts/baixar_corpus.py)")
-    if par.json()["source"]["type"] != "csv":
-        pytest.skip("wolfz.run ainda lê só CSV")
     esperado = pl.read_parquet(par.saida)
     assert_frame_equal(wolfz.run(load_recipe(par.receita), par.entrada.original), esperado)
 

@@ -12,6 +12,19 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 - `estrutura_esperada.json` em cada arquivo do corpus: o gabarito da detecção (cabeçalho, área, colunas, totais e `fill_down`).
 - `scripts/medir_deteccao.py`: compara a detecção com o gabarito e imprime uma tabela em Markdown para colar no PR. Na v1: área 95%, cabeçalho 87%, totais 90%, `fill_down` 100% e tudo certo em 77% dos 39 arquivos.
 - Teste de regressão da detecção: um arquivo que passa a errar reprova o build; as falhas conhecidas ficam listadas com o motivo.
+- Catálogo de operações da F1.E, cada uma com Polars, Power Query M, script Python e teste de equivalência:
+  - estrutura: `select_range`, `header_rows` (inclusive cabeçalho em várias linhas e arquivo sem cabeçalho), `drop_empty_rows`, `drop_empty_cols`, `fill_down`, `unpivot`;
+  - colunas: `drop_cols`, `reorder`, `cast`, `split_col`, `merge_cols`;
+  - texto: `trim` (inclui `\xa0` e caracteres invisíveis), `case`, `remove_accents`, `replace` (literal);
+  - padrões brasileiros: `parse_decimal_br`, `parse_percent`, `parse_date_br`, `parse_month_year`, `parse_bool_br`, `clean_cpf` e `clean_cnpj` (com coluna opcional de validade do dígito verificador, CNPJ alfanumérico incluído), `clean_cep`, `normalize_uf`;
+  - linhas: `filter` (DSL pequena e traduzível para M), `dedupe`, `fill_null`, `sort`.
+- `wolfz.run` e `wolfz run` leem `.xlsx`, `.xls` e `.ods` (a aba da receita, ou a primeira que casa com `sheet_name_regex`). Planilha vem como grade (colunas `A`, `B`, …); CSV vem com cabeçalho, ou como grade quando a receita começa por `select_range` ou `header_rows`.
+- As receitas esperadas do corpus rodam de ponta a ponta e são comparadas com o gabarito (72 hoje); a receita inicial proposta pela detecção roda em todos os arquivos do corpus.
+
+### Alterado
+
+- `parse_date_br` lê DDMMAAAA sem o zero do dia (`'1032021'` → 01/03/2021), que é como a data fica depois de passar pelo Excel como número.
+- O script Python exportado copia constantes do tipo data das funções de `wolfz.br`.
 
 ## [0.2.0] - 2026-10-16
 

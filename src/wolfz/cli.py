@@ -20,9 +20,8 @@ from rich.console import Console
 from rich.table import Table
 
 from wolfz import __version__
-from wolfz.core.engine import StepError, collect
+from wolfz.core.engine import StepError, collect, read_input
 from wolfz.core.ingest import IngestError
-from wolfz.core.ingest.csv import read_csv_raw
 from wolfz.core.profile import ColumnProfile, LoadedTable, TableProfile, load_table, profile_table
 from wolfz.core.profile.column import SAMPLE_SIZE
 from wolfz.core.recipe import RecipeError, load_recipe, recipe_json_schema
@@ -108,7 +107,7 @@ _EPILOG = (
 def run(
     receita: Annotated[Path, typer.Argument(help="Receita .wolfz.json.", show_default=False)],
     arquivo: Annotated[
-        Path, typer.Argument(help="Planilha a limpar (por enquanto, só CSV).", show_default=False)
+        Path, typer.Argument(help="Planilha a limpar (.xlsx, .xls, .ods ou .csv).", show_default=False)
     ],
     saida: Annotated[
         str,
@@ -140,14 +139,10 @@ def run(
 
     if not arquivo.is_file():
         _fail(ExitCode.UNREADABLE_INPUT, f"Arquivo não encontrado: {arquivo}")
-    if arquivo.suffix.lower() not in {".csv", ".txt"}:
-        _fail(
-            ExitCode.UNREADABLE_INPUT,
-            f"Formato ainda não suportado: {arquivo.suffix or 'sem extensão'}. Por enquanto, só CSV "
-            "(Excel e ODS entram na versão 0.2).",
-        )
     try:
-        df = read_csv_raw(arquivo)
+        df = read_input(recipe, arquivo)
+    except IngestError as exc:
+        _fail(ExitCode.UNREADABLE_INPUT, f"{exc.title}: {exc.message}")
     except (OSError, pl.exceptions.PolarsError) as exc:
         _fail(ExitCode.UNREADABLE_INPUT, f"Não foi possível ler {arquivo}: {_first_line(exc)}")
 
