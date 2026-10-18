@@ -6,6 +6,10 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 
 ## [Não publicado]
 
+## [0.5.0] - 2026-10-18
+
+A receita vira Power Query e Python de verdade: o `.pq` exportado é uma consulta que lê o arquivo de origem e roda sozinha no Power BI (validada no Power BI Desktop com 5 arquivos do corpus), e o script Python lê planilha e CSV do mesmo jeito que o WolfzBR, sem depender dele.
+
 ### Adicionado
 
 - Exportação Power Query M completa (`.pq`): consulta `let ... in` que lê o arquivo de origem (`Excel.Workbook` para `.xlsx`/`.xls`, `Csv.Document` com `Encoding` e `Delimiter` detectados na importação), refaz a grade crua (colunas `A`, `B`, …, linha 1 é a linha 1 da aba) e aplica os passos ativos, cada um com nome legível e único no estilo do Power Query (`#"Linhas removidas"`) e o comentário `// s3 drop_rows_where` antes.
@@ -155,7 +159,8 @@ Primeira versão: receita, três operações e `wolfz run`. Ainda não publicada
 
 - `clean_cnpj` descartava CNPJ alfanumérico válido que parecia notação científica (ex.: `00.000.000/000E-20`).
 
-[Não publicado]: https://github.com/RafaelGomide/WolfzBR/compare/v0.4.0...HEAD
+[Não publicado]: https://github.com/RafaelGomide/WolfzBR/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.1.0...v0.2.0

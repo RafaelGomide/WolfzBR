@@ -6,7 +6,7 @@ Limpeza de planilhas brasileiras com receitas reproduzíveis. Você arrasta a pl
 
 Tudo roda na sua máquina. Nenhum dado sai do seu computador.
 
-> **Status:** pré-alfa (0.4). O formato da receita ainda pode mudar até a 1.0.
+> **Status:** pré-alfa (0.5). O formato da receita ainda pode mudar até a 1.0.
 
 ![Importar, ajustar a receita e exportar](https://raw.githubusercontent.com/RafaelGomide/WolfzBR/main/docs/demo.gif)
 
@@ -81,8 +81,8 @@ df = wolfz.run("vendas.wolfz.json", "vendas_fevereiro.xlsx")  # polars.DataFrame
 | CSV | UTF-8 com BOM; separador `,`, `;` ou tabulação; vírgula decimal opcional. Opção de neutralizar fórmulas (`=`, `+`, `-`, `@`). |
 | Excel (`.xlsx`) | Data como data, número como número; texto nunca vira fórmula. |
 | Parquet | Tipos preservados, compressão zstd. |
-| Power Query M | A receita como função M, para colar no Power BI ou no Excel. |
-| Script Python | A receita como script autônomo, que só depende do Polars. |
+| Power Query M | A receita como consulta M que lê o arquivo de origem, para colar no Power BI ou no Excel. Vem com o parâmetro `CaminhoArquivo` num arquivo à parte: para o mês seguinte, troque só o caminho. |
+| Script Python | A receita como script autônomo, que lê a planilha ou o CSV e grava `.csv` ou `.parquet`. Só depende do Polars (e de `fastexcel` e `python-calamine` para ler planilha). |
 
 Tableau (`.hyper`) e projeto do Power BI (`.pbip`) estão previstos para versões futuras.
 
