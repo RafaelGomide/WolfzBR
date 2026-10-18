@@ -10,7 +10,7 @@ import polars as pl
 from pydantic import Field, model_validator
 
 from wolfz.core.recipe import Op, register_op
-from wolfz.export.m import m_field, m_list, m_text
+from wolfz.export.m import m_field, m_list, m_text, m_value
 
 
 @register_op
@@ -31,6 +31,7 @@ class DropRowsWhere(Op):
     (nula) nunca casa, então a linha fica."""
 
     op: Literal["drop_rows_where"]
+    m_label = "Linhas removidas"
     col: str = Field(min_length=1)
     match: Literal["equals", "starts_with", "contains", "in"]
     value: str | list[str]
@@ -174,22 +175,12 @@ def filter_lf(lf: pl.LazyFrame, col: str, match: str, value: Any, ignore_case: b
     return lf.filter(cond.fill_null(False))
 
 
-def _m_valor(valor: Any) -> str:
-    if isinstance(valor, bool):
-        return "true" if valor else "false"
-    if isinstance(valor, int | float):
-        return repr(valor)
-    if isinstance(valor, list):
-        return "{" + ", ".join(_m_valor(v) for v in valor) + "}"
-    return m_text(valor)
-
-
 def _m_alvo(valor: Any) -> str:
     """Literal M; data ISO vira #date quando a célula é data."""
     if isinstance(valor, str) and re.fullmatch(_ISO, valor):
         a, m, d = (int(x) for x in valor.split("-"))
         return f"(if v is date then #date({a}, {m}, {d}) else {m_text(valor)})"
-    return _m_valor(valor)
+    return m_value(valor)
 
 
 @register_op
@@ -203,6 +194,7 @@ class Filter(Op):
     ``is_null``."""
 
     op: Literal["filter"]
+    m_label = "Linhas filtradas"
     col: str = Field(min_length=1)
     match: Literal[
         "equals",
@@ -305,6 +297,7 @@ class Dedupe(Op):
     só essas colunas; sem, a linha inteira."""
 
     op: Literal["dedupe"]
+    m_label = "Duplicatas removidas"
     full_checkpoint = True  # compara a tabela inteira
     cols: list[str] | None = None
 
@@ -338,6 +331,7 @@ class FillNull(Op):
     """Preenche células nulas com um valor fixo."""
 
     op: Literal["fill_null"]
+    m_label = "Nulos preenchidos"
     cols: list[str] = Field(min_length=1)
     value: Escalar
 
@@ -357,7 +351,7 @@ class FillNull(Op):
         return f"lf = lf.with_columns(pl.col(c).fill_null(pl.lit({self.value!r})) for c in {self.cols!r})"
 
     def to_m(self, prev: str, name: str) -> str:
-        args = f"null, {_m_valor(self.value)}, Replacer.ReplaceValue, {m_list(self.cols)}"
+        args = f"null, {m_value(self.value)}, Replacer.ReplaceValue, {m_list(self.cols)}"
         return f"{name} = Table.ReplaceValue({prev}, {args})"
 
 
@@ -368,6 +362,7 @@ class Sort(Op):
     ordem crescente e no fim da decrescente. Empate mantém a ordem original."""
 
     op: Literal["sort"]
+    m_label = "Linhas classificadas"
     full_checkpoint = True  # reordena a tabela inteira
     by: list[str] = Field(min_length=1)
     descending: bool | list[bool] = False

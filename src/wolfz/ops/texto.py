@@ -49,6 +49,7 @@ class Trim(Op):
     ``collapse_spaces``, espaços repetidos no meio viram um só."""
 
     op: Literal["trim"]
+    m_label = "Texto aparado"
     cols: list[str] = Field(min_length=1)
     collapse_spaces: bool = False
 
@@ -102,6 +103,7 @@ class Case(Op):
     de cada palavra em maiúscula (``title``)."""
 
     op: Literal["case"]
+    m_label = "Maiúsculas e minúsculas"
     cols: list[str] = Field(min_length=1)
     mode: Literal["upper", "lower", "title"]
 
@@ -152,6 +154,7 @@ class RemoveAccents(Op):
     Polars e no M, que não tem função nativa para isso."""
 
     op: Literal["remove_accents"]
+    m_label = "Acentos removidos"
     cols: list[str] = Field(min_length=1)
 
     m_helpers = {  # noqa: RUF012
@@ -195,6 +198,7 @@ class Replace(Op):
     ``old``: ``{"old": "31.12.9999", "new": null}`` apaga a data sentinela."""
 
     op: Literal["replace"]
+    m_label = "Valor substituído"
     cols: list[str] = Field(min_length=1)
     old: str = Field(min_length=1)
     new: str | None

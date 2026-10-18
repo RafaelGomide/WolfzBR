@@ -39,7 +39,7 @@ def _vazia() -> Recipe:
 
 
 def test_receita_sem_passos():
-    assert recipe_to_m(_vazia()) == "(Fonte as table) as table => Fonte\n"
+    assert recipe_to_m(_vazia()).endswith("in\n    Fonte\n")
     script = recipe_to_python(_vazia())
     namespace: dict = {}
     exec(script, namespace)

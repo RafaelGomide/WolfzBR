@@ -232,6 +232,7 @@ class SelectRange(Op):
     inteiramente vazia e até a última coluna."""
 
     op: Literal["select_range"]
+    m_label = "Área recortada"
     start: str
     end: str | None = None
     end_detect: Literal["auto"] | None = None
@@ -319,6 +320,7 @@ class HeaderRows(Op):
     colunas recebem esses nomes, na ordem (arquivo sem cabeçalho: ``n=0``)."""
 
     op: Literal["header_rows"]
+    m_label = "Cabeçalhos promovidos"
     n: int = Field(default=1, ge=0, le=10)
     joiner: str = " "
     names: list[str] | None = None
@@ -381,6 +383,7 @@ class DropEmptyRows(Op):
     com espaços)."""
 
     op: Literal["drop_empty_rows"]
+    m_label = "Linhas vazias removidas"
 
     python_helpers = (celula_vazia,)
     m_helpers = {"WolfzVazia": _M_VAZIA}  # noqa: RUF012
@@ -410,6 +413,7 @@ class DropEmptyCols(Op):
     de relatório, 'Valor de Compra' que nunca é preenchido)."""
 
     op: Literal["drop_empty_cols"]
+    m_label = "Colunas vazias removidas"
 
     python_helpers = (drop_empty_cols_lf,)
     m_helpers = {"WolfzVazia": _M_VAZIA}  # noqa: RUF012
@@ -441,6 +445,7 @@ class FillDown(Op):
     na vertical, relatório que só escreve o grupo na primeira linha)."""
 
     op: Literal["fill_down"]
+    m_label = "Preenchido abaixo"
     cols: list[str] = Field(min_length=1)
 
     python_helpers = (celula_vazia,)
@@ -482,6 +487,7 @@ class Unpivot(Op):
     valores nulos, como o ``Table.UnpivotOtherColumns`` do Power Query."""
 
     op: Literal["unpivot"]
+    m_label = "Colunas não dinâmicas"
     full_checkpoint = True  # junta a tabela inteira e reordena
     index: list[str] = Field(min_length=1)
     variable_name: str = Field(default="variavel", min_length=1)

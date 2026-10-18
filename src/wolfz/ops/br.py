@@ -74,6 +74,7 @@ class ParseBrl(Op):
     errado (ver ``wolfz.br.numeros.parse_brl``)."""
 
     op: Literal["parse_brl"]
+    m_label = "Valores em reais convertidos"
     full_checkpoint = True  # função Python por valor
     cols: list[str] = Field(min_length=1)
     debit_negative: bool = False
@@ -182,6 +183,7 @@ class ParseDecimalBr(_ValorBr):
     como texto: '8725.3480')."""
 
     op: Literal["parse_decimal_br"]
+    m_label = "Números convertidos"
     decimal: Literal[",", ".", "auto"] = ","
     dash_is_zero: bool = False
     debit_negative: bool = False
@@ -287,6 +289,7 @@ class ParsePercent(_ValorBr):
     0.125). A escolha vale para a coluna inteira, nunca valor a valor."""
 
     op: Literal["parse_percent"]
+    m_label = "Percentuais convertidos"
     bare: Literal["fraction", "points"] = "fraction"
 
     funcao = parse_percent_br
@@ -323,6 +326,7 @@ class ParseDateBr(_ValorBr):
     dígitos; ``century_pivot`` decide o século de ano com 2 dígitos."""
 
     op: Literal["parse_date_br"]
+    m_label = "Datas convertidas"
     eight_digits: Literal["auto", "ymd", "dmy"] = "auto"
     century_pivot: int = Field(default=30, ge=0, le=99)
     accept_excel_serial: bool = True
@@ -381,6 +385,7 @@ class ParseMonthYear(_ValorBr):
     '01/2024', '2024-01', '202401', 'Competência 03/2025'."""
 
     op: Literal["parse_month_year"]
+    m_label = "Meses convertidos"
     century_pivot: int = Field(default=30, ge=0, le=99)
 
     funcao = parse_month_year
@@ -420,6 +425,7 @@ class ParseBoolBr(_ValorBr):
     ``empty_is_false``, célula vazia é falso (colunas de "marque com X")."""
 
     op: Literal["parse_bool_br"]
+    m_label = "Booleanos convertidos"
     empty_is_false: bool = False
 
     funcao = parse_bool_br
@@ -502,6 +508,7 @@ class CleanCpf(_Documento):
     '***456789**'. Com ``pad_zeros=False``, CPF curto vira nulo."""
 
     op: Literal["clean_cpf"]
+    m_label = "CPF limpo"
 
     funcao = clean_cpf
     valido = cpf_is_valid
@@ -543,6 +550,7 @@ class CleanCnpj(_Documento):
     verificador com a regra nova, que vale também para o numérico."""
 
     op: Literal["clean_cnpj"]
+    m_label = "CNPJ limpo"
 
     funcao = clean_cnpj
     valido = cnpj_is_valid
@@ -578,6 +586,7 @@ class CleanCep(_ValorBr):
     nulo."""
 
     op: Literal["clean_cep"]
+    m_label = "CEP limpo"
 
     funcao = clean_cep
     dtype = "String"
@@ -602,6 +611,7 @@ class NormalizeUf(_ValorBr):
     O que não é UF vira nulo."""
 
     op: Literal["normalize_uf"]
+    m_label = "UF normalizada"
 
     funcao = normalize_uf
     dtype = "String"

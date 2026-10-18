@@ -55,6 +55,9 @@ class Op(_Model, ABC):
     python_helpers: ClassVar[tuple[Callable[..., Any], ...]] = ()
     # Funções M auxiliares, declaradas uma vez no início da consulta: nome -> definição.
     m_helpers: ClassVar[dict[str, str]] = {}
+    # Nome do passo na consulta M, no estilo do Power Query ("Colunas renomeadas").
+    # Vazio: usa o nome da operação.
+    m_label: ClassVar[str] = ""
     # Exemplos para o teste de equivalência e para a documentação. Cada um é
     # {"step": parâmetros do passo, "input": colunas de entrada} e, opcional,
     # "expected": colunas esperadas na saída. Toda operação do catálogo

@@ -44,7 +44,7 @@ from wolfz.export.dados import (
     escritor,
     gravar_juntos,
 )
-from wolfz.export.m import recipe_to_m
+from wolfz.export.m import PARAMETRO, parameter_to_m, recipe_to_m, source_from_project
 from wolfz.export.python import recipe_to_python
 
 RECIPE_FILE = "recipe.wolfz.json"
@@ -299,8 +299,12 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
             raise Problem(422, "output_dir precisa ser um caminho absoluto.")
         saida = saida.resolve()
         atual = receita(pasta)
-        base = _nome_seguro(Path(_ler_json(pasta / PROJECT_FILE)["name"]).stem)
+        projeto = _ler_json(pasta / PROJECT_FILE)
+        base = _nome_seguro(Path(projeto["name"]).stem)
         alvos = {fmt: saida / f"{base}{_EXTENSOES[fmt]}" for fmt in dict.fromkeys(pedido.formats)}
+        if "powerquery" in alvos:
+            # O parâmetro CaminhoArquivo vai num arquivo à parte (F2.A3).
+            alvos["powerquery_parametro"] = saida / f"{base}.{PARAMETRO}.pq"
         existentes = [str(p) for p in alvos.values() if p.exists()]
         if existentes and not pedido.overwrite:
             raise Problem(
@@ -321,7 +325,12 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
             if fmt in EXTENSOES:
                 escritas[alvo] = escritor(fmt, tabela, opcoes, pedido.neutralize_formulas, aba=atual.name)
             elif fmt == "powerquery":
-                escritas[alvo] = partial(_escrever_texto, recipe_to_m(atual))
+                fonte = source_from_project(projeto["source"], pl.scan_parquet(pasta / RAW_FILE))
+                escritas[alvo] = partial(_escrever_texto, recipe_to_m(atual, fonte))
+            elif fmt == "powerquery_parametro":
+                # Arquivo enviado por upload não tem caminho: fica o nome, para o usuário completar.
+                caminho = projeto["source"].get("path") or rf"C:\caminho\para\{projeto['source']['name']}"
+                escritas[alvo] = partial(_escrever_texto, parameter_to_m(caminho, atual.name))
             else:
                 escritas[alvo] = partial(_escrever_texto, recipe_to_python(atual))
         try:

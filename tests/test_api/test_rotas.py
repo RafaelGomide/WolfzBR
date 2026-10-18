@@ -297,6 +297,7 @@ def test_exportar_formatos(client, projeto, tmp_path):
     assert r.status_code == 200, r.text
     nomes = sorted(Path(f).name for f in r.json()["files"])
     assert nomes == [
+        "receita_municipal.CaminhoArquivo.pq",
         "receita_municipal.csv",
         "receita_municipal.parquet",
         "receita_municipal.pq",
@@ -304,7 +305,12 @@ def test_exportar_formatos(client, projeto, tmp_path):
     ]
     assert r.json()["rows"] == 12
     assert pl.read_parquet(destino / "receita_municipal.parquet").height == 12
-    assert "Table." in (destino / "receita_municipal.pq").read_text(encoding="utf-8")
+    consulta = (destino / "receita_municipal.pq").read_text(encoding="utf-8")
+    assert "Excel.Workbook(File.Contents(CaminhoArquivo), null, true)" in consulta
+    assert "// s1 select_range" in consulta
+    parametro = (destino / "receita_municipal.CaminhoArquivo.pq").read_text(encoding="utf-8")
+    assert "receita_municipal.xlsx" in parametro
+    assert "IsParameterQuery = true" in parametro
     assert not [p for p in destino.iterdir() if p.name.startswith(".wolfz-export")]  # sem temporários
 
 

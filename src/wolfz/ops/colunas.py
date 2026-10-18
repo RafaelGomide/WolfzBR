@@ -17,6 +17,7 @@ class Rename(Op):
     a receita nunca renomeia "nada" em silêncio quando a planilha muda."""
 
     op: Literal["rename"]
+    m_label = "Colunas renomeadas"
     mapping: dict[str, str] = Field(
         min_length=1,
         description="Nome atual -> nome novo.",
@@ -112,6 +113,7 @@ class DropCols(Op):
     "nada" em silêncio quando a planilha muda."""
 
     op: Literal["drop_cols"]
+    m_label = "Colunas removidas"
     cols: list[str] = Field(min_length=1)
 
     examples = (
@@ -138,6 +140,7 @@ class Reorder(Op):
     colunas não citadas vêm depois, na ordem em que estavam; sem ele, saem."""
 
     op: Literal["reorder"]
+    m_label = "Colunas reordenadas"
     cols: list[str] = Field(min_length=1)
     keep_rest: bool = True
 
@@ -229,6 +232,7 @@ class Cast(Op):
     converte vira nulo; ``int`` com casas decimais também."""
 
     op: Literal["cast"]
+    m_label = "Tipo alterado"
     types: dict[str, Tipo] = Field(min_length=1)
 
     python_helpers = (cast_expr,)
@@ -273,6 +277,7 @@ class SplitCol(Op):
     do texto; parte que falta fica nula."""
 
     op: Literal["split_col"]
+    m_label = "Coluna dividida"
     col: str = Field(min_length=1)
     delimiter: str = Field(min_length=1)
     into: list[str] = Field(min_length=2)
@@ -316,6 +321,7 @@ class MergeCols(Op):
     as colunas originais ficam."""
 
     op: Literal["merge_cols"]
+    m_label = "Colunas mescladas"
     cols: list[str] = Field(min_length=2)
     separator: str = ""
     into: str = Field(min_length=1)

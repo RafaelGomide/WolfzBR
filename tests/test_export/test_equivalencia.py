@@ -77,7 +77,7 @@ def test_polars_igual_script_python(cls, example):
 def test_m_estruturalmente_valido(cls, example):
     m = recipe_to_m(_recipe(_step(cls, example)))
     check_m(m)
-    assert "s1 = " in m
+    assert f"// s1 {cls.model_fields['op'].annotation.__args__[0]}\n" in m
 
 
 RECEITA_COMPLETA = [

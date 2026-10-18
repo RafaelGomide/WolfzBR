@@ -6,6 +6,17 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 
 ## [Não publicado]
 
+### Adicionado
+
+- Exportação Power Query M completa (`.pq`): consulta `let ... in` que lê o arquivo de origem (`Excel.Workbook` para `.xlsx`/`.xls`, `Csv.Document` com `Encoding` e `Delimiter` detectados na importação), refaz a grade crua (colunas `A`, `B`, …, linha 1 é a linha 1 da aba) e aplica os passos ativos, cada um com nome legível e único no estilo do Power Query (`#"Linhas removidas"`) e o comentário `// s3 drop_rows_where` antes.
+- Parâmetro `CaminhoArquivo` exportado num arquivo à parte (`<nome>.CaminhoArquivo.pq`), com a instrução de como criá-lo no Power BI Desktop; para reaplicar a receita a outro arquivo, troca-se só o parâmetro.
+- Escapes de identificador, texto e lista do M (`m_identifier`, `m_text`, `m_value`, `m_list`), testados com nomes hostis (`"`, `#"`, quebra de linha, emoji) contra o parser oficial da Microsoft.
+- `scripts/validacao_m.py`, que gera as consultas e os valores de referência de um subconjunto fixo de 5 arquivos do corpus para a validação manual do M no Power BI Desktop, conferida nesta versão.
+
+### Alterado
+
+- O `.pq` exportado deixa de ser uma função `(Fonte as table) as table => ...` e passa a ser uma consulta que roda sozinha no Power BI.
+
 ## [0.4.0] - 2026-10-17
 
 Primeira versão com interface: `wolfz ui` abre o navegador com a API local, e a planilha é limpa na tela, com a estrutura detectada em cores, a receita editável e a tabela antes e depois de cada passo. Exportação para CSV (pronto para o Excel em português), Excel, Parquet, Power Query M e script Python. Primeira versão no PyPI.
