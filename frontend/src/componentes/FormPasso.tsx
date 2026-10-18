@@ -2,9 +2,11 @@
 // (GET /ops, F1.H9). Formulários próprios e simples: o catálogo só usa
 // texto, número, sim/não, enum, lista, mapa e alternativas (anyOf).
 
-import { useId, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import type { Operacao, Passo } from "../api/cliente";
 import { T } from "../textos";
+import { separarItens } from "../util/lista";
 import { nomeOp } from "../util/receita";
 import {
   FIXOS,
@@ -39,8 +41,8 @@ function Lista({
   const s = resolver(item, defs);
   if (s.type === "string" && !s.enum) {
     const adicionar = () => {
-      const t = novo.trim();
-      if (t && !valor.includes(t)) mudar([...valor, t]);
+      const novos = separarItens(novo, colunas).filter((t) => !valor.includes(t));
+      if (novos.length) mudar([...valor, ...novos]);
       setNovo("");
     };
     const sugestoes = (colunas ?? []).filter((c) => !valor.includes(c));
@@ -66,7 +68,9 @@ function Lista({
             aria-label={rotulo}
             list={sugestoes.length ? lista : undefined}
             value={novo}
+            placeholder={T.form.dicaLista}
             onChange={(e) => setNovo(e.target.value)}
+            onBlur={adicionar}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
@@ -391,6 +395,10 @@ export function FormPasso({
   aoCancelar: () => void;
 }) {
   const [rascunho, setRascunho] = useState<Passo>(passo);
+  const atual = useRef(rascunho);
+  useLayoutEffect(() => {
+    atual.current = rascunho;
+  });
   const schema = operacao.schema as {
     properties?: Record<string, Schema>;
     required?: string[];
@@ -400,8 +408,15 @@ export function FormPasso({
   const obrigatorios = new Set(schema.required ?? []);
 
   function aplicar() {
-    const limpo: Passo = { id: rascunho.id, op: rascunho.op };
-    for (const [k, v] of Object.entries(rascunho)) if (v !== null && v !== undefined) limpo[k] = v;
+    // Texto digitado num campo de lista e ainda não adicionado entra agora:
+    // tirar o foco confirma o campo (onBlur), e o flushSync aplica isso
+    // antes de ler o rascunho.
+    flushSync(() => {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    });
+    const r = atual.current;
+    const limpo: Passo = { id: r.id, op: r.op };
+    for (const [k, v] of Object.entries(r)) if (v !== null && v !== undefined) limpo[k] = v;
     aoAplicar(limpo);
   }
 
@@ -456,7 +471,9 @@ export function FormPasso({
         <button type="button" onClick={aoCancelar}>
           {T.comum.cancelar}
         </button>
-        <button type="submit" className="primario">
+        {/* Não tira o foco ao apertar: o redesenho do campo que perde o foco
+            poderia mover o botão antes de o clique terminar. */}
+        <button type="submit" className="primario" onMouseDown={(e) => e.preventDefault()}>
           {T.comum.aplicar}
         </button>
       </div>

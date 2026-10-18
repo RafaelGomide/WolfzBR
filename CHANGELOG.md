@@ -6,6 +6,10 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 
 ## [Não publicado]
 
+## [0.4.0] - 2026-10-17
+
+Primeira versão com interface: `wolfz ui` abre o navegador com a API local, e a planilha é limpa na tela, com a estrutura detectada em cores, a receita editável e a tabela antes e depois de cada passo. Exportação para CSV (pronto para o Excel em português), Excel, Parquet, Power Query M e script Python. Primeira versão no PyPI.
+
 ### Adicionado
 
 - API local (`wolfz.api`, FastAPI) com prefixo `/api` e a interface compilada servida na raiz:
@@ -50,6 +54,10 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 - No Windows, o salvamento automático da receita falhava às vezes ("acesso negado") quando um preview lia o arquivo no mesmo instante. Renomear por cima agora tenta de novo por até 1 s.
 - Detecção: cabeçalho de série com datas nas colunas (`1997-01-01 00:00:00`, como o Excel entrega uma célula de data) não era reconhecido. Data ISO passa a contar como rótulo, como o ano já contava. Sem mudança nas métricas do corpus.
 - Interface: coluna numérica com nome longo ficava com os valores fora da área visível do grid. A largura inicial vai até 180 px.
+- Interface: digitar vários valores num campo de lista ("NORTE, NORDESTE, SUL") criava um item só com o texto inteiro, e o "Remover linhas" com `in` não removia nada. Vírgula, ponto e vírgula e quebra de linha agora separam os itens (colchetes e aspas em volta são ignorados), e o nome exato de uma coluna com vírgula continua inteiro. Achado na cronometragem dos arquivos de validação.
+- Interface: texto digitado num campo de lista sem clicar em "Adicionar" se perdia ao aplicar o passo. Agora entra junto.
+- Interface: o painel da receita pode ser alargado, para mapas com nomes de coluna longos.
+- O sdist levava o `README.md` do corpus de testes: os padrões de `include` agora são ancorados na raiz do repositório.
 
 ### Alterado
 
@@ -133,7 +141,8 @@ Primeira versão: receita, três operações e `wolfz run`. Ainda não publicada
 
 - `clean_cnpj` descartava CNPJ alfanumérico válido que parecia notação científica (ex.: `00.000.000/000E-20`).
 
-[Não publicado]: https://github.com/RafaelGomide/WolfzBR/compare/v0.3.0...HEAD
+[Não publicado]: https://github.com/RafaelGomide/WolfzBR/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/RafaelGomide/WolfzBR/releases/tag/v0.1.0

@@ -114,6 +114,7 @@ export const T = {
     adicionarItem: "Adicionar",
     adicionarTodas: (n: number) => `Adicionar todas (${n})`,
     limpar: "Limpar",
+    dicaLista: "Vários de uma vez: separe com vírgula",
     removerItem: "Remover",
     nenhumItem: "nenhum",
     chave: "de",

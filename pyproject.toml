@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wolfzbr"
-version = "0.3.0"
+version = "0.4.0"
 description = "Limpeza de planilhas brasileiras com receitas reproduzíveis e exportação para Power Query M, Python, Tableau e Power BI."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -87,7 +87,7 @@ packages = ["src/wolfz"]
 [tool.hatch.build.targets.wheel.hooks.custom]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/wolfz", "README.md", "LICENSE", "hatch_build.py"]
+include = ["/src/wolfz", "/README.md", "/LICENSE", "/hatch_build.py"]
 
 [tool.ruff]
 line-length = 110

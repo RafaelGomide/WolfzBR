@@ -649,3 +649,15 @@ pre {
   order: 2;
   font-weight: normal;
 }
+
+/* O painel da receita pode ser alargado (arrastando o canto inferior
+   direito): mapas com nomes de coluna longos cabem melhor. */
+.painel-receita {
+  resize: horizontal;
+  min-width: 18rem;
+  max-width: 60vw;
+}
+.mapa-campo .linha > input[readonly] {
+  flex: 1 1 8rem;
+  text-overflow: ellipsis;
+}

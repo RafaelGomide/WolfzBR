@@ -149,3 +149,25 @@ test("ajustar a área arrastando na visão bruta", async ({ page }) => {
   await page.getByRole("tab", { name: "Antes e depois" }).click();
   await expect(grade(page, "Receita inteira")).toHaveAttribute("data-total", "6");
 });
+
+test("lista digitada com vírgulas vira vários valores (Remover linhas, in)", async ({ page }) => {
+  await abrir(page);
+  await importar(page, arquivo("receita_municipal"));
+  await esperarProjeto(page, "receita_municipal.xlsx");
+
+  await passo(page, "s2").getByRole("button", { name: "Definir o cabeçalho" }).click();
+  await adicionarPasso(page, "drop_rows_where", "Remover linhas");
+  const form = page.getByRole("form", { name: "Novo passo" });
+  await form.getByRole("combobox", { name: "Coluna" }).fill("Código");
+  await form.getByRole("combobox", { name: "Condição" }).selectOption("in");
+  await form
+    .getByRole("combobox", { name: "Valor: Tipo do valor" })
+    .selectOption({ label: "lista" });
+  // Do jeito que se escreve na mão (com aspas de Python no meio) e sem
+  // clicar em "Adicionar": sair do campo já confirma.
+  await form.getByRole("textbox", { name: "Valor" }).fill("1.1.1.2.50.0.0, '1.1.1.3.03.1.0'");
+  await form.getByRole("button", { name: "Aplicar" }).click();
+
+  await expect(passo(page, "s3")).toContainText("1.1.1.2.50.0.0, 1.1.1.3.03.1.0");
+  await expect(grade(page, "Depois de s3")).toHaveAttribute("data-total", "10");
+});
