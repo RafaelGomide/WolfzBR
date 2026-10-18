@@ -5,14 +5,17 @@ usam são copiadas para dentro dele, junto com as constantes e funções de
 que dependem. Assim ele roda numa máquina sem o WolfzBR, e o teste de
 equivalência garante que dá o mesmo resultado que o motor (§13.5).
 
-Versão mínima da Fase 0: só a função ``transform`` e uma leitura simples de
-CSV. A exportação completa (leitura de Excel, encoding, saída) entra em F2.
+A leitura da entrada (``wolfz.export.leitura``) também vai copiada: o
+script lê planilha e CSV do mesmo jeito que ``wolfz.run``.
 """
 
 from __future__ import annotations
 
+import ast
 import inspect
 import re
+import subprocess
+import sys
 import textwrap
 import types
 from collections.abc import Callable, Iterable
@@ -21,12 +24,19 @@ from typing import Any
 
 from wolfz import __version__
 from wolfz.core.recipe import Recipe
+from wolfz.export.leitura import ler_entrada
 
-_HEADER = '''\
-"""Script gerado pelo WolfzBR {version} a partir da receita {name!r}.
+_HEADER = '''"""Receita "{name}", exportada pelo WolfzBR {version} em {date}.
 
-Não depende do WolfzBR, só de Polars. Uso:
-    python <este_script.py> entrada.csv saida.csv
+Script autônomo: não depende do WolfzBR, só de Polars (e, para ler
+planilha, de fastexcel e python-calamine). Uso:
+
+    python <este_script.py> entrada.xlsx saida.csv
+
+Lê a entrada como o WolfzBR lê (planilha como grade de texto, CSV com
+encoding e separador detectados), aplica os passos da receita e grava a
+saída em .csv ou .parquet. A função ``transform`` também pode ser
+importada e aplicada a um ``LazyFrame`` já lido.
 """
 
 from __future__ import annotations
@@ -36,13 +46,31 @@ from __future__ import annotations
 
 _MAIN = """
 
-if __name__ == "__main__":
-    import sys
-
+def main() -> None:
+    if len(sys.argv) != 3:
+        sys.exit(f"uso: python {sys.argv[0]} entrada saida.csv")
     entrada, saida = sys.argv[1:3]
-    df = pl.read_csv(entrada, infer_schema=False)
-    transform(df.lazy()).collect().write_csv(saida)
+    df = transform(ler_entrada(entrada, ABA, ABA_REGEX, GRADE).lazy()).collect()
+    if saida.lower().endswith(".parquet"):
+        df.write_parquet(saida)
+    else:
+        df.write_csv(saida)
+
+
+if __name__ == "__main__":
+    main()
 """
+
+# Passos que trabalham sobre a grade crua: se a receita começa por um deles,
+# o CSV é lido sem cabeçalho (a mesma regra de ``wolfz.run``).
+_PASSOS_DE_GRADE = {"select_range", "header_rows"}
+
+
+def _docstring(text: str) -> str:
+    """Texto seguro dentro do docstring do script: sem quebra de linha,
+    barra invertida nem aspas que fechem a string."""
+    limpo = " ".join("".join(" " if not c.isprintable() else c for c in text).split())
+    return limpo.replace("\\", "\\\\").replace('"', '\\"')
 
 
 def _code_names(code: types.CodeType) -> set[str]:
@@ -53,6 +81,28 @@ def _code_names(code: types.CodeType) -> set[str]:
         if isinstance(const, types.CodeType):
             names |= _code_names(const)
     return names
+
+
+def _annotation_names(fn: Callable[..., Any]) -> set[str]:
+    """Nomes usados nas anotações: com ``from __future__ import annotations``
+    elas são texto e não aparecem no bytecode."""
+    names: set[str] = set()
+    for annotation in fn.__annotations__.values():
+        if isinstance(annotation, str):
+            tree = ast.parse(annotation, mode="eval")
+            names |= {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
+    return names
+
+
+def _public_module(value: Any) -> str:
+    """Módulo público de onde importar ``value`` (``pathlib`` e não
+    ``pathlib._local``)."""
+    parts = value.__module__.split(".")
+    for i in range(1, len(parts) + 1):
+        module = ".".join(parts[:i])
+        if getattr(sys.modules.get(module), value.__name__, None) is value:
+            return module
+    return value.__module__
 
 
 def _literal(name: str, value: Any) -> str:
@@ -89,7 +139,7 @@ def bundle(functions: Iterable[Callable[..., Any]]) -> tuple[list[str], str]:
             return
         seen[name] = fn
         sources[name] = textwrap.dedent(inspect.getsource(fn))
-        for ref in sorted(_code_names(fn.__code__)):
+        for ref in sorted(_code_names(fn.__code__) | _annotation_names(fn)):
             if ref not in fn.__globals__:
                 continue  # builtin ou atributo
             value = fn.__globals__[ref]
@@ -100,7 +150,7 @@ def bundle(functions: Iterable[Callable[..., Any]]) -> tuple[list[str], str]:
                 visit(value)
             elif callable(value):
                 # classe ou função de outra biblioteca (ex.: datetime.date)
-                imports.add(f"from {value.__module__} import {value.__name__}")
+                imports.add(f"from {_public_module(value)} import {value.__name__}")
             else:
                 code = _literal(ref, value)
                 if constants.setdefault(ref, code) != code:
@@ -112,33 +162,69 @@ def bundle(functions: Iterable[Callable[..., Any]]) -> tuple[list[str], str]:
         imports.add("import re")
     if any(" = date(" in c for c in constants.values()):
         imports.add("from datetime import date")
-    parts = [*constants.values(), *sources.values()]
-    return sorted(imports), "\n\n".join(p.rstrip() for p in parts)
+    code = "\n".join(c.rstrip() for c in constants.values())
+    if sources:
+        code += "\n\n\n" + "\n\n\n".join(src.rstrip() for src in sources.values())
+    return sorted(imports), code
 
 
-def recipe_to_python(recipe: Recipe) -> str:
-    """Script Python autônomo com a função ``transform(lf)`` que aplica
-    todos os passos da receita."""
-    helpers: list[Callable[..., Any]] = []
-    for step in recipe.active_steps:
+def recipe_to_python(recipe: Recipe, today: date | None = None) -> str:
+    """Script Python autônomo: ``transform(lf)`` aplica todos os passos
+    ativos da receita, e ``main`` lê a entrada e grava a saída."""
+    steps = recipe.active_steps
+    helpers: list[Callable[..., Any]] = [ler_entrada]
+    for step in steps:
         helpers.extend(h for h in step.python_helpers if h not in helpers)
     stdlib, helper_code = bundle(helpers)
-    # stdlib primeiro (import, depois from), Polars por último
-    stdlib = sorted(stdlib, key=lambda line: (line.startswith("from "), line))
-    imports = [*stdlib, "", "import polars as pl"] if stdlib else ["import polars as pl"]
+    imports = [*stdlib, "import sys", "", "import polars as pl"]
+
+    match = recipe.source.match
+    grade = bool(steps) and steps[0].op in _PASSOS_DE_GRADE
+    constants = [
+        "# Como ler a entrada (da receita)",
+        f"ABA = {recipe.source.sheet!r}",
+        f"ABA_REGEX = {match.sheet_name_regex if match else None!r}",
+        f"GRADE = {grade!r}  # CSV lido como grade (A, B, ...) e não com cabeçalho",
+    ]
 
     body = []
-    for step in recipe.active_steps:
+    for step in steps:
         body.append(f"# {step.id}: {step.op}")
         body.extend(step.to_python().splitlines())
     body.append("return lf")
 
-    parts = [_HEADER.format(version=__version__, name=recipe.name, imports="\n".join(imports))]
-    if helper_code:
-        parts.append("\n# Funções copiadas de wolfz.br\n\n" + helper_code + "\n")
+    header = _HEADER.format(
+        version=__version__,
+        name=_docstring(recipe.name),
+        date=(today or date.today()).isoformat(),
+        imports="\n".join(imports),
+    )
+    parts = [header, "\n".join(constants) + "\n"]
+    parts.append("\n# Funções copiadas do WolfzBR\n\n" + helper_code + "\n")
     parts.append(
         "\ndef transform(lf: pl.LazyFrame) -> pl.LazyFrame:\n"
+        + '    """Aplica os passos da receita, em ordem."""\n'
         + "\n".join(f"    {line}" if line else "" for line in body)
         + "\n"
     )
-    return "\n".join(parts) + _MAIN
+    return ruff_format("\n".join(parts) + _MAIN)
+
+
+def ruff_format(code: str) -> str:
+    """Passa o script pelo ruff, com a configuração padrão: ordena os
+    imports e formata. O script é código que o usuário vai ler (F2.B3)."""
+    from ruff.__main__ import find_ruff_bin
+
+    ruff = find_ruff_bin()
+    for args in (["check", "--select", "I", "--fix"], ["format"]):
+        result = subprocess.run(
+            [ruff, *args, "--isolated", "--quiet", "--stdin-filename", "script.py", "-"],
+            input=code.encode("utf-8"),
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            erro = result.stderr.decode("utf-8", "replace") or result.stdout.decode("utf-8", "replace")
+            raise RuntimeError(f"ruff recusou o script exportado: {erro.strip()}")
+        code = result.stdout.decode("utf-8")
+    return code

@@ -218,6 +218,11 @@ class ParseDecimalBr(_ValorBr):
             },
             "expected": {"v": [8725.348, 0.125, 1.0, None], "w": [1234.0, 2.5, 1234567.0, None]},
         },
+        {
+            "step": {"cols": ["v"], "debit_negative": True},
+            "input": {"v": ["1.234,56 D", "10,00 C", "5,00", "7,5D", None]},
+            "expected": {"v": [-1234.56, 10.0, 5.0, -7.5, None]},
+        },
     )
 
     def _kwargs(self) -> dict[str, Any]:
@@ -362,6 +367,11 @@ class ParseDateBr(_ValorBr):
             "input": {"d": ["01022024", "45657", "15/03/29", "15/03/30"]},
             "expected": {"d": [_DATA(2024, 2, 1), None, _DATA(2029, 3, 15), _DATA(1930, 3, 15)]},
         },
+        {
+            "step": {"cols": ["d"], "eight_digits": "ymd", "century_pivot": 50},
+            "input": {"d": ["20240201", "01022024", "15/03/49", "15/03/50"]},
+            "expected": {"d": [_DATA(2024, 2, 1), None, _DATA(2049, 3, 15), _DATA(1950, 3, 15)]},
+        },
     )
 
     def _kwargs(self) -> dict[str, Any]:
@@ -409,6 +419,11 @@ class ParseMonthYear(_ValorBr):
                 ]
             },
             "expected": {"m": [_DATA(2024, 1, 1)] * 5 + [_DATA(2025, 3, 1), None, None]},
+        },
+        {
+            "step": {"cols": ["m"], "century_pivot": 50},
+            "input": {"m": ["jan/49", "jan/50", "03/2025"]},
+            "expected": {"m": [_DATA(2049, 1, 1), _DATA(1950, 1, 1), _DATA(2025, 3, 1)]},
         },
     )
 
@@ -572,6 +587,11 @@ class CleanCnpj(_Documento):
                 "c": ["00000000000191", "00000000000191", "12ABC34501DE35", "11222333000180", None, None],
                 "c_valido": [True, True, True, False, None, None],
             },
+        },
+        {
+            "step": {"cols": ["c"], "pad_zeros": False},
+            "input": {"c": ["191", "00.000.000/0001-91", None]},
+            "expected": {"c": [None, "00000000000191", None]},
         },
     )
 

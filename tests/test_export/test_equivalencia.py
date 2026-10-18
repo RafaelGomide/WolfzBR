@@ -10,6 +10,7 @@ import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal, get_args, get_origin
 
 import polars as pl
 import pytest
@@ -61,6 +62,41 @@ def test_catalogo_nao_esta_vazio():
 @pytest.mark.parametrize("name", list(CATALOGO))
 def test_toda_operacao_tem_exemplo(name):
     assert CATALOGO[name].examples, f"{name} precisa de pelo menos um exemplo em `examples`"
+
+
+def _literais(annotation) -> set:
+    if get_origin(annotation) is Literal:
+        return set(get_args(annotation))
+    return set().union(*(_literais(a) for a in get_args(annotation)))
+
+
+def _valores(valor) -> set:
+    if isinstance(valor, list):
+        return set().union(*(_valores(v) for v in valor))
+    if isinstance(valor, dict):
+        return set().union(*(_valores(v) for v in valor.values()))
+    return {valor}
+
+
+@pytest.mark.parametrize("name", list(CATALOGO))
+def test_exemplos_cobrem_todos_os_parametros(name):
+    """Cobertura de 100% do catálogo (F2.B4): todo parâmetro de toda
+    operação aparece em algum exemplo, e toda opção fixa (``Literal``)
+    diferente do padrão é usada. Assim o Polars, o script Python e o M
+    são comparados em cada caminho da operação, não só no padrão."""
+    cls = CATALOGO[name]
+    passos = [e["step"] for e in cls.examples]
+    faltam = []
+    for campo, info in cls.model_fields.items():
+        if campo in ("id", "op", "enabled"):
+            continue
+        usados = [p[campo] for p in passos if campo in p]
+        if not usados:
+            faltam.append(campo)
+            continue
+        opcoes = _literais(info.annotation) - set().union(*map(_valores, usados)) - {info.default}
+        faltam += [f"{campo}={o!r}" for o in sorted(opcoes, key=str)]
+    assert not faltam, f"{name}: nenhum exemplo usa {', '.join(faltam)}"
 
 
 @pytest.mark.parametrize(("cls", "example"), CASOS)

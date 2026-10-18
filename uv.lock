@@ -1675,6 +1675,7 @@ dependencies = [
     { name = "python-multipart" },
     { name = "python-ulid" },
     { name = "rapidfuzz" },
+    { name = "ruff" },
     { name = "typer" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -1687,7 +1688,6 @@ dev = [
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-cov" },
-    { name = "ruff" },
     { name = "syrupy" },
 ]
 sql = [
@@ -1717,7 +1717,7 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.9" },
     { name = "python-ulid", specifier = ">=2.7" },
     { name = "rapidfuzz", specifier = ">=3.9" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.5" },
+    { name = "ruff", specifier = ">=0.5" },
     { name = "syrupy", marker = "extra == 'dev'", specifier = ">=4.6" },
     { name = "tableauhyperapi", marker = "extra == 'tableau'", specifier = ">=0.0.19" },
     { name = "typer", specifier = ">=0.12" },

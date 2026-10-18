@@ -242,6 +242,41 @@ class Filter(Op):
             "input": {"obs": [None, "x"], "id": ["1", "2"]},
             "expected": {"obs": [None], "id": ["1"]},
         },
+        {
+            "step": {"col": "uf", "match": "equals", "value": "ES"},
+            "input": {"uf": ["ES", "es", "RJ", None]},
+            "expected": {"uf": ["ES"]},
+        },
+        {
+            "step": {"col": "uf", "match": "not_equals", "value": "es", "ignore_case": True},
+            "input": {"uf": ["ES", "RJ", None]},
+            "expected": {"uf": ["RJ"]},
+        },
+        {
+            "step": {"col": "v", "match": "gt", "value": 2.5},
+            "input": {"v": [1.0, 2.5, 3.0, None]},
+            "expected": {"v": [3.0]},
+        },
+        {
+            "step": {"col": "v", "match": "le", "value": 2},
+            "input": {"v": [1, 2, 3, None]},
+            "expected": {"v": [1, 2]},
+        },
+        {
+            "step": {"col": "mes", "match": "not_in", "value": ["TOTAL", "ANO"]},
+            "input": {"mes": ["JAN", "TOTAL", None, "ANO"]},
+            "expected": {"mes": ["JAN"]},
+        },
+        {
+            "step": {"col": "obs", "match": "not_null"},
+            "input": {"obs": [None, "x", ""]},
+            "expected": {"obs": ["x", ""]},
+        },
+        {
+            "step": {"col": "conta", "match": "starts_with", "value": "1.1"},
+            "input": {"conta": ["1.1.01", "1.2", "11", None]},
+            "expected": {"conta": ["1.1.01"]},
+        },
     )
 
     @model_validator(mode="after")

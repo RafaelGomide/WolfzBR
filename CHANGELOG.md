@@ -11,10 +11,13 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 - Exportação Power Query M completa (`.pq`): consulta `let ... in` que lê o arquivo de origem (`Excel.Workbook` para `.xlsx`/`.xls`, `Csv.Document` com `Encoding` e `Delimiter` detectados na importação), refaz a grade crua (colunas `A`, `B`, …, linha 1 é a linha 1 da aba) e aplica os passos ativos, cada um com nome legível e único no estilo do Power Query (`#"Linhas removidas"`) e o comentário `// s3 drop_rows_where` antes.
 - Parâmetro `CaminhoArquivo` exportado num arquivo à parte (`<nome>.CaminhoArquivo.pq`), com a instrução de como criá-lo no Power BI Desktop; para reaplicar a receita a outro arquivo, troca-se só o parâmetro.
 - Escapes de identificador, texto e lista do M (`m_identifier`, `m_text`, `m_value`, `m_list`), testados com nomes hostis (`"`, `#"`, quebra de linha, emoji) contra o parser oficial da Microsoft.
+- Script Python exportado completo: lê a entrada do mesmo jeito que o `wolfz.run` (planilha `.xlsx`/`.xls`/`.ods` como grade de texto, CSV com encoding e separador detectados), grava `.csv` ou `.parquet` e continua sem depender do WolfzBR. Cabeçalho com a versão do WolfzBR, a data da exportação e o nome da receita.
 - `scripts/validacao_m.py`, que gera as consultas e os valores de referência de um subconjunto fixo de 5 arquivos do corpus para a validação manual do M no Power BI Desktop, conferida nesta versão.
 
 ### Alterado
 
+- O script Python exportado sai formatado e com os imports ordenados pelo ruff, que passa a ser dependência do pacote.
+- Exemplos novos em `filter`, `parse_date_br`, `parse_decimal_br`, `parse_month_year` e `clean_cnpj`: o teste de equivalência cobre todo parâmetro e toda opção de cada operação.
 - O `.pq` exportado deixa de ser uma função `(Fonte as table) as table => ...` e passa a ser uma consulta que roda sozinha no Power BI.
 
 ## [0.4.0] - 2026-10-17
