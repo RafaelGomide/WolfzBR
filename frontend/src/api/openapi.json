@@ -114,7 +114,7 @@
       },
       "Deteccao": {
         "additionalProperties": true,
-        "description": "Estrutura detectada, em linhas e letras do Excel.",
+        "description": "Estrutura detectada, em linhas e letras do Excel. ``tabelas`` só\naparece quando a aba tem mais de uma; a receita inicial usa a principal.",
         "properties": {
           "cabecalho": {
             "anyOf": [
@@ -158,6 +158,14 @@
               "type": "string"
             },
             "title": "Notas",
+            "type": "array"
+          },
+          "tabelas": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/TabelaDetectada"
+            },
+            "title": "Tabelas",
             "type": "array"
           },
           "titulo": {
@@ -959,6 +967,55 @@
           "recipe"
         ],
         "title": "ReceitaSalva",
+        "type": "object"
+      },
+      "TabelaDetectada": {
+        "additionalProperties": true,
+        "description": "Uma das tabelas de uma aba com mais de uma (F2.D3).",
+        "properties": {
+          "cabecalho": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cabecalho"
+          },
+          "colunas": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Colunas",
+            "type": "array"
+          },
+          "dados": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Dados",
+            "type": "array"
+          },
+          "passos": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Passos",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dados",
+          "colunas",
+          "passos"
+        ],
+        "title": "TabelaDetectada",
         "type": "object"
       },
       "ValidationError": {

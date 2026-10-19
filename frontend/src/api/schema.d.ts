@@ -273,7 +273,8 @@ export interface components {
     };
     /**
      * Deteccao
-     * @description Estrutura detectada, em linhas e letras do Excel.
+     * @description Estrutura detectada, em linhas e letras do Excel. ``tabelas`` só
+     *     aparece quando a aba tem mais de uma; a receita inicial usa a principal.
      */
     Deteccao: {
       /** Cabecalho */
@@ -292,6 +293,11 @@ export interface components {
        * @default []
        */
       notas: string[];
+      /**
+       * Tabelas
+       * @default []
+       */
+      tabelas: components["schemas"]["TabelaDetectada"][];
       /**
        * Titulo
        * @default []
@@ -600,6 +606,24 @@ export interface components {
       recipe: {
         [key: string]: unknown;
       };
+    } & {
+      [key: string]: unknown;
+    };
+    /**
+     * TabelaDetectada
+     * @description Uma das tabelas de uma aba com mais de uma (F2.D3).
+     */
+    TabelaDetectada: {
+      /** Cabecalho */
+      cabecalho?: number[] | null;
+      /** Colunas */
+      colunas: string[];
+      /** Dados */
+      dados: number[];
+      /** Passos */
+      passos: {
+        [key: string]: unknown;
+      }[];
     } & {
       [key: string]: unknown;
     };

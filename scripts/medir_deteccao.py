@@ -6,7 +6,10 @@ Para cada arquivo do corpus, roda ``detect_structure`` e compara com o
 - **área**: primeira e última linha de dados e primeira e última coluna;
 - **cabeçalho**: linhas do cabeçalho (a v1 só acerta cabeçalho de uma linha);
 - **totais**: linhas de total e subtotal;
-- **fill_down**: colunas com mesclagem vertical.
+- **fill_down**: colunas com mesclagem vertical;
+- **tabelas**: ``detect_tables`` acha o mesmo número de tabelas da aba, com
+  as mesmas áreas (F2.D3). Num arquivo de uma tabela só, pega o corte que não
+  devia acontecer.
 
 Rode a cada PR que mexer em ``wolfz/core/detect/`` e cole a tabela no PR::
 
@@ -30,16 +33,17 @@ sys.path.insert(0, str(RAIZ / "tests" / "test_corpus"))
 
 from corpus_lib import Entrada, entradas  # noqa: E402
 
-from wolfz.core.detect import detect_structure  # noqa: E402
+from wolfz.core.detect import detect_structure, detect_tables  # noqa: E402
 from wolfz.core.ingest import detect_format, read_sheet  # noqa: E402
 from wolfz.core.ingest.csv import open_csv_lazy  # noqa: E402
 
-CRITERIOS = ("area", "cabecalho", "totais", "fill_down")
+CRITERIOS = ("area", "cabecalho", "totais", "fill_down", "tabelas")
 ROTULOS = {
     "area": "área",
     "cabecalho": "cabeçalho",
     "totais": "totais",
     "fill_down": "fill_down",
+    "tabelas": "tabelas",
     "tudo": "tudo certo",
 }
 
@@ -78,6 +82,7 @@ def medir_entrada(entrada: Entrada) -> Resultado | None:
             dados = read_sheet(entrada.original, esperado["aba"])
             df, estrutura = dados.frame, dados.structure
         det = detect_structure(df, estrutura)
+        tabelas = detect_tables(df, estrutura)
     except Exception as exc:  # um arquivo que quebra a detecção não derruba a medição
         resultado.erro = f"{type(exc).__name__}: {exc}"
         return resultado
@@ -95,6 +100,11 @@ def medir_entrada(entrada: Entrada) -> Resultado | None:
         "cabecalho": (obtido["cabecalho"], tabela["cabecalho"], _intervalo),
         "totais": (obtido["totais"], tabela["totais"], lambda v: ", ".join(map(str, v)) or "nenhum"),
         "fill_down": (obtido["fill_down"], tabela["fill_down"], lambda v: ", ".join(v) or "nenhum"),
+        "tabelas": (
+            [(t.to_dict()["dados"], t.to_dict()["colunas"]) for t in tabelas],
+            [(t["dados"], t["colunas"]) for t in esperado["tabelas"]],
+            lambda v: "; ".join(f"{_intervalo(d)} {c[0]}:{c[1]}" for d, c in v) or "nenhuma",
+        ),
     }
     for criterio, (veio, devia, fmt) in pares.items():
         certo = veio == devia
@@ -122,8 +132,8 @@ def markdown(resultados: list[Resultado]) -> str:
         return "✓" if r.acertos[c] else f"✗ {r.detalhes[c]}"
 
     linhas = [
-        "| Arquivo | Área | Cabeçalho | Totais | fill_down |",
-        "|---|---|---|---|---|",
+        "| Arquivo | Área | Cabeçalho | Totais | fill_down | Tabelas |",
+        "|---|---|---|---|---|---|",
     ]
     for r in resultados:
         nome = r.nome if r.conjunto == "desenvolvimento" else f"{r.nome} (validação)"
@@ -144,6 +154,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--validacao", action="store_true", help="Inclui o conjunto de validação.")
     parser.add_argument("--json", action="store_true", help="Saída em JSON.")
     args = parser.parse_args(argv)
+    sys.stdout.reconfigure(encoding="utf-8")  # o console do Windows não é UTF-8
     resultados = medir(args.validacao)
     if args.json:
         dados = {

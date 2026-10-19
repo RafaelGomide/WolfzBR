@@ -28,8 +28,19 @@ class Aba(_Resposta):
     columns: int | None = None
 
 
+class TabelaDetectada(_Resposta):
+    """Uma das tabelas de uma aba com mais de uma (F2.D3)."""
+
+    cabecalho: list[int] | None = None
+    dados: list[int]
+    colunas: list[str]
+    # Passos da receita inicial para esta tabela (sem ``id``).
+    passos: list[dict[str, Any]]
+
+
 class Deteccao(_Resposta):
-    """Estrutura detectada, em linhas e letras do Excel."""
+    """Estrutura detectada, em linhas e letras do Excel. ``tabelas`` só
+    aparece quando a aba tem mais de uma; a receita inicial usa a principal."""
 
     cabecalho: list[int] | None = None
     dados: list[int]
@@ -38,6 +49,7 @@ class Deteccao(_Resposta):
     fill_down: list[str] = []
     titulo: list[str] = []
     notas: list[str] = []
+    tabelas: list[TabelaDetectada] = []
 
 
 class Fonte(_Resposta):

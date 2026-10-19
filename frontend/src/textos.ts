@@ -70,6 +70,12 @@ export const T = {
     recarregarReceita: "Carregar a versão salva",
     erroSalvar: "Não deu para salvar a última alteração; ela foi desfeita.",
   },
+  tabelas: {
+    aviso: (n: number) => `Esta aba tem ${n} tabelas. A receita usa a destacada:`,
+    tabela: (i: number, area: string) => `Tabela ${i} (${area})`,
+    confirmar: (i: number) =>
+      `Trocar a receita pelos passos detectados na tabela ${i}? Os passos atuais saem.`,
+  },
   bruta: {
     legenda: "Legenda",
     titulo: "Título",

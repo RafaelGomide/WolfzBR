@@ -197,3 +197,25 @@ test("revisão de municípios: aceitar a sugestão grava na receita", async ({ p
   );
   await expect(grade(page, "Depois de s3")).toHaveAttribute("data-total", "6");
 });
+
+test("aba com duas tabelas: trocar a receita para a segunda", async ({ page }) => {
+  await abrir(page);
+  await importar(page, arquivo("anuario_tabelas_lado_a_lado"));
+  await esperarProjeto(page, "anuario_tabelas_lado_a_lado.xlsx");
+
+  const tabelas = page.getByRole("group", { name: /Esta aba tem 2 tabelas/ });
+  await expect(tabelas.getByRole("button", { name: "Tabela 1 (A2:C10)" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  page.once("dialog", (d) => d.accept());
+  await tabelas.getByRole("button", { name: "Tabela 2 (E2:G10)" }).click();
+
+  await expect(passo(page, "s1")).toContainText("E2:G10");
+  await expect(tabelas.getByRole("button", { name: "Tabela 2 (E2:G10)" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await page.getByRole("tab", { name: "Antes e depois" }).click();
+  await expect(grade(page, "Receita inteira")).toHaveAttribute("data-total", "8");
+});

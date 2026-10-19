@@ -159,6 +159,11 @@ function Editor({
     salvar({ ...receita, steps }).catch(() => undefined);
   }
 
+  function usarTabela(passos: Record<string, unknown>[]) {
+    const steps = passos.map((p, i) => ({ ...p, id: `s${i + 1}` }) as Passo);
+    salvar({ ...receita, steps }).catch(() => undefined);
+  }
+
   // Colunas antes e depois do passo selecionado, para os formulários. Vêm
   // do cache do preview (limit=1) e não dependem de a grade estar na tela.
   const colunasAntes = useColunas(id, antes ?? "raw", versao);
@@ -237,7 +242,13 @@ function Editor({
             </button>
           </div>
           {aba === "original" ? (
-            <VisaoBruta projeto={id} receita={receita} deteccao={deteccao} aoUsarArea={usarArea} />
+            <VisaoBruta
+              projeto={id}
+              receita={receita}
+              deteccao={deteccao}
+              aoUsarArea={usarArea}
+              aoUsarTabela={usarTabela}
+            />
           ) : (
             <div className="antes-depois">
               {antes !== undefined && (

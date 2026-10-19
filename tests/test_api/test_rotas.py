@@ -523,3 +523,24 @@ def test_exportar_com_depara(client, projeto_municipios, tmp_path):
     parametro = (tmp_path / "fixtures.CaminhoDeparaMunicipios.pq").read_text(encoding="utf-8")
     assert m_text(str(tmp_path / "depara_municipios.csv")) in parametro
     assert "CaminhoDeparaMunicipios" in (tmp_path / "fixtures.pq").read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Várias tabelas na aba (F2.D3)
+# ---------------------------------------------------------------------------
+
+
+def test_aba_com_duas_tabelas(client):
+    r = enviar(client, "anuario_tabelas_lado_a_lado")
+    assert r.status_code == 201, r.text
+    deteccao = r.json()["detection"]
+    assert [t["colunas"] for t in deteccao["tabelas"]] == [["A", "C"], ["E", "G"]]
+    assert deteccao["tabelas"][1]["passos"][0] == {"op": "select_range", "start": "E2", "end": "G10"}
+    # A receita inicial usa a principal (empate: a primeira).
+    assert r.json()["recipe"]["steps"][0]["start"] == "A2"
+    estrutura = client.get(f"/api/projects/{r.json()['id']}/structure").json()
+    assert len(estrutura["detection"]["tabelas"]) == 2
+
+
+def test_aba_com_uma_tabela_nao_lista_tabelas(client, projeto):
+    assert projeto["detection"].get("tabelas", []) == []

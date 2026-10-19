@@ -731,3 +731,16 @@ pre {
   align-items: center;
   gap: 0.4rem;
 }
+
+/* Várias tabelas na aba (F2.D3) */
+.tabelas-da-aba {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  margin-bottom: 0.4rem;
+  border-radius: var(--raio);
+  background: var(--aviso-fundo);
+  color: var(--aviso);
+}

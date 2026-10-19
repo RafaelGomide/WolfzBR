@@ -28,7 +28,7 @@ from wolfz.api.problems import Problem
 from wolfz.api.projetos import Projetos
 from wolfz.api.security import Settings
 from wolfz.br.municipios import buscar
-from wolfz.core.detect import detect_structure
+from wolfz.core.detect import Detection, detect_tables, main_table
 from wolfz.core.engine import collect, run
 from wolfz.core.engine.preview import LIMITE_PAGINA, preview_project
 from wolfz.core.ingest import SheetStructure, import_file, list_sheets, open_file
@@ -135,8 +135,11 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
         projeto["source"]["uploaded"] = True
         write_json_atomic(pasta / PROJECT_FILE, projeto)
 
-        deteccao = detect_structure(pl.read_parquet(pasta / RAW_FILE), resultado.structure)
-        write_json_atomic(pasta / DETECTION_FILE, deteccao.to_dict() if deteccao else None)
+        grade = pl.read_parquet(pasta / RAW_FILE)
+        tabelas = detect_tables(grade, resultado.structure)
+        deteccao = main_table(tabelas)
+        detectado = _deteccao_json(deteccao, tabelas)
+        write_json_atomic(pasta / DETECTION_FILE, detectado)
         passos = deteccao.to_steps() if deteccao else []
         fonte: dict[str, Any] = {"type": _TIPO_FONTE[projeto["source"]["format"]]}
         if projeto["source"]["sheet"]:
@@ -155,7 +158,7 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
         return {
             **projeto,
             "reused_raw": resultado.reused,
-            "detection": deteccao.to_dict() if deteccao else None,
+            "detection": detectado,
             "recipe": _receita_json(inicial),
             "etag": _etag(inicial),
         }
@@ -444,6 +447,18 @@ def _copia_com_limite(upload: UploadFile, destino: Path, limite: int) -> None:
                     413, f"O limite de upload é {limite // (1024 * 1024)} MB.", code="file_too_large"
                 )
             saida.write(bloco)
+
+
+def _deteccao_json(principal: Detection | None, tabelas: list[Detection]) -> dict[str, Any] | None:
+    """Detecção gravada no projeto: a tabela principal e, se a aba tem mais
+    de uma, todas elas com os passos de cada uma, para a interface trocar
+    de tabela (F2.D3)."""
+    if principal is None:
+        return None
+    detectado = principal.to_dict()
+    if len(tabelas) > 1:
+        detectado["tabelas"] = [{**t.to_dict(), "passos": t.to_steps()} for t in tabelas]
+    return detectado
 
 
 def _ate_o_passo(recipe: Recipe, step: str | None) -> Recipe:

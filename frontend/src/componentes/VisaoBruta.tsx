@@ -49,11 +49,13 @@ export function VisaoBruta({
   receita,
   deteccao,
   aoUsarArea,
+  aoUsarTabela,
 }: {
   projeto: string;
   receita: Receita;
   deteccao?: Deteccao | null;
   aoUsarArea: (inicio: string, fim: string) => void;
+  aoUsarTabela: (passos: Record<string, unknown>[]) => void;
 }) {
   const [selecao, setSelecao] = useState<GridSelection>(VAZIA);
   const area = useMemo(() => areaDaReceita(receita, deteccao), [receita, deteccao]);
@@ -75,8 +77,35 @@ export function VisaoBruta({
   const r = selecao.current?.range;
   const intervalo = r ? [paraA1(r.y, r.x), paraA1(r.y + r.height - 1, r.x + r.width - 1)] : null;
 
+  const tabelas = deteccao?.tabelas ?? [];
+  const recorte = receita.steps.find((p) => p.op === "select_range");
+
   return (
     <div className="visao-bruta">
+      {tabelas.length > 1 && (
+        <div className="tabelas-da-aba" role="group" aria-label={T.tabelas.aviso(tabelas.length)}>
+          <span>{T.tabelas.aviso(tabelas.length)}</span>
+          {tabelas.map((t, i) => {
+            const inicio = String(t.passos[0]?.start ?? "");
+            const fim = String(t.passos[0]?.end ?? "");
+            const atual = recorte?.start === inicio && recorte?.end === fim;
+            return (
+              <button
+                key={`${inicio}:${fim}`}
+                type="button"
+                className={atual ? "primario" : undefined}
+                aria-pressed={atual}
+                onClick={() => {
+                  if (atual || !window.confirm(T.tabelas.confirmar(i + 1))) return;
+                  aoUsarTabela(t.passos);
+                }}
+              >
+                {T.tabelas.tabela(i + 1, `${inicio}:${fim}`)}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <div className="barra-ferramentas">
         <ul className="legenda" aria-label={T.bruta.legenda}>
           {(

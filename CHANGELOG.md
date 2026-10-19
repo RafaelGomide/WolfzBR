@@ -14,8 +14,13 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 - Exportação do de-para (`depara_municipios.csv`) junto com o M e o script Python (ADR-7). O M lê o de-para pelo parâmetro `CaminhoDeparaMunicipios` (exportado em `<nome>.CaminhoDeparaMunicipios.pq`) e faz join exato; município que não está no de-para fica com status `fora_do_depara`, a linha não some.
 - Operações novas: `clean_phone` (E.164), `clean_cpf_cnpj` (com a coluna de tipo de pessoa), `split_municipio_uf`, `parse_ibge_value` (com a coluna `<coluna>_situacao`), `scale_by_unit`, `fix_mojibake` e `strip_footnotes`, cada uma em Polars, M e script Python.
 
+- Detecção v2: cabeçalho multinível (o nível de cima é preenchido para a direita e junto com `_`: `Janeiro_Masculino`), subtotais reconhecidos pela soma (inclusive antes dos componentes, como o IBGE publica: "Região Norte" e depois os estados; o total geral é a soma dos subtotais) e várias tabelas na mesma aba (`detect_tables`), empilhadas ou lado a lado. No corpus, os arquivos com tudo certo passam de 77% para 95%.
+- Interface: aba com mais de uma tabela mostra as tabelas detectadas e troca a receita para a escolhida.
+- `scripts/medir_deteccao.py`: critério `tabelas` (número e área de cada tabela da aba).
+
 ### Corrigido
 
+- `scripts/medir_deteccao.py` quebrava no console do Windows ao imprimir ✓.
 - Receitas do corpus que esperavam estas operações passam a rodar e a bater com o gabarito; as três tabelas sintéticas do SIDRA ganharam fim explícito no recorte, porque a legenda vem logo abaixo dos dados, sem linha em branco.
 
 ## [0.5.0] - 2026-10-18

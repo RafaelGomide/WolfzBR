@@ -313,3 +313,207 @@ def test_passo_de_total_por_negrito_usa_a_primeira_celula():
     det = detect_structure(df, estrutura)
     assert det.totals == [1]
     assert det.to_steps()[2] == {"op": "drop_rows_where", "col": "A", "match": "in", "value": ["10"]}
+
+
+# ---------------------------------------------------------------------------
+# Detecção v2: cabeçalho multinível (F2.D1)
+# ---------------------------------------------------------------------------
+
+MULTINIVEL = [
+    ["Casos notificados"],
+    [None],
+    ["Região", "Janeiro", None, "Fevereiro", None],
+    [None, "Masculino", "Feminino", "Masculino", "Feminino"],
+    ["Central", "802", "751", "592", "622"],
+    ["Norte", "103", "610", "470", "855"],
+    ["Sul", "50", "60", "70", "80"],
+]
+
+
+def test_cabecalho_multinivel():
+    det = detect_structure(grade(MULTINIVEL))
+    assert det.to_dict()["cabecalho"] == [3, 4]
+    assert det.to_dict()["dados"] == [5, 7]
+    assert det.title == ["Casos notificados"]
+    passos = det.to_steps()
+    assert passos[0] == {"op": "select_range", "start": "A3", "end": "E7"}
+    assert passos[1] == {"op": "header_rows", "n": 2, "joiner": "_"}
+    assert list(det.labels.values()) == [
+        "Região",
+        "Janeiro_Masculino",
+        "Janeiro_Feminino",
+        "Fevereiro_Masculino",
+        "Fevereiro_Feminino",
+    ]
+
+
+def test_rotulos_iguais_aos_da_operacao():
+    """Os nomes que a detecção calcula são os que o header_rows produz: os
+    passos seguintes (drop_rows_where, fill_down) citam essas colunas."""
+    import wolfz.ops  # noqa: F401
+    from wolfz.core.recipe import recipe_from_dict
+
+    df = grade(MULTINIVEL)
+    det = detect_structure(df)
+    receita = recipe_from_dict(
+        {
+            "wolfz_version": "0.1",
+            "name": "x",
+            "created_at": "2026-01-01T00:00:00Z",
+            "source": {"type": "excel"},
+            "steps": [{"id": f"s{i}", **p} for i, p in enumerate(det.to_steps(), 1)],
+        }
+    )
+    lf = df.lazy()
+    for passo in receita.steps:
+        lf = passo.to_polars(lf)
+    assert lf.collect_schema().names() == list(det.labels.values())
+
+
+def test_metadado_chave_valor_nao_e_nivel_de_cabecalho():
+    linhas = [
+        ["ESTAÇÃO:", "BRASILIA"],
+        ["DATA DE FUNDAÇÃO:", "2000-05-07"],
+        ["DATA", "HORA", "CHUVA", "PRESSÃO", "TEMPERATURA", "UMIDADE"],
+        ["2001-01-01", "00:00", "0,8", "886", "20,1", "80"],
+        ["2001-01-01", "01:00", "3,4", "886,1", "19,8", "82"],
+    ]
+    assert detect_structure(grade(linhas)).to_dict()["cabecalho"] == [3, 3]
+
+
+def test_titulo_de_uma_celula_nao_e_nivel_de_cabecalho():
+    assert detect_structure(grade(RELATORIO)).to_dict()["cabecalho"] == [4, 4]
+
+
+# ---------------------------------------------------------------------------
+# Verificação de total pela soma (F2.D2)
+# ---------------------------------------------------------------------------
+
+
+def test_subtotal_antes_dos_componentes_e_total_geral():
+    """Como o IBGE publica: Brasil, depois cada região seguida dos estados."""
+    linhas = [
+        ["Unidade", "População"],
+        ["Brasil", "1.000"],
+        ["Norte", "300"],
+        ["Acre", "100"],
+        ["Pará", "200"],
+        ["Sul", "700"],
+        ["Paraná", "400"],
+        ["Santa Catarina", "300"],
+    ]
+    det = detect_structure(grade(linhas))
+    assert det.to_dict()["totais"] == [2, 3, 6]
+    assert det.to_steps()[-1] == {
+        "op": "drop_rows_where",
+        "col": "Unidade",
+        "match": "in",
+        "value": ["Brasil", "Norte", "Sul"],
+    }
+
+
+def test_subtotal_depois_dos_componentes():
+    linhas = [
+        ["Item", "Valor"],
+        ["a", "10"],
+        ["b", "20"],
+        ["Grupo 1", "30"],
+        ["c", "5"],
+        ["d", "7"],
+        ["e", "1"],
+        ["Grupo 2", "13"],
+    ]
+    assert detect_structure(grade(linhas)).to_dict()["totais"] == [4, 8]
+
+
+def test_soma_por_acaso_nao_e_total():
+    """'3' = '1' + '2' numa coluna de IDs: a soma fecha, mas os grupos não
+    cobrem a coluna e uma soma isolada não basta."""
+    linhas = [["ID", "Nome"], *([str(i), f"n{i}"] for i in range(1, 9))]
+    assert detect_structure(grade(linhas)).totals == []
+    numeros = [["Rua", "Número"], *([f"r{i}", n] for i, n in enumerate(["12", "30", "42", "8", "101", "77"]))]
+    assert detect_structure(grade(numeros)).totals == []
+
+
+def test_secao_sem_numero_separa_os_grupos():
+    linhas = [
+        ["Item", "Qtd"],
+        ["Animais", None],
+        ["Grande porte", "30"],
+        ["Bovino", "20"],
+        ["Bubalino", "10"],
+        ["Pequeno porte", "9"],
+        ["Galinhas", "5"],
+        ["Codornas", "4"],
+        ["Produtos", None],
+        ["Leite", "100"],
+        ["Ovos", "50"],
+    ]
+    assert detect_structure(grade(linhas)).to_dict()["totais"] == [3, 6]
+
+
+# ---------------------------------------------------------------------------
+# Várias tabelas na aba (F2.D3)
+# ---------------------------------------------------------------------------
+
+
+def test_tabelas_empilhadas():
+    from wolfz.core.detect import detect_tables
+
+    linhas = [
+        ["Tabela 1"],
+        ["Município", "Área"],
+        ["Vitória", "93"],
+        ["Serra", "547"],
+        ["Fonte: IBGE"],
+        [None],
+        [None],
+        ["Tabela 2"],
+        ["Município", "População", "Densidade"],
+        ["Vitória", "322869", "3471"],
+        ["Serra", "520649", "951"],
+        ["Linhares", "166786", "47"],
+    ]
+    tabelas = detect_tables(grade(linhas))
+    assert [(t.to_dict()["dados"], t.to_dict()["colunas"]) for t in tabelas] == [
+        ([3, 4], ["A", "B"]),
+        ([10, 12], ["A", "C"]),
+    ]
+    assert tabelas[0].notes == ["Fonte: IBGE"]
+    # A principal é a de mais linhas de dados.
+    assert detect_structure(grade(linhas)).to_dict()["dados"] == [10, 12]
+
+
+def test_tabelas_lado_a_lado():
+    from wolfz.core.detect import detect_tables
+
+    linhas = [
+        ["Matrículas", None, None, None, "Docentes"],
+        ["Município", "Urbana", "Rural", None, "Município", "Docentes"],
+        ["Vitória", "100", "10", None, "Vitória", "50"],
+        ["Serra", "200", "20", None, "Serra", "60"],
+    ]
+    tabelas = detect_tables(grade(linhas))
+    assert [t.to_dict()["colunas"] for t in tabelas] == [["A", "C"], ["E", "F"]]
+    assert [t.to_steps()[0] for t in tabelas] == [
+        {"op": "select_range", "start": "A2", "end": "C4"},
+        {"op": "select_range", "start": "E2", "end": "F4"},
+    ]
+
+
+def test_coluna_vazia_dentro_da_tabela_nao_separa():
+    """Coluna vazia com uma coluna só de um lado (rótulo e valor afastados,
+    como na estimativa do IBGE) é a mesma tabela."""
+    from wolfz.core.detect import detect_tables
+
+    linhas = [["UF", None, "População"], ["Acre", None, "906876"], ["Pará", None, "8777124"]]
+    tabelas = detect_tables(grade(linhas))
+    assert len(tabelas) == 1
+    assert tabelas[0].to_dict()["colunas"] == ["A", "C"]
+
+
+def test_uma_linha_vazia_nao_separa_tabelas():
+    from wolfz.core.detect import detect_tables
+
+    linhas = [["Item", "Valor"], ["a", "1"], [None], ["b", "2"], ["c", "3"]]
+    assert len(detect_tables(grade(linhas))) == 1
