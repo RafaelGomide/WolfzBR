@@ -6,7 +6,7 @@ Limpeza de planilhas brasileiras com receitas reproduzíveis. Você arrasta a pl
 
 Tudo roda na sua máquina. Nenhum dado sai do seu computador.
 
-> **Status:** pré-alfa (0.5). O formato da receita ainda pode mudar até a 1.0.
+> **Status:** pré-alfa (0.6). O formato da receita ainda pode mudar até a 1.0.
 
 ![Importar, ajustar a receita e exportar](https://raw.githubusercontent.com/RafaelGomide/WolfzBR/main/docs/demo.gif)
 

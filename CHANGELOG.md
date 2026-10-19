@@ -6,6 +6,10 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 
 ## [Não publicado]
 
+## [0.6.0] - 2026-10-18
+
+Pacote brasileiro completo: município casado com a lista oficial do IBGE (com revisão na tela e de-para exportado para o Power BI), sete operações novas de padrões brasileiros e a detecção v2, que reconhece cabeçalho em vários níveis, subtotais pela soma e mais de uma tabela na mesma aba.
+
 ### Adicionado
 
 - Lista oficial de municípios do IBGE empacotada (`wolfz/br/data/municipios.parquet`: código de 7 e de 6 dígitos, nome oficial, nome normalizado, UF), gerada por `scripts/atualizar_municipios.py` a partir da API de localidades. Fonte e data da extração no `NOTICE`, que passa a ir no pacote.
@@ -13,10 +17,10 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 - Interface: revisão dos municípios ("Revisar municípios" no passo), com sugestões, aceitar, corrigir buscando na lista do IBGE, marcar que não é município e desfazer. API: `GET /projects/{id}/steps/{step}/municipios` e `GET /municipios`.
 - Exportação do de-para (`depara_municipios.csv`) junto com o M e o script Python (ADR-7). O M lê o de-para pelo parâmetro `CaminhoDeparaMunicipios` (exportado em `<nome>.CaminhoDeparaMunicipios.pq`) e faz join exato; município que não está no de-para fica com status `fora_do_depara`, a linha não some.
 - Operações novas: `clean_phone` (E.164), `clean_cpf_cnpj` (com a coluna de tipo de pessoa), `split_municipio_uf`, `parse_ibge_value` (com a coluna `<coluna>_situacao`), `scale_by_unit`, `fix_mojibake` e `strip_footnotes`, cada uma em Polars, M e script Python.
-
 - Detecção v2: cabeçalho multinível (o nível de cima é preenchido para a direita e junto com `_`: `Janeiro_Masculino`), subtotais reconhecidos pela soma (inclusive antes dos componentes, como o IBGE publica: "Região Norte" e depois os estados; o total geral é a soma dos subtotais) e várias tabelas na mesma aba (`detect_tables`), empilhadas ou lado a lado. No corpus, os arquivos com tudo certo passam de 77% para 95%.
 - Interface: aba com mais de uma tabela mostra as tabelas detectadas e troca a receita para a escolhida.
 - `scripts/medir_deteccao.py`: critério `tabelas` (número e área de cada tabela da aba).
+- `scripts/validacao_m.py`: conjunto complementar para a validação do M no Power BI (sinais do IBGE, mojibake, CPF ou CNPJ e o de-para de municípios, com o parâmetro `CaminhoDeparaMunicipios`).
 
 ### Corrigido
 
@@ -176,7 +180,8 @@ Primeira versão: receita, três operações e `wolfz run`. Ainda não publicada
 
 - `clean_cnpj` descartava CNPJ alfanumérico válido que parecia notação científica (ex.: `00.000.000/000E-20`).
 
-[Não publicado]: https://github.com/RafaelGomide/WolfzBR/compare/v0.5.0...HEAD
+[Não publicado]: https://github.com/RafaelGomide/WolfzBR/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.2.0...v0.3.0
