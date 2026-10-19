@@ -544,3 +544,44 @@ def test_aba_com_duas_tabelas(client):
 
 def test_aba_com_uma_tabela_nao_lista_tabelas(client, projeto):
     assert projeto["detection"].get("tabelas", []) == []
+
+
+# ---------------------------------------------------------------------------
+# Sugestões (F2.E)
+# ---------------------------------------------------------------------------
+
+
+def test_sugestoes(client, projeto):
+    r = client.get(_url(projeto, "suggestions"))
+    assert r.status_code == 200, r.text
+    (sugestao,) = r.json()
+    assert sugestao["rule"] == "decimal_br"
+    assert sugestao["steps"] == [
+        {"op": "parse_decimal_br", "cols": ["Previsão Atualizada (R$)", "Arrecadado (R$)"], "decimal": "auto"}
+    ]
+    assert sugestao["kind"] == "passo" and sugestao["confidence"] > 0.9
+
+
+def test_rejeitar_sugestao_vale_para_o_projeto(client, settings, projeto):
+    pedido = {"rule": "decimal_br", "cols": ["Arrecadado (R$)"]}
+    r = client.post(_url(projeto, "suggestions/rejections"), json=pedido)
+    assert r.status_code == 204, r.text
+    client.post(_url(projeto, "suggestions/rejections"), json=pedido)  # repetir não duplica
+    (sugestao,) = client.get(_url(projeto, "suggestions")).json()
+    assert sugestao["cols"] == ["Previsão Atualizada (R$)"]
+    gravado = json.loads(
+        (settings.workspace.project_dir(projeto["id"]) / "suggestions.json").read_text(encoding="utf-8")
+    )
+    assert gravado == {"rejected": [{"rule": "decimal_br", "col": "Arrecadado (R$)"}]}
+
+    client.post(_url(projeto, "suggestions/rejections"), json={"rule": "decimal_br"})
+    assert client.get(_url(projeto, "suggestions")).json() == []
+
+
+def test_aceitar_sugestao_tira_ela_da_lista(client, projeto):
+    (sugestao,) = client.get(_url(projeto, "suggestions")).json()
+    receita = projeto["recipe"]
+    receita["steps"] += [{"id": f"s{len(receita['steps']) + 1}", **p} for p in sugestao["steps"]]
+    r = client.put(_url(projeto, "recipe"), json=receita, headers={"If-Match": projeto["etag"]})
+    assert r.status_code == 200, r.text
+    assert client.get(_url(projeto, "suggestions")).json() == []

@@ -38,8 +38,9 @@ Abre o navegador com a interface. Para usar:
 
 1. Arraste o arquivo (`.xlsx`, `.xls`, `.ods` ou `.csv`). Se tiver mais de uma aba, escolha qual.
 2. Confira a estrutura detectada: título, cabeçalho, dados, totais e rodapé aparecem em cores. Se a área estiver errada, clique e arraste na grade para marcar a certa.
-3. Ajuste a receita: adicione, edite, reordene ou desative passos, vendo a tabela antes e depois de cada um. Clique no cabeçalho de uma coluna para ver o perfil dela.
-4. Exporte: CSV (pronto para o Excel em português), Excel, Parquet, Power Query M e script Python.
+3. Aceite as sugestões: o WolfzBR olha a tabela e propõe os passos (moeda e número em texto, datas, CPF e CEP sem zero, espaços invisíveis, acento estragado, meses em colunas…), cada um com o motivo. Aceite, edite, rejeite ou aceite todas.
+4. Ajuste a receita: adicione, edite, reordene ou desative passos, vendo a tabela antes e depois de cada um. Clique no cabeçalho de uma coluna para ver o perfil dela.
+5. Exporte: CSV (pronto para o Excel em português), Excel, Parquet, Power Query M e script Python.
 
 A receita é salva automaticamente a cada edição. O endereço só funciona com a chave de acesso que o terminal mostra, nova a cada execução. Deixe o terminal aberto enquanto usa; Ctrl+C encerra.
 

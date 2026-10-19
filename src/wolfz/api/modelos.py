@@ -151,6 +151,21 @@ class Exportacao(_Resposta):
     neutralized: bool = False
 
 
+class Sugestao(_Resposta):
+    """Passos propostos por uma regra (F2.E). ``kind="aviso"`` não tem passo."""
+
+    id: str
+    rule: str
+    # Passos sem ``id``, na ordem; quem aceita numera.
+    steps: list[dict[str, Any]]
+    confidence: float
+    reason: str
+    cols: list[str]
+    kind: str
+    # Ordem de aplicação no "aceitar todas" (limpeza, conversão, forma).
+    order: int
+
+
 class Municipio(_Resposta):
     codigo_ibge: str
     nome: str

@@ -9,6 +9,7 @@ import { ativo, mover, nomeOp, novoId, resumo } from "../util/receita";
 import { passoNovo } from "../util/schema";
 import { FormPasso } from "./FormPasso";
 import { RevisaoMunicipios } from "./RevisaoMunicipios";
+import { Sugestoes } from "./Sugestoes";
 
 type Modo =
   | { tipo: "escolher" }
@@ -71,6 +72,7 @@ function EscolherOp({
 
 export function PainelReceita({
   projetoId,
+  versao,
   receita,
   ops,
   selecionado,
@@ -81,6 +83,7 @@ export function PainelReceita({
   salvar,
 }: {
   projetoId: string;
+  versao: string;
   receita: Receita;
   ops: Operacao[];
   selecionado: string | null;
@@ -154,6 +157,19 @@ export function PainelReceita({
           titulo={T.receita.novoPasso}
           aoAplicar={(p) => aplicar(p, modo.posicao)}
           aoCancelar={() => setModo(null)}
+        />
+      )}
+
+      {modo === null && (
+        <Sugestoes
+          projetoId={projetoId}
+          receita={receita}
+          versao={versao}
+          salvar={salvar}
+          aoEditar={(passo) => {
+            setErrosForm(undefined);
+            setModo({ tipo: "novo", passo, posicao: passos.length });
+          }}
         />
       )}
 

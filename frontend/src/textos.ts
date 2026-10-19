@@ -110,6 +110,16 @@ export const T = {
     novoPasso: "Novo passo",
     editarPasso: (id: string) => `Editar ${id}`,
   },
+  sugestoes: {
+    titulo: (n: number) => `Sugestões (${n})`,
+    aceitar: "Aceitar",
+    aceitarTodas: (n: number) => `Aceitar todas (${n})`,
+    editar: "Editar",
+    rejeitar: "Rejeitar",
+    entendi: "Entendi",
+    aviso: "Aviso",
+    confianca: "Confiança da sugestão",
+  },
   municipios: {
     revisar: "Revisar municípios",
     titulo: (id: string) => `Municípios do passo ${id}`,

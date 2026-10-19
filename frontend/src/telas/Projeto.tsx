@@ -213,6 +213,7 @@ function Editor({
       <div className="corpo">
         <PainelReceita
           projetoId={id}
+          versao={versao}
           receita={receita}
           ops={ops}
           selecionado={atual}

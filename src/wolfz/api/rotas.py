@@ -35,6 +35,7 @@ from wolfz.core.ingest import SheetStructure, import_file, list_sheets, open_fil
 from wolfz.core.profile import profile_table
 from wolfz.core.recipe import Recipe, dumps_recipe, load_recipe, recipe_from_dict, registered_ops, save_recipe
 from wolfz.core.recipe.migrate import CURRENT_VERSION
+from wolfz.core.suggest import suggest
 from wolfz.core.workspace import PROJECT_FILE, RAW_FILE, STRUCTURE_FILE, write_json_atomic
 from wolfz.export.dados import (
     EXTENSOES,
@@ -52,7 +53,14 @@ from wolfz.ops.municipio import PARAMETRO_DEPARA
 
 RECIPE_FILE = "recipe.wolfz.json"
 DETECTION_FILE = "detection.json"
+# Sugestões rejeitadas no projeto: {"rejected": [{"rule": ..., "col": ... | null}]}.
+SUGGESTIONS_FILE = "suggestions.json"
 _TIPO_FONTE = {"xlsx": "excel", "xls": "excel", "ods": "ods", "csv": "csv"}
+
+
+class PedidoRejeicao(BaseModel):
+    rule: str = Field(min_length=1, description="Regra da sugestão rejeitada.")
+    cols: list[str] = Field(default_factory=list, description="Colunas; vazio rejeita a regra inteira.")
 
 
 class PedidoExportacao(BaseModel):
@@ -288,6 +296,32 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
         return pagina.to_dict()
 
     # -----------------------------------------------------------------------
+    # Sugestões (F2.E)
+    # -----------------------------------------------------------------------
+
+    @api.get("/projects/{project_id}/suggestions", response_model=list[m.Sugestao])
+    def sugestoes(project_id: str) -> list[dict[str, Any]]:
+        """Sugestões para a tabela no fim da receita, na ordem de aplicação.
+        As rejeitadas neste projeto não voltam."""
+        pasta = projetos.abrir(project_id)
+        atual = receita(pasta)
+        with projetos.lock_preview(project_id):
+            tabela = collect(atual, pl.scan_parquet(pasta / RAW_FILE))
+        return [s.to_dict() for s in suggest(tabela, _rejeitadas(pasta))]
+
+    @api.post("/projects/{project_id}/suggestions/rejections", status_code=204)
+    def rejeitar_sugestao(project_id: str, pedido: PedidoRejeicao) -> Response:
+        """Rejeita a sugestão para as colunas dela (ou a regra inteira, sem
+        colunas). Fica gravado no projeto."""
+        pasta = projetos.abrir(project_id)
+        atuais = _ler_json(pasta / SUGGESTIONS_FILE) if (pasta / SUGGESTIONS_FILE).is_file() else {}
+        rejeitadas = atuais.get("rejected", [])
+        novas = [{"rule": pedido.rule, "col": c} for c in pedido.cols] or [{"rule": pedido.rule, "col": None}]
+        rejeitadas += [r for r in novas if r not in rejeitadas]
+        write_json_atomic(pasta / SUGGESTIONS_FILE, {**atuais, "rejected": rejeitadas})
+        return Response(status_code=204)
+
+    # -----------------------------------------------------------------------
     # Revisão de municípios (F2.C4)
     # -----------------------------------------------------------------------
 
@@ -447,6 +481,13 @@ def _copia_com_limite(upload: UploadFile, destino: Path, limite: int) -> None:
                     413, f"O limite de upload é {limite // (1024 * 1024)} MB.", code="file_too_large"
                 )
             saida.write(bloco)
+
+
+def _rejeitadas(pasta: Path) -> list[tuple[str, str | None]]:
+    caminho = pasta / SUGGESTIONS_FILE
+    if not caminho.is_file():
+        return []
+    return [(r["rule"], r.get("col")) for r in _ler_json(caminho).get("rejected", [])]
 
 
 def _deteccao_json(principal: Detection | None, tabelas: list[Detection]) -> dict[str, Any] | None:

@@ -202,6 +202,48 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/projects/{project_id}/suggestions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Sugestoes
+     * @description Sugestões para a tabela no fim da receita, na ordem de aplicação.
+     *     As rejeitadas neste projeto não voltam.
+     */
+    get: operations["sugestoes_api_projects__project_id__suggestions_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/projects/{project_id}/suggestions/rejections": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Rejeitar Sugestao
+     * @description Rejeita a sugestão para as colunas dela (ou a regra inteira, sem
+     *     colunas). Fica gravado no projeto.
+     */
+    post: operations["rejeitar_sugestao_api_projects__project_id__suggestions_rejections_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/sheets": {
     parameters: {
       query?: never;
@@ -473,6 +515,19 @@ export interface components {
        */
       overwrite: boolean;
     };
+    /** PedidoRejeicao */
+    PedidoRejeicao: {
+      /**
+       * Cols
+       * @description Colunas; vazio rejeita a regra inteira.
+       */
+      cols?: string[];
+      /**
+       * Rule
+       * @description Regra da sugestão rejeitada.
+       */
+      rule: string;
+    };
     /** Perfil */
     Perfil: {
       /** Columns */
@@ -606,6 +661,32 @@ export interface components {
       recipe: {
         [key: string]: unknown;
       };
+    } & {
+      [key: string]: unknown;
+    };
+    /**
+     * Sugestao
+     * @description Passos propostos por uma regra (F2.E). ``kind="aviso"`` não tem passo.
+     */
+    Sugestao: {
+      /** Cols */
+      cols: string[];
+      /** Confidence */
+      confidence: number;
+      /** Id */
+      id: string;
+      /** Kind */
+      kind: string;
+      /** Order */
+      order: number;
+      /** Reason */
+      reason: string;
+      /** Rule */
+      rule: string;
+      /** Steps */
+      steps: {
+        [key: string]: unknown;
+      }[];
     } & {
       [key: string]: unknown;
     };
@@ -1048,6 +1129,70 @@ export interface operations {
         content: {
           "application/json": components["schemas"]["Estrutura"];
         };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  sugestoes_api_projects__project_id__suggestions_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        project_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Sugestao"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  rejeitar_sugestao_api_projects__project_id__suggestions_rejections_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        project_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PedidoRejeicao"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       /** @description Validation Error */
       422: {

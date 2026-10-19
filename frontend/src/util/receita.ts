@@ -9,6 +9,12 @@ export function novoId(receita: Receita): string {
   return `s${Math.max(0, ...nums) + 1}`;
 }
 
+/** Os passos com ids novos e seguidos, depois do maior id da receita. */
+export function numerar(receita: Receita, passos: Record<string, unknown>[]): Passo[] {
+  const inicio = Number(novoId(receita).slice(1));
+  return passos.map((p, i) => ({ ...p, id: `s${inicio + i}` }) as Passo);
+}
+
 /** Passo cujo resultado é a tabela "antes" de ``id``: o último passo ativo
  * anterior a ele, ou ``"raw"`` se não houver. */
 export function passoAnterior(receita: Receita, id: string): string {

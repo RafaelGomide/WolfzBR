@@ -601,6 +601,29 @@
         "title": "PedidoExportacao",
         "type": "object"
       },
+      "PedidoRejeicao": {
+        "properties": {
+          "cols": {
+            "description": "Colunas; vazio rejeita a regra inteira.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Cols",
+            "type": "array"
+          },
+          "rule": {
+            "description": "Regra da sugestão rejeitada.",
+            "minLength": 1,
+            "title": "Rule",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule"
+        ],
+        "title": "PedidoRejeicao",
+        "type": "object"
+      },
       "Perfil": {
         "additionalProperties": true,
         "properties": {
@@ -967,6 +990,63 @@
           "recipe"
         ],
         "title": "ReceitaSalva",
+        "type": "object"
+      },
+      "Sugestao": {
+        "additionalProperties": true,
+        "description": "Passos propostos por uma regra (F2.E). ``kind=\"aviso\"`` não tem passo.",
+        "properties": {
+          "cols": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cols",
+            "type": "array"
+          },
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "order": {
+            "title": "Order",
+            "type": "integer"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "rule": {
+            "title": "Rule",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "rule",
+          "steps",
+          "confidence",
+          "reason",
+          "cols",
+          "kind",
+          "order"
+        ],
+        "title": "Sugestao",
         "type": "object"
       },
       "TabelaDetectada": {
@@ -1707,6 +1787,93 @@
           }
         },
         "summary": "Estrutura"
+      }
+    },
+    "/api/projects/{project_id}/suggestions": {
+      "get": {
+        "description": "Sugestões para a tabela no fim da receita, na ordem de aplicação.\nAs rejeitadas neste projeto não voltam.",
+        "operationId": "sugestoes_api_projects__project_id__suggestions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Sugestao"
+                  },
+                  "title": "Response Sugestoes Api Projects  Project Id  Suggestions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sugestoes"
+      }
+    },
+    "/api/projects/{project_id}/suggestions/rejections": {
+      "post": {
+        "description": "Rejeita a sugestão para as colunas dela (ou a regra inteira, sem\ncolunas). Fica gravado no projeto.",
+        "operationId": "rejeitar_sugestao_api_projects__project_id__suggestions_rejections_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PedidoRejeicao"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rejeitar Sugestao"
       }
     },
     "/api/sheets": {

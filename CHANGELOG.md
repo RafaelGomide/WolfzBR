@@ -6,6 +6,13 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 
 ## [Não publicado]
 
+### Adicionado
+
+- Sugestões automáticas (`wolfz.core.suggest`): regras registradas com `@rule` olham a tabela no fim da receita e propõem passos com confiança e motivo. Catorze regras: moeda, número e data em texto (com a ordem de AAAAMMDD ou DDMMAAAA), percentual, coluna vazia, espaços extras ou invisíveis, linhas duplicadas, meses em colunas (despivotar), categoria com variação de caixa e acento, CPF e CNPJ com máscara misturada ou zeros perdidos (inclusive na mesma coluna, com o tipo de pessoa), CEP com 7 dígitos, sinais do IBGE e mojibake, mais um aviso para código com zero à esquerda que não deve virar número. Código e ID (`Cód.`, `CD_MUN`, CNPJ já limpo) não são sugeridos como número.
+- Interface: painel de sugestões na receita, com aceitar, editar, rejeitar e "aceitar todas" (na ordem certa: limpar, converter e por último mudar a forma da tabela). A rejeitada fica gravada no projeto e não volta.
+- API: `GET /projects/{id}/suggestions` e `POST /projects/{id}/suggestions/rejections`.
+- Uma regra que falha vai para o log (`wolfz.suggest`) e é ignorada; as outras continuam.
+
 ## [0.6.0] - 2026-10-18
 
 Pacote brasileiro completo: município casado com a lista oficial do IBGE (com revisão na tela e de-para exportado para o Power BI), sete operações novas de padrões brasileiros e a detecção v2, que reconhece cabeçalho em vários níveis, subtotais pela soma e mais de uma tabela na mesma aba.

@@ -744,3 +744,64 @@ pre {
   background: var(--aviso-fundo);
   color: var(--aviso);
 }
+
+/* Sugestões (F2.E3) */
+.sugestoes-painel {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  margin: 0.5rem 0;
+  border: 1px solid #c9d7f5;
+  border-radius: var(--raio);
+  background: #f5f8ff;
+}
+.sugestoes-cabeca {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.sugestoes-alternar {
+  border: none;
+  background: none;
+  padding: 0;
+  font-weight: 600;
+}
+.sugestoes-lista {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.4rem;
+  max-height: 22rem;
+  overflow: auto;
+}
+.sugestao-item {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.4rem 0.5rem;
+  background: #fff;
+  border: 1px solid #dde3ee;
+  border-radius: var(--raio);
+}
+.sugestao-item.aviso {
+  border-color: var(--aviso);
+  background: var(--aviso-fundo);
+}
+.sugestao-item p {
+  margin: 0;
+  font-size: 0.9em;
+}
+.sugestao-titulo {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.sugestao-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.sugestao-acoes button {
+  font-size: 0.85em;
+}

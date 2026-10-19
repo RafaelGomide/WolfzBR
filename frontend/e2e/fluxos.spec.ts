@@ -219,3 +219,44 @@ test("aba com duas tabelas: trocar a receita para a segunda", async ({ page }) =
   await page.getByRole("tab", { name: "Antes e depois" }).click();
   await expect(grade(page, "Receita inteira")).toHaveAttribute("data-total", "8");
 });
+
+test("sugestões: rejeitar não volta, aceitar acrescenta o passo", async ({ page }) => {
+  await abrir(page);
+  await importar(page, arquivo("clientes_cpf_cep"));
+  await esperarProjeto(page, "clientes_cpf_cep.xlsx");
+
+  const painel = page.getByRole("region", { name: "Sugestões (2)" });
+  await expect(painel).toContainText("CEP com 7 dígitos");
+  const cep = painel.locator(".sugestao-item", { hasText: "CEP com 7 dígitos" });
+  await cep.getByRole("button", { name: "Rejeitar" }).click();
+  await expect(page.getByRole("region", { name: "Sugestões (1)" })).toBeVisible();
+
+  // A rejeição fica gravada no projeto.
+  await page.reload();
+  await esperarProjeto(page, "clientes_cpf_cep.xlsx");
+  const restante = page.getByRole("region", { name: "Sugestões (1)" });
+  await expect(restante).not.toContainText("CEP com 7 dígitos");
+
+  const passos = await page.locator("li[data-passo]").count();
+  await restante.getByRole("button", { name: "Aceitar" }).click();
+  await expect(page.locator("li[data-passo]")).toHaveCount(passos + 1);
+  await expect(page.locator("li[data-passo]").last()).toContainText("Limpar CPF");
+  await expect(page.locator(".sugestoes-painel")).toHaveCount(0);
+});
+
+test("sugestões: aceitar todas aplica na ordem (converter antes de despivotar)", async ({
+  page,
+}) => {
+  await abrir(page);
+  await importar(page, arquivo("orcamento_gerencial_meses"));
+  await esperarProjeto(page, "orcamento_gerencial_meses.xlsx");
+
+  const passos = await page.locator("li[data-passo]").count();
+  await page.getByRole("button", { name: /Aceitar todas \(2\)/ }).click();
+  await expect(page.locator("li[data-passo]")).toHaveCount(passos + 2);
+  await expect(page.locator("li[data-passo]").nth(passos)).toContainText("Número brasileiro");
+  await expect(page.locator("li[data-passo]").nth(passos + 1)).toContainText("Despivotar colunas");
+  await page.getByRole("tab", { name: "Antes e depois" }).click();
+  await expect(grade(page, "Receita inteira")).toBeVisible();
+  await expect(page.locator(".estado.erro")).toHaveCount(0);
+});
