@@ -19,7 +19,10 @@ import {
 } from "../util/schema";
 
 // Parâmetros cujo valor é nome de coluna: o campo sugere as colunas da tabela.
-const DE_COLUNA = new Set(["cols", "col", "by", "index", "mapping", "types"]);
+const DE_COLUNA = new Set([
+  ...["cols", "col", "by", "index", "mapping", "types"],
+  ...["uf_col", "person_type_col", "unit_col"],
+]);
 
 function Lista({
   valor,

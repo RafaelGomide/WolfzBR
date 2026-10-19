@@ -321,7 +321,8 @@ def recipe_to_m(recipe: Recipe, fonte: FonteM | None = None) -> str:
             if helpers.setdefault(name, definition) != definition:
                 raise ValueError(f"duas definições diferentes para a função M {name!r}")
 
-    reservados = {*helpers, PARAMETRO, "Arquivo", "Aba", "Cabecalho", "Fonte"}
+    extras = list(dict.fromkeys(p for step in steps for p in step.m_parameters))
+    reservados = {*helpers, PARAMETRO, *extras, "Arquivo", "Aba", "Cabecalho", "Fonte"}
     nomes = step_names(steps, reservados)
     blocos = [f"{name} = {definition.strip()}" for name, definition in helpers.items()]
     blocos += fonte_passos
@@ -337,21 +338,31 @@ def recipe_to_m(recipe: Recipe, fonte: FonteM | None = None) -> str:
         f"// Precisa do parâmetro {PARAMETRO} (texto com o caminho completo do arquivo de origem):",
         "// Power BI Desktop > Transformar dados > Gerenciar Parâmetros > Novo Parâmetro,",
         f"// Nome: {PARAMETRO}, Tipo: Texto. O arquivo .{PARAMETRO}.pq exportado junto tem o valor.",
+        *(
+            f"// Precisa também do parâmetro {p}: crie do mesmo jeito, com o arquivo .{p}.pq exportado junto."
+            for p in extras
+        ),
         "// Para colar esta consulta: Nova Fonte > Consulta Nula > Editor Avançado.",
     ]
     return "\n".join(cabecalho) + f"\nlet\n{_indent(corpo)}\nin\n    {prev}\n"
 
 
-def parameter_to_m(caminho: str | None, recipe_name: str = "") -> str:
-    """Parâmetro ``CaminhoArquivo``, para colar como uma consulta nula com
-    esse nome (ou criar pela tela de parâmetros com o mesmo valor)."""
+def parameter_to_m(caminho: str | None, recipe_name: str = "", nome: str = PARAMETRO) -> str:
+    """Parâmetro de caminho (``CaminhoArquivo`` ou outro, como o do de-para),
+    para colar como uma consulta nula com esse nome (ou criar pela tela de
+    parâmetros com o mesmo valor)."""
     valor = m_text(caminho or "C:\\caminho\\do\\arquivo")
     receita = f' da receita "{_comment(recipe_name)}"' if recipe_name else ""
-    return (
-        f"// Parâmetro {PARAMETRO}{receita}, gerado pelo WolfzBR.\n"
-        "// Power BI Desktop > Transformar dados > Gerenciar Parâmetros > Novo Parâmetro:\n"
-        f"// Nome {PARAMETRO}, Tipo Texto, Valor atual = o caminho abaixo. Ou: Nova Fonte >\n"
-        f"// Consulta Nula, renomeie para {PARAMETRO} e cole este texto no Editor Avançado.\n"
+    dica = (
         "// Para aplicar a receita a outro arquivo, troque só este valor.\n"
+        if nome == PARAMETRO
+        else "// Aponte para o arquivo exportado junto com a consulta.\n"
+    )
+    return (
+        f"// Parâmetro {nome}{receita}, gerado pelo WolfzBR.\n"
+        "// Power BI Desktop > Transformar dados > Gerenciar Parâmetros > Novo Parâmetro:\n"
+        f"// Nome {nome}, Tipo Texto, Valor atual = o caminho abaixo. Ou: Nova Fonte >\n"
+        f"// Consulta Nula, renomeie para {nome} e cole este texto no Editor Avançado.\n"
+        f"{dica}"
         f'{valor} meta [IsParameterQuery = true, Type = "Text", IsParameterQueryRequired = true]\n'
     )

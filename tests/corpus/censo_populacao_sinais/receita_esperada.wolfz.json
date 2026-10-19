@@ -6,7 +6,7 @@
   },
   "steps": [
     {
-      "end_detect": "auto",
+      "end": "E16",
       "id": "s1",
       "op": "select_range",
       "start": "A4"
@@ -34,7 +34,8 @@
         "mulheres"
       ],
       "id": "s4",
-      "op": "parse_ibge"
+      "op": "parse_ibge_value",
+      "status": false
     }
   ],
   "wolfz_version": "0.1"

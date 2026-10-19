@@ -336,6 +336,123 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "ItemRevisaoMunicipio": {
+        "additionalProperties": true,
+        "description": "Valor distinto de uma coluna de município, com o casamento atual.",
+        "properties": {
+          "chave": {
+            "title": "Chave",
+            "type": "string"
+          },
+          "codigo_ibge": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codigo Ibge"
+          },
+          "linhas": {
+            "title": "Linhas",
+            "type": "integer"
+          },
+          "nome_ibge": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nome Ibge"
+          },
+          "nota": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nota"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "sugestoes": {
+            "items": {
+              "$ref": "#/components/schemas/Municipio"
+            },
+            "title": "Sugestoes",
+            "type": "array"
+          },
+          "uf": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uf"
+          },
+          "valor": {
+            "title": "Valor",
+            "type": "string"
+          }
+        },
+        "required": [
+          "valor",
+          "chave",
+          "linhas",
+          "status",
+          "sugestoes"
+        ],
+        "title": "ItemRevisaoMunicipio",
+        "type": "object"
+      },
+      "Municipio": {
+        "additionalProperties": true,
+        "properties": {
+          "codigo_ibge": {
+            "title": "Codigo Ibge",
+            "type": "string"
+          },
+          "nome": {
+            "title": "Nome",
+            "type": "string"
+          },
+          "nota": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nota"
+          },
+          "uf": {
+            "title": "Uf",
+            "type": "string"
+          }
+        },
+        "required": [
+          "codigo_ibge",
+          "nome",
+          "uf"
+        ],
+        "title": "Municipio",
+        "type": "object"
+      },
       "Operacao": {
         "additionalProperties": true,
         "properties": {
@@ -891,6 +1008,83 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/municipios": {
+      "get": {
+        "description": "Busca na lista do IBGE, para a correção manual.",
+        "operationId": "buscar_municipios_api_municipios_get",
+        "parameters": [
+          {
+            "description": "Começo ou parte do nome.",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "description": "Começo ou parte do nome.",
+              "minLength": 1,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sigla ou nome da UF.",
+            "in": "query",
+            "name": "uf",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Sigla ou nome da UF.",
+              "title": "Uf"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Municipio"
+                  },
+                  "title": "Response Buscar Municipios Api Municipios Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Buscar Municipios"
+      }
+    },
     "/api/ops": {
       "get": {
         "description": "Operações registradas, com o JSON Schema dos parâmetros: a\ninterface monta os formulários dos passos a partir disto.",
@@ -1364,6 +1558,59 @@
           }
         },
         "summary": "Salvar Receita"
+      }
+    },
+    "/api/projects/{project_id}/steps/{step_id}/municipios": {
+      "get": {
+        "description": "Valores distintos que chegam a um passo ``normalize_municipio``,\ncom o casamento atual e sugestões: primeiro os que precisam de\nrevisão. Aceitar ou corrigir é editar o ``manual`` do passo\n(``PUT /recipe``).",
+        "operationId": "revisar_municipios_api_projects__project_id__steps__step_id__municipios_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "step_id",
+            "required": true,
+            "schema": {
+              "title": "Step Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ItemRevisaoMunicipio"
+                  },
+                  "title": "Response Revisar Municipios Api Projects  Project Id  Steps  Step Id  Municipios Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revisar Municipios"
       }
     },
     "/api/projects/{project_id}/structure": {

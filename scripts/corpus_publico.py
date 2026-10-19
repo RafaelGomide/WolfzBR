@@ -170,7 +170,7 @@ def _passos_populacao(regioes: list[str]) -> list[dict]:
             "mapping": {"BRASIL E UNIDADES DA FEDERAÇÃO": "uf", "POPULAÇÃO ESTIMADA": "populacao"},
         },
         {"op": "drop_rows_where", "col": "uf", "match": "in", "value": ["Brasil", *regioes]},
-        {"op": "strip_footnote_marks", "cols": ["populacao"]},
+        {"op": "strip_footnotes", "cols": ["populacao"]},
         {"op": "parse_decimal_br", "cols": ["populacao"]},
         {"op": "cast", "types": {"populacao": "int"}},
     ]
@@ -366,7 +366,7 @@ def ibge_ppm_2012_linhares(path: Path) -> list[Saida]:
         {"op": "header_rows", "n": 0, "names": nomes},
         {"op": "trim", "cols": ["especificacao"]},
         {"op": "drop_rows_where", "col": "especificacao", "match": "in", "value": sorted(secoes | portes)},
-        {"op": "parse_ibge", "cols": nomes[1:]},
+        {"op": "parse_ibge_value", "cols": nomes[1:], "status": False},
     ]
     # Linhas de seção ('Categorias', 'Produtos') ficam na área; só os portes
     # do rebanho são subtotais.

@@ -7,14 +7,30 @@ from collections.abc import Callable
 from typing import Any, ClassVar, Literal
 
 import polars as pl
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from wolfz.br.booleanos import parse_bool_br
 from wolfz.br.datas import parse_date_br, parse_month_year
-from wolfz.br.documentos import clean_cep, clean_cnpj, clean_cpf, cnpj_is_valid, cpf_is_valid
-from wolfz.br.geo import normalize_uf
-from wolfz.br.numeros import decimal_provavel, parse_brl, parse_number_br, parse_percent_br
+from wolfz.br.documentos import (
+    clean_cep,
+    clean_cnpj,
+    clean_cpf,
+    clean_cpf_cnpj,
+    clean_phone,
+    cnpj_is_valid,
+    cpf_is_valid,
+)
+from wolfz.br.geo import normalize_uf, split_municipio_uf
+from wolfz.br.numeros import (
+    decimal_provavel,
+    parse_brl,
+    parse_ibge_value,
+    parse_number_br,
+    parse_percent_br,
+    scale_from_unit,
+)
 from wolfz.core.recipe import Op, register_op
+from wolfz.core.text import fix_mojibake, strip_footnote_marks
 from wolfz.export.m import m_field, m_text
 from wolfz.ops import m_br
 
@@ -648,3 +664,478 @@ class NormalizeUf(_ValorBr):
 
     def _m(self, valor: str) -> str:
         return f"WolfzUf({valor})"
+
+
+# ---------------------------------------------------------------------------
+# Pacote BR completo (F2.C6)
+# ---------------------------------------------------------------------------
+
+
+def map_unique_rows(fn: Callable[..., Any], dtype: pl.DataType) -> Callable[[pl.Series], pl.Series]:
+    """Como ``map_unique``, para uma função de várias colunas (recebe uma
+    coluna struct): roda uma vez por combinação distinta."""
+
+    def apply(s: pl.Series) -> pl.Series:
+        linhas = s.struct.unnest().rows()
+        resultados = {linha: fn(*linha) for linha in set(linhas)}
+        return pl.Series(s.name, [resultados[linha] for linha in linhas], dtype=dtype)
+
+    return apply
+
+
+@register_op
+class CleanPhone(_ValorBr):
+    """Telefone no formato E.164: '(27) 99999-9999' -> '+5527999999999'.
+    Trata +55, zero de longa distância, código de operadora e celular
+    antigo de 8 dígitos (acrescenta o 9, a não ser com
+    ``add_ninth_digit=False``). Número sem DDD usa ``default_ddd``; sem ele,
+    vira nulo, como 0800 e DDD que não existe."""
+
+    op: Literal["clean_phone"]
+    m_label = "Telefone limpo"
+    default_ddd: str | None = Field(default=None, pattern=r"^\d{2}$", description="DDD para número sem DDD")
+    add_ninth_digit: bool = True
+
+    funcao = clean_phone
+    dtype = "String"
+    m_tipo = "type nullable text"
+    python_helpers = (clean_phone,)
+    m_helpers = {**m_br.BASE, "WolfzPrepId": m_br.PREP_ID, "WolfzTelefone": m_br.TELEFONE}  # noqa: RUF012
+    examples = (
+        {
+            "step": {"cols": ["tel"]},
+            "input": {
+                "tel": [
+                    "(27) 99999-9999",
+                    "+55 27 3333-4444",
+                    "027 8888-7777",
+                    "0 21 27 99999-9999",
+                    "0800 123 4567",
+                    "99999-9999",
+                    None,
+                ]
+            },
+            "expected": {
+                "tel": [
+                    "+5527999999999",
+                    "+552733334444",
+                    "+5527988887777",
+                    "+5527999999999",
+                    None,
+                    None,
+                    None,
+                ]
+            },
+        },
+        {
+            "step": {"cols": ["tel"], "default_ddd": "27", "add_ninth_digit": False},
+            "input": {"tel": ["8888-7777", "(11) 8888-7777", "27 1234-5678"]},
+            "expected": {"tel": ["+552788887777", "+551188887777", "+552712345678"]},
+        },
+    )
+
+    def _kwargs(self) -> dict[str, Any]:
+        kwargs: dict[str, Any] = {}
+        if self.default_ddd is not None:
+            kwargs["default_ddd"] = self.default_ddd
+        if not self.add_ninth_digit:
+            kwargs["add_ninth_digit"] = False
+        return kwargs
+
+    def _m(self, valor: str) -> str:
+        ddd = "null" if self.default_ddd is None else m_text(self.default_ddd)
+        return f"WolfzTelefone({valor}, {ddd}, {str(self.add_ninth_digit).lower()})"
+
+
+@register_op
+class CleanCpfCnpj(Op):
+    """Coluna com CPF ou CNPJ ("CPF OU CNPJ DO SANCIONADO" no CEIS): limpa
+    e completa os zeros no tamanho certo. Com ``person_type_col`` (coluna com
+    'F'/'J', 'PF'/'PJ', 'Física'/'Jurídica'), o tipo decide; sem ela, o
+    tamanho e o dígito verificador. Ambíguo vira nulo."""
+
+    op: Literal["clean_cpf_cnpj"]
+    m_label = "CPF ou CNPJ limpo"
+    full_checkpoint = True
+    col: str
+    person_type_col: str | None = None
+
+    python_helpers = (clean_cpf_cnpj,)
+    m_helpers = {  # noqa: RUF012
+        **m_br.BASE,
+        "WolfzPrepId": m_br.PREP_ID,
+        "WolfzCpf": m_br.CPF,
+        "WolfzCnpj": m_br.CNPJ,
+        "WolfzCpfValido": m_br.CPF_VALIDO,
+        "WolfzCnpjValido": m_br.CNPJ_VALIDO,
+        "WolfzCpfCnpj": m_br.CPF_CNPJ,
+    }
+    examples = (
+        {
+            "step": {"col": "doc"},
+            "input": {"doc": ["529.982.247-25", "191", "11.222.333/0001-81", "2345678909", "abc", None]},
+            "expected": {"doc": ["52998224725", None, "11222333000181", None, None, None]},
+        },
+        {
+            "step": {"col": "doc", "person_type_col": "tipo"},
+            "input": {"doc": ["191", "191", "52998224725", None], "tipo": ["J", "F", "Pessoa Física", "J"]},
+            "expected": {
+                "doc": ["00000000000191", "00000000191", "52998224725", None],
+                "tipo": ["J", "F", "Pessoa Física", "J"],
+            },
+        },
+    )
+
+    def to_polars(self, lf: pl.LazyFrame) -> pl.LazyFrame:
+        if self.person_type_col is None:
+            return lf.with_columns(
+                pl.col(self.col).map_batches(map_unique(clean_cpf_cnpj, pl.String), return_dtype=pl.String)
+            )
+        par = pl.struct(pl.col(self.col).cast(pl.String), pl.col(self.person_type_col).cast(pl.String))
+        aplicar = map_unique_rows(clean_cpf_cnpj, pl.String)
+        return lf.with_columns(par.map_batches(aplicar, return_dtype=pl.String).alias(self.col))
+
+    def to_python(self) -> str:
+        if self.person_type_col is None:
+            fn = "map_elements(clean_cpf_cnpj, return_dtype=pl.String)"
+            return f"lf = lf.with_columns(pl.col({self.col!r}).{fn})"
+        return (
+            f"lf = lf.with_columns(pl.struct({self.col!r}, {self.person_type_col!r})"
+            f".map_elements(lambda r: clean_cpf_cnpj(r[{self.col!r}], r[{self.person_type_col!r}]), "
+            f"return_dtype=pl.String).alias({self.col!r}))"
+        )
+
+    def to_m(self, prev: str, name: str) -> str:
+        if self.person_type_col is None:
+            return (
+                f"{name} = Table.TransformColumns({prev}, "
+                f"{{{{{m_text(self.col)}, each WolfzCpfCnpj(_, null), type nullable text}}}})"
+            )
+        campo, tipo = m_field(self.col), m_field(self.person_type_col)
+        return (
+            f"{name} = Table.ReplaceValue({prev}, each {campo}, each WolfzCpfCnpj({campo}, {tipo}), "
+            f"Replacer.ReplaceValue, {{{m_text(self.col)}}})"
+        )
+
+
+@register_op
+class SplitMunicipioUf(Op):
+    """Separa município e UF que vêm no mesmo campo: 'Vitória - ES',
+    'Vitória/ES', 'Alta Floresta D'Oeste (RO)'. O município fica em ``col``
+    e a UF vai para a coluna nova ``uf_col``. Só separa se o fim for uma UF
+    de verdade: 'Embu-Guaçu' continua inteiro (e a UF fica nula)."""
+
+    op: Literal["split_municipio_uf"]
+    m_label = "Município e UF separados"
+    full_checkpoint = True
+    col: str
+    uf_col: str = "uf"
+
+    python_helpers = (split_municipio_uf,)
+    m_helpers = {**m_br.BASE, "WolfzMunicipioUf": m_br.MUNICIPIO_UF}  # noqa: RUF012
+    examples = (
+        {
+            "step": {"col": "m"},
+            "input": {
+                "m": [
+                    "Vitória - ES",
+                    "Vitória/es",
+                    "Alta Floresta D'Oeste (RO)",
+                    "Embu-Guaçu",
+                    "Serra (XX)",
+                    None,
+                ]
+            },
+            "expected": {
+                "m": ["Vitória", "Vitória", "Alta Floresta D'Oeste", "Embu-Guaçu", "Serra (XX)", None],
+                "uf": ["ES", "ES", "RO", None, None, None],
+            },
+        },
+        {
+            "step": {"col": "local", "uf_col": "sigla"},
+            "input": {"local": ["Serra \u2013 ES", "  Linhares  -  es "]},
+            "expected": {"local": ["Serra", "Linhares"], "sigla": ["ES", "ES"]},
+        },
+    )
+
+    @model_validator(mode="after")
+    def _colunas_diferentes(self) -> SplitMunicipioUf:
+        if self.uf_col == self.col:
+            raise ValueError("uf_col precisa ser diferente de col")
+        return self
+
+    def to_polars(self, lf: pl.LazyFrame) -> pl.LazyFrame:
+        municipio = map_unique(lambda v: split_municipio_uf(v)[0], pl.String)
+        uf = map_unique(lambda v: split_municipio_uf(v)[1], pl.String)
+        c = pl.col(self.col).cast(pl.String)
+        return lf.with_columns(
+            c.map_batches(municipio, return_dtype=pl.String).alias(self.col),
+            c.map_batches(uf, return_dtype=pl.String).alias(self.uf_col),
+        )
+
+    def to_python(self) -> str:
+        c = f"pl.col({self.col!r})"
+        partes = [
+            f"    {c}.map_elements(lambda v: split_municipio_uf(v)[{i}], return_dtype=pl.String)"
+            f".alias({nome!r}),"
+            for i, nome in enumerate((self.col, self.uf_col))
+        ]
+        return "\n".join(["lf = lf.with_columns(", *partes, ")"])
+
+    def to_m(self, prev: str, name: str) -> str:
+        campo = m_field(self.col)
+        uf = f"each WolfzMunicipioUf({campo}){{1}}"
+        com_uf = f"Table.AddColumn({prev}, {m_text(self.uf_col)}, {uf}, type nullable text)"
+        return (
+            f"{name} = Table.TransformColumns({com_uf}, "
+            f"{{{{{m_text(self.col)}, each WolfzMunicipioUf(_){{0}}, type nullable text}}}})"
+        )
+
+
+@register_op
+class ParseIbgeValue(Op):
+    """Valor de tabela do IBGE (SIDRA, Censo, DATASUS) com os sinais
+    convencionais: '-' é zero absoluto, '0' é zero arredondado, '..' não se
+    aplica, '...' não disponível, 'X' omitido por sigilo. '-' vira 0; os
+    outros sinais viram nulo, nunca zero. Com ``status`` (padrão), cria a
+    coluna ``<coluna>_situacao`` dizendo qual era o caso de cada célula."""
+
+    op: Literal["parse_ibge_value"]
+    m_label = "Valores do IBGE convertidos"
+    full_checkpoint = True
+    cols: list[str] = Field(min_length=1)
+    decimal: Literal[".", ","] = "."
+    status: bool = True
+
+    python_helpers = (parse_ibge_value,)
+    m_helpers = {  # noqa: RUF012
+        **m_br.BASE,
+        "WolfzNumeroBr": m_br.NUMERO_BR,
+        "WolfzIbge": m_br.IBGE,
+    }
+    examples = (
+        {
+            "step": {"cols": ["v"]},
+            "input": {"v": ["5556", "-", "..", "...", "X", "0", "1234.5", "abc", None]},
+            "expected": {
+                "v": [5556.0, 0.0, None, None, None, 0.0, 1234.5, None, None],
+                "v_situacao": [
+                    "valor",
+                    "zero_absoluto",
+                    "nao_se_aplica",
+                    "nao_disponivel",
+                    "omitido_sigilo",
+                    "zero_arredondado",
+                    "valor",
+                    "invalido",
+                    "nao_disponivel",
+                ],
+            },
+        },
+        {
+            "step": {"cols": ["v"], "decimal": ",", "status": False},
+            "input": {"v": ["1.234,5", "x", "0,0"]},
+            "expected": {"v": [1234.5, None, 0.0]},
+        },
+    )
+
+    def _fn(self, i: int) -> Callable[[Any], Any]:
+        decimal = self.decimal
+        return lambda v: parse_ibge_value(v, decimal=decimal)[i]
+
+    def to_polars(self, lf: pl.LazyFrame) -> pl.LazyFrame:
+        valor = map_unique(self._fn(0), pl.Float64)
+        exprs = [
+            pl.col(c).cast(pl.String).map_batches(valor, return_dtype=pl.Float64).alias(c) for c in self.cols
+        ]
+        if self.status:
+            situacao = map_unique(self._fn(1), pl.String)
+            exprs += [
+                pl.col(c)
+                .cast(pl.String)
+                .map_batches(situacao, return_dtype=pl.String)
+                .fill_null("nao_disponivel")
+                .alias(f"{c}_situacao")
+                for c in self.cols
+            ]
+        return lf.with_columns(exprs)
+
+    def to_python(self) -> str:
+        args = "" if self.decimal == "." else f", decimal={self.decimal!r}"
+        linhas = [
+            "lf = lf.with_columns(",
+            f"    pl.col(c).map_elements(lambda v: parse_ibge_value(v{args})[0], return_dtype=pl.Float64)",
+            f"    for c in {self.cols!r}",
+            ")",
+        ]
+        if self.status:
+            linhas = [
+                "lf = lf.with_columns(",
+                f"    pl.col(c).map_elements(lambda v: parse_ibge_value(v{args})[1], return_dtype=pl.String)",
+                "    .fill_null('nao_disponivel')",
+                "    .alias(c + '_situacao')",
+                f"    for c in {self.cols!r}",
+                ")",
+                *linhas,
+            ]
+        return "\n".join(linhas)
+
+    def to_m(self, prev: str, name: str) -> str:
+        cultura = '"pt-BR"' if self.decimal == "," else '"en-US"'
+        expr = prev
+        if self.status:
+            for c in self.cols:
+                corpo = f"each WolfzIbge({m_field(c)}, {cultura}){{1}}"
+                expr = f"Table.AddColumn({expr}, {m_text(c + '_situacao')}, {corpo}, type text)"
+        transforms = ", ".join(
+            f"{{{m_text(c)}, each WolfzIbge(_, {cultura}){{0}}, type nullable number}}" for c in self.cols
+        )
+        return f"{name} = Table.TransformColumns({expr}, {{{transforms}}})"
+
+
+@register_op
+class ScaleByUnit(Op):
+    """Multiplica colunas numéricas pela escala escrita na unidade: 'Mil
+    Reais' -> x1.000, 'R$ milhões' -> x1.000.000. A unidade é fixa
+    (``unit``, a do título da tabela) ou vem de outra coluna
+    (``unit_col``, uma por linha). Use depois de converter o número."""
+
+    op: Literal["scale_by_unit"]
+    m_label = "Valores na escala da unidade"
+    cols: list[str] = Field(min_length=1)
+    unit: str | None = None
+    unit_col: str | None = None
+
+    python_helpers = (scale_from_unit,)
+    m_helpers = {**m_br.BASE, "WolfzEscala": m_br.ESCALA}  # noqa: RUF012
+    examples = (
+        {
+            "step": {"cols": ["v"], "unit": "Mil Reais"},
+            "input": {"v": [1.5, None, 2.0]},
+            "expected": {"v": [1500.0, None, 2000.0]},
+        },
+        {
+            "step": {"cols": ["v", "w"], "unit_col": "u"},
+            "input": {
+                "v": [1.0, 2.0, 3.0, 4.0],
+                "w": [1, 1, 1, None],
+                "u": ["R$ milhões", "Toneladas", "bilhões", None],
+            },
+            "expected": {
+                "v": [1000000.0, 2.0, 3000000000.0, 4.0],
+                "w": [1000000, 1, 1000000000, None],
+                "u": ["R$ milhões", "Toneladas", "bilhões", None],
+            },
+        },
+    )
+
+    @model_validator(mode="after")
+    def _uma_unidade(self) -> ScaleByUnit:
+        if (self.unit is None) == (self.unit_col is None):
+            raise ValueError("informe unit (unidade fixa) ou unit_col (coluna com a unidade), um dos dois")
+        return self
+
+    def to_polars(self, lf: pl.LazyFrame) -> pl.LazyFrame:
+        if self.unit is not None:
+            fator: pl.Expr = pl.lit(scale_from_unit(self.unit))
+        else:
+            escala = map_unique(scale_from_unit, pl.Int64)
+            fator = (
+                pl.col(self.unit_col).cast(pl.String).map_batches(escala, return_dtype=pl.Int64).fill_null(1)
+            )
+        return lf.with_columns(pl.col(c) * fator for c in self.cols)
+
+    def to_python(self) -> str:
+        if self.unit is not None:
+            return f"lf = lf.with_columns(pl.col(c) * scale_from_unit({self.unit!r}) for c in {self.cols!r})"
+        fator = f"pl.col({self.unit_col!r}).map_elements(scale_from_unit, return_dtype=pl.Int64).fill_null(1)"
+        return f"lf = lf.with_columns(pl.col(c) * {fator} for c in {self.cols!r})"
+
+    def to_m(self, prev: str, name: str) -> str:
+        if self.unit is not None:
+            fator = scale_from_unit(self.unit)
+            transforms = ", ".join(
+                f"{{{m_text(c)}, each _ * {fator}, type nullable number}}" for c in self.cols
+            )
+            return f"{name} = Table.TransformColumns({prev}, {{{transforms}}})"
+        expr = prev
+        for c in self.cols:
+            campo = m_field(c)
+            novo = f"each {campo} * WolfzEscala({m_field(self.unit_col)})"
+            expr = f"Table.ReplaceValue({expr}, each {campo}, {novo}, Replacer.ReplaceValue, {{{m_text(c)}}})"
+        return f"{name} = {expr}"
+
+
+@register_op
+class FixMojibake(_ValorBr):
+    """Conserta acento estragado de texto UTF-8 lido como Latin-1:
+    'SÃ£o Paulo' -> 'São Paulo'. Desfaz até duas camadas; texto que não
+    volta inteiro fica como está."""
+
+    op: Literal["fix_mojibake"]
+    m_label = "Acentuação corrigida"
+
+    funcao = fix_mojibake
+    dtype = "String"
+    m_tipo = "type nullable text"
+    python_helpers = (fix_mojibake,)
+    m_helpers = {"WolfzMojibake": m_br.MOJIBAKE}  # noqa: RUF012
+    examples = (
+        {
+            "step": {"cols": ["t"]},
+            "input": {"t": ["SÃ£o Paulo", "InformaÃ§Ã£o", "SÃƒÂ£o", "São Paulo", "SÃO PAULO", None]},
+            "expected": {"t": ["São Paulo", "Informação", "São", "São Paulo", "SÃO PAULO", None]},
+        },
+    )
+
+    def _m(self, valor: str) -> str:
+        return f"WolfzMojibake({valor})"
+
+
+@register_op
+class StripFootnotes(_ValorBr):
+    """Tira a marca de nota de rodapé do fim do texto: 'Abacaxi*' ->
+    'Abacaxi', 'Total²' -> 'Total', 'Receita líquida (1)' -> 'Receita
+    líquida'. Sem isso, a mesma categoria aparece com e sem a marca em anos
+    diferentes e não agrupa."""
+
+    op: Literal["strip_footnotes"]
+    m_label = "Notas de rodapé removidas"
+
+    funcao = strip_footnote_marks
+    dtype = "String"
+    m_tipo = "type nullable text"
+    python_helpers = (strip_footnote_marks,)
+    m_helpers = {"WolfzNotaRodape": m_br.NOTA_RODAPE}  # noqa: RUF012
+    examples = (
+        {
+            "step": {"cols": ["t"]},
+            "input": {
+                "t": [
+                    "Abacaxi*",
+                    "Abacaxi **",
+                    "Total²",
+                    "Receita líquida (1)",
+                    "Nota (123)",
+                    "A* *",
+                    "Sem marca ",
+                    None,
+                ]
+            },
+            "expected": {
+                "t": [
+                    "Abacaxi",
+                    "Abacaxi",
+                    "Total",
+                    "Receita líquida",
+                    "Nota (123)",
+                    "A*",
+                    "Sem marca ",
+                    None,
+                ]
+            },
+        },
+    )
+
+    def _m(self, valor: str) -> str:
+        return f"WolfzNotaRodape({valor})"

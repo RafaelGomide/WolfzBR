@@ -688,7 +688,7 @@ def sidra_pam_area() -> Sintetico:
 
     saida = tabela(("municipio", TXT, municipios), *((c, NUM, limpos[c]) for c in cols))
     passos = [
-        {"op": "select_range", "start": "A2", "end_detect": "auto"},
+        {"op": "select_range", "start": "A2", "end": f"E{3 + len(municipios)}"},
         {"op": "header_rows", "n": 2, "joiner": " "},
         {
             "op": "rename",
@@ -700,7 +700,7 @@ def sidra_pam_area() -> Sintetico:
                 f"{qtd} 2023": cols[3],
             },
         },
-        {"op": "parse_ibge", "cols": cols},
+        {"op": "parse_ibge_value", "cols": cols, "status": False},
     ]
     return Sintetico(
         "sidra_pam_area",
@@ -791,10 +791,10 @@ def sidra_ppm_rebanho() -> Sintetico:
 
     saida = tabela(("municipio", TXT, municipios), *((c, NUM, limpos[c]) for c in cols[1:]))
     passos = [
-        {"op": "select_range", "start": "A4", "end_detect": "auto"},
+        {"op": "select_range", "start": "A4", "end": f"G{4 + len(municipios)}"},
         {"op": "header_rows", "n": 1},
         {"op": "rename", "mapping": dict(zip(cab, cols, strict=True))},
-        {"op": "parse_ibge", "cols": cols[1:]},
+        {"op": "parse_ibge_value", "cols": cols[1:], "status": False},
     ]
     return Sintetico(
         "sidra_ppm_rebanho",
@@ -847,10 +847,10 @@ def censo_populacao_sinais() -> Sintetico:
         ("mulheres", NUM, [x[7] for x in linhas]),
     )
     passos = [
-        {"op": "select_range", "start": "A4", "end_detect": "auto"},
+        {"op": "select_range", "start": "A4", "end": f"E{4 + len(linhas)}"},
         {"op": "header_rows", "n": 1},
         {"op": "rename", "mapping": dict(zip(cab, saida.columns, strict=True))},
-        {"op": "parse_ibge", "cols": ["total", "homens", "mulheres"]},
+        {"op": "parse_ibge_value", "cols": ["total", "homens", "mulheres"], "status": False},
     ]
     return Sintetico(
         "censo_populacao_sinais",
@@ -1134,7 +1134,7 @@ def tabnet_obitos() -> Sintetico:
         {"op": "drop_rows_where", "col": "Município", "match": "equals", "value": "Total"},
         {"op": "drop_cols", "cols": ["Total"]},
         {"op": "rename", "mapping": {"Município": "municipio", **dict(zip(anos, cols, strict=True))}},
-        {"op": "parse_ibge", "cols": cols},
+        {"op": "parse_ibge_value", "cols": cols, "status": False},
         {"op": "cast", "types": dict.fromkeys(cols, "int")},
     ]
     return Sintetico(

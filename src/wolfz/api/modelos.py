@@ -139,6 +139,28 @@ class Exportacao(_Resposta):
     neutralized: bool = False
 
 
+class Municipio(_Resposta):
+    codigo_ibge: str
+    nome: str
+    uf: str
+    nota: float | None = None
+
+
+class ItemRevisaoMunicipio(_Resposta):
+    """Valor distinto de uma coluna de município, com o casamento atual."""
+
+    valor: str
+    uf: str | None = None
+    # Chave do ``manual`` do passo: "valor" ou "valor|UF".
+    chave: str
+    linhas: int
+    status: str
+    codigo_ibge: str | None = None
+    nome_ibge: str | None = None
+    nota: float | None = None
+    sugestoes: list[Municipio]
+
+
 class Operacao(_Resposta):
     op: str
     doc: str

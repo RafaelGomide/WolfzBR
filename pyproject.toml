@@ -9,7 +9,7 @@ description = "Limpeza de planilhas brasileiras com receitas reproduzíveis e ex
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "Rafael Gomide" }]
 keywords = ["limpeza de dados", "planilhas", "excel", "power bi", "power query", "polars", "brasil"]
 classifiers = [
@@ -88,7 +88,7 @@ packages = ["src/wolfz"]
 [tool.hatch.build.targets.wheel.hooks.custom]
 
 [tool.hatch.build.targets.sdist]
-include = ["/src/wolfz", "/README.md", "/LICENSE", "/hatch_build.py"]
+include = ["/src/wolfz", "/README.md", "/LICENSE", "/NOTICE", "/hatch_build.py"]
 
 [tool.ruff]
 line-length = 110

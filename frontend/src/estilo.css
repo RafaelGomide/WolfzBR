@@ -661,3 +661,73 @@ pre {
   flex: 1 1 8rem;
   text-overflow: ellipsis;
 }
+
+/* Revisão de municípios (F2.C4) */
+.revisao-municipios {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  margin: 0.5rem 0;
+  border: 1px solid var(--primaria);
+  border-radius: var(--raio);
+  background: #f5f8ff;
+}
+.revisao-municipios h3,
+.revisao-municipios p {
+  margin: 0;
+}
+.itens-municipio {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.4rem;
+  max-height: 28rem;
+  overflow: auto;
+}
+.item-municipio {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.4rem 0.5rem;
+  background: #fff;
+  border: 1px solid #dde3ee;
+  border-radius: var(--raio);
+}
+.item-municipio.status-revisar {
+  border-color: var(--aviso);
+}
+.item-cabeca {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+}
+.item-cabeca .etiqueta {
+  margin-left: 0;
+}
+.item-cabeca small {
+  color: var(--texto-suave);
+  margin-left: auto;
+}
+.item-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.item-acoes button {
+  font-size: 0.85em;
+}
+.busca-municipio {
+  display: grid;
+  gap: 0.3rem;
+}
+.busca-municipio ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.campo-linha {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}

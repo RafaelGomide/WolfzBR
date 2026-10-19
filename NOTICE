@@ -1,0 +1,11 @@
+WolfzBR
+Copyright (c) Rafael Gomide. Licença MIT (ver LICENSE).
+
+Este pacote inclui dados de terceiros:
+
+Lista de municípios brasileiros (src/wolfz/br/data/municipios.parquet)
+  Fonte: Instituto Brasileiro de Geografia e Estatística (IBGE),
+  API de Localidades, https://servicodados.ibge.gov.br/api/docs/localidades
+  Endpoint: https://servicodados.ibge.gov.br/api/v1/localidades/municipios?view=nivelado
+  Extraído em 2026-10-18 (5571 municípios) por scripts/atualizar_municipios.py.
+  Dados públicos do IBGE; uso livre com citação da fonte.

@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from wolfz.br.booleanos import _FALSE, _TRUE
 from wolfz.br.constants import MESES, NULL_TOKENS, UFS
+from wolfz.br.documentos import _DDDS, _PF, _PJ
+from wolfz.br.numeros import _IBGE_SIGNS
 from wolfz.core.text import normalize_key
 from wolfz.export.m import m_list, m_text
 from wolfz.ops.texto import ACENTOS, ESPACOS, INVISIVEIS
@@ -24,6 +26,12 @@ from wolfz.ops.texto import ACENTOS, ESPACOS, INVISIVEIS
 def _registro(mapa: dict[str, object]) -> str:
     """Record M a partir de um dict (chaves de texto qualquer)."""
     valores = "{" + ", ".join(m_text(v) if isinstance(v, str) else str(v) for v in mapa.values()) + "}"
+    return f"Record.FromList({valores}, {m_list(mapa.keys())})"
+
+
+def _registro_lista(mapa: dict[str, tuple]) -> str:
+    """Record M de listas: chave -> {valor, ...}."""
+    valores = "{" + ", ".join(m_list(v) for v in mapa.values()) + "}"
     return f"Record.FromList({valores}, {m_list(mapa.keys())})"
 
 
@@ -367,3 +375,177 @@ BASE = {
     "WolfzChave": CHAVE,
     "WolfzNulo": NULO,
 }
+
+
+# clean_phone: E.164 ('+5527999999999'). O DDD padrão chega já com 2 dígitos.
+TELEFONE = f"""
+(v as any, dddPadrao as nullable text, nonoDigito as logical) as nullable text =>
+    let s = WolfzPrepId(v)
+    in
+        if s = null then null
+        else
+        let
+            d0 = Text.Select(s, {{"0".."9"}}),
+            semZero = Text.Range(d0, 1),
+            d1 =
+                if Text.StartsWith(d0, "55") and List.Contains({{12, 13}}, Text.Length(d0)) then Text.Range(d0, 2)
+                else if Text.StartsWith(d0, "0") then
+                    (if List.Contains({{12, 13}}, Text.Length(semZero)) then Text.Range(semZero, 2) else semZero)
+                else d0,
+            d =
+                if List.Contains({{8, 9}}, Text.Length(d1)) then (if dddPadrao = null then null else dddPadrao & d1)
+                else d1,
+            ddd = Text.Start(d, 2),
+            numero0 = Text.Range(d, 2),
+            numero =
+                if Text.Length(numero0) = 8 and List.Contains({{"6", "7", "8", "9"}}, Text.Start(numero0, 1)) and nonoDigito
+                then "9" & numero0
+                else numero0
+        in
+            if d = null or not List.Contains({{10, 11}}, Text.Length(d))
+                or not List.Contains({m_list(sorted(_DDDS))}, Number.From(ddd))
+            then null
+            else if Text.Length(numero) = 9 and Text.Start(numero, 1) <> "9" then null
+            else "+55" & ddd & numero
+"""
+
+# clean_cpf_cnpj: coluna com CPF ou CNPJ; o tipo de pessoa decide, e sem ele
+# o tamanho e o dígito verificador.
+CPF_CNPJ = f"""
+(v as any, tipo as any) as nullable text =>
+    let k = WolfzChave(tipo)
+    in
+        if List.Contains({m_list(sorted(_PF))}, k) then WolfzCpf(v, true)
+        else if List.Contains({m_list(sorted(_PJ))}, k) then WolfzCnpj(v, true)
+        else
+        let s = WolfzPrepId(v)
+        in
+            if s = null then null
+            else
+            let
+                c = Text.Upper(Text.Remove(s, {{".", "-", "/", " ", "#(tab)", "#(cr)", "#(lf)"}})),
+                soDigitos = Text.Length(c) > 0 and Text.Select(c, {{"0".."9"}}) = c,
+                comoCpf = Text.PadStart(c, 11, "0"),
+                comoCnpj = Text.PadStart(c, 14, "0"),
+                cpfOk = WolfzCpfValido(comoCpf),
+                cnpjOk = WolfzCnpjValido(comoCnpj)
+            in
+                if not soDigitos or Text.Length(c) > 11 then WolfzCnpj(c, true)
+                else if cpfOk and not cnpjOk then comoCpf
+                else if cnpjOk and not cpfOk then comoCnpj
+                else if Text.Length(c) = 11 then comoCpf
+                else null
+"""
+
+# split_municipio_uf: {{município, UF}}. Só separa se o sufixo for uma UF real.
+MUNICIPIO_UF = f"""
+(v as any) as list =>
+    if v = null or WolfzNulo(v) then {{null, null}}
+    else
+    let
+        s = WolfzEspacos(Text.From(v, "en-US")),
+        n = Text.Length(s),
+        ufs = {m_list(sorted(UFS))},
+        letras = (t as text) as logical => Text.Length(t) = 2 and Text.Select(t, {{"A".."Z", "a".."z"}}) = t,
+        // 'Alta Floresta D'Oeste (RO)'
+        parenteses =
+            if n >= 5 and Text.EndsWith(s, ")") and Text.Middle(s, n - 4, 1) = "("
+            then {{Text.TrimEnd(Text.Start(s, n - 4)), Text.Middle(s, n - 3, 2)}}
+            else null,
+        // 'Vitória - ES', 'Vitória/ES'
+        antes = Text.TrimEnd(Text.Start(s, if n >= 2 then n - 2 else 0)),
+        separado =
+            if n >= 4 and List.Contains({{"-", "#(2013)", "/"}}, Text.End(antes, 1))
+            then {{Text.TrimEnd(Text.Start(antes, Text.Length(antes) - 1)), Text.End(s, 2)}}
+            else null,
+        valido = (p as nullable list) as logical =>
+            p <> null and Text.Length(p{{0}}) > 0 and letras(p{{1}}) and List.Contains(ufs, Text.Upper(p{{1}}))
+    in
+        if valido(parenteses) then {{parenteses{{0}}, Text.Upper(parenteses{{1}})}}
+        else if valido(separado) then {{separado{{0}}, Text.Upper(separado{{1}})}}
+        else {{s, null}}
+"""
+
+# parse_ibge_value: {{valor, situação}} com os sinais convencionais do IBGE.
+IBGE = f"""
+(v as any, cultura as text) as list =>
+    if v = null then {{null, "nao_disponivel"}}
+    else
+    let
+        s = WolfzEspacos(Text.From(v, "en-US")),
+        sinais = {_registro_lista(_IBGE_SIGNS)},
+        sinal = Record.FieldOrDefault(sinais, Text.Lower(s), null),
+        t = if Text.StartsWith(s, "-") then Text.Range(s, 1) else s,
+        zeros = Text.Range(t, if Text.Length(t) >= 2 then 2 else Text.Length(t)),
+        zero = t = "0" or (Text.Length(t) >= 3 and Text.Start(t, 1) = "0"
+            and List.Contains({{".", ","}}, Text.Middle(t, 1, 1)) and Text.Select(zeros, {{"0"}}) = zeros),
+        n = WolfzNumeroBr(s, false, false, cultura)
+    in
+        if sinal <> null then sinal
+        else if zero then {{0, "zero_arredondado"}}
+        else if n <> null then {{n, "valor"}}
+        else {{null, "invalido"}}
+"""
+
+# scale_from_unit: multiplicador escrito na unidade ('Mil Reais' -> 1000).
+ESCALA = """
+(unidade as any) as number =>
+    let
+        k = WolfzChave(unidade),
+        soPalavras = Text.Combine(List.Transform(
+            Text.ToList(k), each if List.Contains({"a".."z", "0".."9", "_"}, _) then _ else " "
+        )),
+        palavras = List.Select(Text.Split(soPalavras, " "), each _ <> ""),
+        tem = (lista as list) as logical => List.ContainsAny(palavras, lista)
+    in
+        if tem({"bilhoes", "bilhao", "bi"}) then 1000000000
+        else if tem({"milhoes", "milhao", "mi"}) then 1000000
+        else if tem({"mil", "milhares"}) then 1000
+        else 1
+"""
+
+# fix_mojibake: desfaz até duas camadas de UTF-8 lido como cp1252/Latin-1.
+# Texto que não volta inteiro (bytes que não são UTF-8) fica como está.
+MOJIBAKE = """
+(v as any) as any =>
+    if not (v is text) then v
+    else
+    let
+        marcas = {"Ã", "Â", "â€"},
+        temMarca = (t as text) as logical => List.AnyTrue(List.Transform(marcas, (m) => Text.Contains(t, m))),
+        desfaz = (t as text, pagina as number) as nullable text =>
+            let
+                bytes = Text.ToBinary(t, pagina),
+                utf8 = Text.FromBinary(bytes, TextEncoding.Utf8)
+            in
+                if Text.FromBinary(bytes, pagina) <> t or Text.Contains(utf8, "#(FFFD)") then null else utf8,
+        passo = (t as text) as nullable text => let a = desfaz(t, 1252) in if a <> null then a else desfaz(t, 28591),
+        r1 = if temMarca(v) then passo(v) else null,
+        t1 = if r1 = null then v else r1,
+        r2 = if r1 <> null and r1 <> v and temMarca(t1) then passo(t1) else null
+    in
+        if r2 = null then t1 else r2
+"""
+
+# strip_footnote_marks: tira a marca de nota do fim ('Abacaxi*', 'Total²', 'Receita (1)').
+NOTA_RODAPE = f"""
+(v as any) as any =>
+    if not (v is text) then v
+    else
+    let
+        t = Text.TrimEnd(v),
+        n = Text.Length(t),
+        sufixo = (conjunto as list) as number =>
+            List.Count(List.FirstN(List.Reverse(Text.ToList(t)), each List.Contains(conjunto, _))),
+        digito = (i as number) as logical => List.Contains({{"0".."9"}}, Text.Middle(t, i, 1)),
+        asteriscos = sufixo({{"*"}}),
+        sobrescritos = sufixo({m_list(list("¹²³⁴⁵⁶⁷⁸⁹⁰"))}),
+        parenteses =
+            if n >= 3 and Text.EndsWith(t, ")") and Text.Middle(t, n - 3, 1) = "(" and digito(n - 2) then 3
+            else if n >= 4 and Text.EndsWith(t, ")") and Text.Middle(t, n - 4, 1) = "(" and digito(n - 3) and digito(n - 2)
+            then 4
+            else 0,
+        corte = if asteriscos > 0 then asteriscos else if sobrescritos > 0 then sobrescritos else parenteses
+    in
+        if corte = 0 then v else Text.TrimEnd(Text.Start(t, n - corte))
+"""

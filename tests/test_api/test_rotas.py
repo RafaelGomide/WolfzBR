@@ -11,6 +11,7 @@ import wolfz
 from wolfz.api.security import Settings
 from wolfz.core.recipe import load_recipe, recipe_from_dict
 from wolfz.core.workspace import Workspace
+from wolfz.export.m import m_text
 
 # ---------------------------------------------------------------------------
 # Projetos
@@ -397,8 +398,8 @@ def test_exportar_pedido_invalido(client, projeto, pedido, trecho):
 
 def test_catalogo_de_operacoes(client):
     ops = {o["op"]: o for o in client.get("/api/ops").json()}
-    # Os testes de receita registram operações extras ("teste_…"); as do WolfzBR são 31.
-    assert len([o for o in ops if not o.startswith("teste_")]) == 31
+    # Os testes de receita registram operações extras ("teste_…"); as do WolfzBR são 39.
+    assert len([o for o in ops if not o.startswith("teste_")]) == 39
     assert ops["parse_brl"]["schema"]["properties"]["cols"]["type"] == "array"
     assert ops["sort"]["full_checkpoint"] is True and ops["rename"]["full_checkpoint"] is False
     assert ops["select_range"]["examples"] and ops["trim"]["doc"]
@@ -442,3 +443,83 @@ def test_erro_inesperado_nao_vaza_detalhe(settings, monkeypatch):
     assert r.status_code == 500
     assert "CPF" not in r.text
     assert r.json()["title"] == "Erro interno"
+
+
+# ---------------------------------------------------------------------------
+# Municípios: revisão e de-para (F2.C4, F2.C5)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def projeto_municipios(client):
+    r = enviar(client, "_fixtures", "municipios_digitados.csv")
+    assert r.status_code == 201, r.text
+    projeto = r.json()
+    receita = projeto["recipe"]
+    receita["steps"].append({"id": "s3", "op": "normalize_municipio", "col": "municipio", "uf_col": "uf"})
+    r = client.put(_url(projeto, "recipe"), json=receita, headers={"If-Match": projeto["etag"]})
+    assert r.status_code == 200, r.text
+    return {**projeto, "recipe": r.json()["recipe"], "etag": r.json()["etag"]}
+
+
+def test_revisar_municipios(client, projeto_municipios):
+    r = client.get(_url(projeto_municipios, "steps/s3/municipios"))
+    assert r.status_code == 200, r.text
+    itens = r.json()
+    assert itens[0]["valor"] == "Guarapary"
+    assert itens[0]["status"] == "revisar"
+    assert itens[0]["linhas"] == 2
+    assert itens[0]["chave"] == "Guarapary|ES"
+    assert itens[0]["sugestoes"][0]["nome"] == "Guarapari"
+    assert {i["valor"]: i["status"] for i in itens} == {
+        "Guarapary": "revisar",
+        "Linhars": "fuzzy",
+        "V. Velha": "abreviacao",
+        "Serra": "exato",
+        "Vitória": "exato",
+    }
+
+
+def test_revisar_municipios_depois_de_aceitar(client, projeto_municipios):
+    receita = projeto_municipios["recipe"]
+    receita["steps"][-1]["manual"] = {"Guarapary|ES": "3202405"}
+    r = client.put(
+        _url(projeto_municipios, "recipe"), json=receita, headers={"If-Match": projeto_municipios["etag"]}
+    )
+    assert r.status_code == 200, r.text
+    itens = client.get(_url(projeto_municipios, "steps/s3/municipios")).json()
+    guarapary = next(i for i in itens if i["valor"] == "Guarapary")
+    assert (guarapary["status"], guarapary["nome_ibge"]) == ("manual", "Guarapari")
+
+
+def test_revisar_passo_que_nao_e_de_municipio(client, projeto_municipios):
+    assert client.get(_url(projeto_municipios, "steps/s1/municipios")).status_code == 422
+    assert client.get(_url(projeto_municipios, "steps/s9/municipios")).status_code == 404
+
+
+def test_buscar_municipios(client):
+    r = client.get("/api/municipios", params={"q": "vila v", "uf": "ES"})
+    assert r.status_code == 200
+    achados = {(m["codigo_ibge"], m["nome"], m["uf"]) for m in r.json()}
+    assert ("3205200", "Vila Velha", "ES") in achados
+    assert all(uf == "ES" for _, _, uf in achados)
+    assert client.get("/api/municipios", params={"q": ""}).status_code == 422
+
+
+def test_exportar_com_depara(client, projeto_municipios, tmp_path):
+    pedido = {"formats": ["powerquery", "python"], "output_dir": str(tmp_path)}
+    r = client.post(_url(projeto_municipios, "exports"), json=pedido)
+    assert r.status_code == 200, r.text
+    nomes = sorted(Path(f).name for f in r.json()["files"])
+    assert nomes == [
+        "depara_municipios.csv",
+        "fixtures.CaminhoArquivo.pq",
+        "fixtures.CaminhoDeparaMunicipios.pq",
+        "fixtures.pq",
+        "fixtures.py",
+    ]
+    depara = pl.read_csv(tmp_path / "depara_municipios.csv", separator=";", infer_schema=False)
+    assert depara.height == 5
+    parametro = (tmp_path / "fixtures.CaminhoDeparaMunicipios.pq").read_text(encoding="utf-8")
+    assert m_text(str(tmp_path / "depara_municipios.csv")) in parametro
+    assert "CaminhoDeparaMunicipios" in (tmp_path / "fixtures.pq").read_text(encoding="utf-8")

@@ -79,11 +79,15 @@ OPERACOES_PLANEJADAS = {
     "fill_null",
     "sort",
     "unpivot",
-    # Depois da F1 (funções de wolfz.br que ainda não viraram operação)
-    "parse_ibge",
+    # F2.C
+    "parse_ibge_value",
     "clean_cpf_cnpj",
     "fix_mojibake",
-    "strip_footnote_marks",
+    "strip_footnotes",
+    "clean_phone",
+    "split_municipio_uf",
+    "scale_by_unit",
+    "normalize_municipio",
 }
 
 CAMPOS_FONTE = {

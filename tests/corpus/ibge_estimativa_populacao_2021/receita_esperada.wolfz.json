@@ -48,7 +48,7 @@
         "populacao"
       ],
       "id": "s6",
-      "op": "strip_footnote_marks"
+      "op": "strip_footnotes"
     },
     {
       "cols": [

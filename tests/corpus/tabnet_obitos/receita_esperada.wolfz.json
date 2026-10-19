@@ -52,7 +52,8 @@
         "ano_2023"
       ],
       "id": "s6",
-      "op": "parse_ibge"
+      "op": "parse_ibge_value",
+      "status": false
     },
     {
       "id": "s7",

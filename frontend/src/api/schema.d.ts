@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+  "/api/municipios": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Buscar Municipios
+     * @description Busca na lista do IBGE, para a correção manual.
+     */
+    get: operations["buscar_municipios_api_municipios_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/ops": {
     parameters: {
       query?: never;
@@ -135,6 +155,29 @@ export interface paths {
      *     chama a cada edição, e a gravação é atômica.
      */
     put: operations["salvar_receita_api_projects__project_id__recipe_put"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/projects/{project_id}/steps/{step_id}/municipios": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Revisar Municipios
+     * @description Valores distintos que chegam a um passo ``normalize_municipio``,
+     *     com o casamento atual e sugestões: primeiro os que precisam de
+     *     revisão. Aceitar ou corrigir é editar o ``manual`` do passo
+     *     (``PUT /recipe``).
+     */
+    get: operations["revisar_municipios_api_projects__project_id__steps__step_id__municipios_get"];
+    put?: never;
     post?: never;
     delete?: never;
     options?: never;
@@ -321,6 +364,45 @@ export interface components {
     HTTPValidationError: {
       /** Detail */
       detail?: components["schemas"]["ValidationError"][];
+    };
+    /**
+     * ItemRevisaoMunicipio
+     * @description Valor distinto de uma coluna de município, com o casamento atual.
+     */
+    ItemRevisaoMunicipio: {
+      /** Chave */
+      chave: string;
+      /** Codigo Ibge */
+      codigo_ibge?: string | null;
+      /** Linhas */
+      linhas: number;
+      /** Nome Ibge */
+      nome_ibge?: string | null;
+      /** Nota */
+      nota?: number | null;
+      /** Status */
+      status: string;
+      /** Sugestoes */
+      sugestoes: components["schemas"]["Municipio"][];
+      /** Uf */
+      uf?: string | null;
+      /** Valor */
+      valor: string;
+    } & {
+      [key: string]: unknown;
+    };
+    /** Municipio */
+    Municipio: {
+      /** Codigo Ibge */
+      codigo_ibge: string;
+      /** Nome */
+      nome: string;
+      /** Nota */
+      nota?: number | null;
+      /** Uf */
+      uf: string;
+    } & {
+      [key: string]: unknown;
     };
     /** Operacao */
     Operacao: {
@@ -543,6 +625,41 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  buscar_municipios_api_municipios_get: {
+    parameters: {
+      query: {
+        /** @description Começo ou parte do nome. */
+        q: string;
+        /** @description Sigla ou nome da UF. */
+        uf?: string | null;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Municipio"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
   catalogo_api_ops_get: {
     parameters: {
       query?: never;
@@ -843,6 +960,38 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ReceitaSalva"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  revisar_municipios_api_projects__project_id__steps__step_id__municipios_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        project_id: string;
+        step_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ItemRevisaoMunicipio"][];
         };
       };
       /** @description Validation Error */

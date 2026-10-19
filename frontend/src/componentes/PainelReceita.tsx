@@ -8,11 +8,13 @@ import { T } from "../textos";
 import { ativo, mover, nomeOp, novoId, resumo } from "../util/receita";
 import { passoNovo } from "../util/schema";
 import { FormPasso } from "./FormPasso";
+import { RevisaoMunicipios } from "./RevisaoMunicipios";
 
 type Modo =
   | { tipo: "escolher" }
   | { tipo: "novo"; passo: Passo; posicao: number }
   | { tipo: "editar"; id: string }
+  | { tipo: "revisar"; id: string }
   | null;
 
 function errosDoPasso(erro: unknown, id: string): string[] | undefined {
@@ -68,6 +70,7 @@ function EscolherOp({
 }
 
 export function PainelReceita({
+  projetoId,
   receita,
   ops,
   selecionado,
@@ -77,6 +80,7 @@ export function PainelReceita({
   colunasDepois,
   salvar,
 }: {
+  projetoId: string;
   receita: Receita;
   ops: Operacao[];
   selecionado: string | null;
@@ -218,6 +222,18 @@ export function PainelReceita({
                 >
                   {T.receita.editar}
                 </button>
+                {p.op === "normalize_municipio" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      aoSelecionar(p.id);
+                      setModo({ tipo: "revisar", id: p.id });
+                    }}
+                    disabled={modo !== null}
+                  >
+                    {T.municipios.revisar}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() =>
@@ -270,6 +286,19 @@ export function PainelReceita({
                     </>
                   )}
                 </div>
+              )}
+              {modo?.tipo === "revisar" && modo.id === p.id && (
+                <RevisaoMunicipios
+                  projetoId={projetoId}
+                  passo={p}
+                  salvarManual={(manual) =>
+                    salvar({
+                      ...receita,
+                      steps: passos.map((x) => (x.id === p.id ? { ...x, manual } : x)),
+                    })
+                  }
+                  aoFechar={() => setModo(null)}
+                />
               )}
               {editando?.id === p.id && porOp.get(p.op) && (
                 <FormPasso

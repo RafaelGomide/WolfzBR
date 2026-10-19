@@ -58,6 +58,10 @@ class Op(_Model, ABC):
     # Nome do passo na consulta M, no estilo do Power Query ("Colunas renomeadas").
     # Vazio: usa o nome da operação.
     m_label: ClassVar[str] = ""
+    # Parâmetros M (consultas à parte) que o passo usa, além de CaminhoArquivo.
+    m_parameters: ClassVar[tuple[str, ...]] = ()
+    # Constantes do script Python exportado que o passo usa: nome -> expressão.
+    python_constants: ClassVar[dict[str, str]] = {}
     # Exemplos para o teste de equivalência e para a documentação. Cada um é
     # {"step": parâmetros do passo, "input": colunas de entrada} e, opcional,
     # "expected": colunas esperadas na saída. Toda operação do catálogo

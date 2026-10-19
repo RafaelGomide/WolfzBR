@@ -8,6 +8,7 @@ entra aqui sozinha. Operação sem exemplo reprova.
 import os
 import subprocess
 import sys
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal, get_args, get_origin
@@ -20,6 +21,7 @@ from polars.testing import assert_frame_equal
 
 import wolfz.ops  # noqa: F401  (registra o catálogo)
 from wolfz.core.recipe import Recipe, Source, recipe_from_dict, registered_ops
+from wolfz.export.depara import ARQUIVO_DEPARA, depara_municipios, gravar_depara
 from wolfz.export.m import recipe_to_m
 from wolfz.export.python import recipe_to_python
 
@@ -50,9 +52,16 @@ def _step(cls, example, step_id="s1"):
 
 
 def _run_script(recipe: Recipe, df: pl.DataFrame) -> pl.DataFrame:
-    namespace: dict = {}
-    exec(compile(recipe_to_python(recipe), "<script exportado>", "exec"), namespace)
-    return namespace["transform"](df.lazy()).collect()
+    """Roda o script exportado. Se a receita usa de-para (ADR-7), ele é
+    gerado a partir da mesma entrada e gravado ao lado do "script", como a
+    exportação faz."""
+    with tempfile.TemporaryDirectory() as pasta:
+        namespace: dict = {"__file__": str(Path(pasta) / "limpeza.py")}
+        depara = depara_municipios(recipe, df.lazy())
+        if depara is not None:
+            gravar_depara(depara, Path(pasta) / ARQUIVO_DEPARA)
+        exec(compile(recipe_to_python(recipe), "<script exportado>", "exec"), namespace)
+        return namespace["transform"](df.lazy()).collect()
 
 
 def test_catalogo_nao_esta_vazio():

@@ -27,6 +27,7 @@ from wolfz.api import modelos as m
 from wolfz.api.problems import Problem
 from wolfz.api.projetos import Projetos
 from wolfz.api.security import Settings
+from wolfz.br.municipios import buscar
 from wolfz.core.detect import detect_structure
 from wolfz.core.engine import collect, run
 from wolfz.core.engine.preview import LIMITE_PAGINA, preview_project
@@ -44,8 +45,10 @@ from wolfz.export.dados import (
     escritor,
     gravar_juntos,
 )
+from wolfz.export.depara import ARQUIVO_DEPARA, depara_municipios, gravar_depara
 from wolfz.export.m import PARAMETRO, parameter_to_m, recipe_to_m, source_from_project
 from wolfz.export.python import recipe_to_python
+from wolfz.ops.municipio import PARAMETRO_DEPARA
 
 RECIPE_FILE = "recipe.wolfz.json"
 DETECTION_FILE = "detection.json"
@@ -282,6 +285,44 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
         return pagina.to_dict()
 
     # -----------------------------------------------------------------------
+    # Revisão de municípios (F2.C4)
+    # -----------------------------------------------------------------------
+
+    @api.get(
+        "/projects/{project_id}/steps/{step_id}/municipios",
+        response_model=list[m.ItemRevisaoMunicipio],
+    )
+    def revisar_municipios(project_id: str, step_id: str) -> list[dict[str, Any]]:
+        """Valores distintos que chegam a um passo ``normalize_municipio``,
+        com o casamento atual e sugestões: primeiro os que precisam de
+        revisão. Aceitar ou corrigir é editar o ``manual`` do passo
+        (``PUT /recipe``)."""
+        pasta = projetos.abrir(project_id)
+        atual = receita(pasta)
+        ids = [s.id for s in atual.steps]
+        if step_id not in ids:
+            raise Problem(404, f"A receita não tem o passo {step_id!r}.", title="Passo não encontrado")
+        passo = atual.steps[ids.index(step_id)]
+        if passo.op != "normalize_municipio":
+            raise Problem(422, f"O passo {step_id} não é de município ({passo.op}).")
+        antes = [s for s in atual.steps[: ids.index(step_id)] if s.enabled]
+        with projetos.lock_preview(project_id):
+            entrada = collect(atual.model_copy(update={"steps": antes}), pl.scan_parquet(pasta / RAW_FILE))
+            return passo.revisao(entrada.lazy())  # type: ignore[attr-defined]
+
+    @api.get("/municipios", response_model=list[m.Municipio])
+    def buscar_municipios(
+        q: Annotated[str, Query(min_length=1, description="Começo ou parte do nome.")],
+        uf: Annotated[str | None, Query(description="Sigla ou nome da UF.")] = None,
+        limit: Annotated[int, Query(ge=1, le=50)] = 10,
+    ) -> list[dict[str, Any]]:
+        """Busca na lista do IBGE, para a correção manual."""
+        return [
+            {"codigo_ibge": mun.codigo, "nome": mun.nome, "uf": mun.uf, "nota": nota}
+            for mun, nota in buscar(q, uf, limit)
+        ]
+
+    # -----------------------------------------------------------------------
     # Exportação
     # -----------------------------------------------------------------------
 
@@ -305,6 +346,12 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
         if "powerquery" in alvos:
             # O parâmetro CaminhoArquivo vai num arquivo à parte (F2.A3).
             alvos["powerquery_parametro"] = saida / f"{base}.{PARAMETRO}.pq"
+        # Município casado por fuzzy: o M e o script fazem join com o de-para (ADR-7, F2.C5).
+        usa_depara = any(s.op == "normalize_municipio" for s in atual.active_steps)
+        if usa_depara and {"powerquery", "python"} & set(alvos):
+            alvos["depara"] = saida / ARQUIVO_DEPARA
+            if "powerquery" in alvos:
+                alvos["powerquery_depara"] = saida / f"{base}.{PARAMETRO_DEPARA}.pq"
         existentes = [str(p) for p in alvos.values() if p.exists()]
         if existentes and not pedido.overwrite:
             raise Problem(
@@ -331,6 +378,12 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
                 # Arquivo enviado por upload não tem caminho: fica o nome, para o usuário completar.
                 caminho = projeto["source"].get("path") or rf"C:\caminho\para\{projeto['source']['name']}"
                 escritas[alvo] = partial(_escrever_texto, parameter_to_m(caminho, atual.name))
+            elif fmt == "powerquery_depara":
+                texto = parameter_to_m(str(alvos["depara"]), atual.name, PARAMETRO_DEPARA)
+                escritas[alvo] = partial(_escrever_texto, texto)
+            elif fmt == "depara":
+                depara = depara_municipios(atual, pl.scan_parquet(pasta / RAW_FILE))
+                escritas[alvo] = partial(gravar_depara, depara)
             else:
                 escritas[alvo] = partial(_escrever_texto, recipe_to_python(atual))
         try:

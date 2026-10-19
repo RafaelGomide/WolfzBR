@@ -6,6 +6,18 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 
 ## [Não publicado]
 
+### Adicionado
+
+- Lista oficial de municípios do IBGE empacotada (`wolfz/br/data/municipios.parquet`: código de 7 e de 6 dígitos, nome oficial, nome normalizado, UF), gerada por `scripts/atualizar_municipios.py` a partir da API de localidades. Fonte e data da extração no `NOTICE`, que passa a ir no pacote.
+- `normalize_municipio`: casa o nome digitado com a lista do IBGE (exato, abreviações como `V. Velha`, `Sto.`, `S.`, e parecido com `rapidfuzz`, restrito à UF quando há coluna de UF) e cria `<coluna>_codigo_ibge`, `<coluna>_nome_ibge` e `<coluna>_status`. Abaixo do limiar, ou com o mesmo nome em mais de uma UF, fica `revisar`, sem código: nada é aplicado em silêncio. As decisões da revisão vão para o `manual` do passo.
+- Interface: revisão dos municípios ("Revisar municípios" no passo), com sugestões, aceitar, corrigir buscando na lista do IBGE, marcar que não é município e desfazer. API: `GET /projects/{id}/steps/{step}/municipios` e `GET /municipios`.
+- Exportação do de-para (`depara_municipios.csv`) junto com o M e o script Python (ADR-7). O M lê o de-para pelo parâmetro `CaminhoDeparaMunicipios` (exportado em `<nome>.CaminhoDeparaMunicipios.pq`) e faz join exato; município que não está no de-para fica com status `fora_do_depara`, a linha não some.
+- Operações novas: `clean_phone` (E.164), `clean_cpf_cnpj` (com a coluna de tipo de pessoa), `split_municipio_uf`, `parse_ibge_value` (com a coluna `<coluna>_situacao`), `scale_by_unit`, `fix_mojibake` e `strip_footnotes`, cada uma em Polars, M e script Python.
+
+### Corrigido
+
+- Receitas do corpus que esperavam estas operações passam a rodar e a bater com o gabarito; as três tabelas sintéticas do SIDRA ganharam fim explícito no recorte, porque a legenda vem logo abaixo dos dados, sem linha em branco.
+
 ## [0.5.0] - 2026-10-18
 
 A receita vira Power Query e Python de verdade: o `.pq` exportado é uma consulta que lê o arquivo de origem e roda sozinha no Power BI (validada no Power BI Desktop com 5 arquivos do corpus), e o script Python lê planilha e CSV do mesmo jeito que o WolfzBR, sem depender dele.

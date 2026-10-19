@@ -171,3 +171,29 @@ test("lista digitada com vírgulas vira vários valores (Remover linhas, in)", a
   await expect(passo(page, "s3")).toContainText("1.1.1.2.50.0.0, 1.1.1.3.03.1.0");
   await expect(grade(page, "Depois de s3")).toHaveAttribute("data-total", "10");
 });
+
+test("revisão de municípios: aceitar a sugestão grava na receita", async ({ page }) => {
+  await abrir(page);
+  await importar(page, arquivo("_fixtures", "municipios_digitados.csv"));
+  await esperarProjeto(page, "fixtures.csv");
+
+  await adicionarPasso(page, "normalize_municipio", "Município do IBGE");
+  const form = page.getByRole("form", { name: "Novo passo" });
+  await form.getByRole("combobox", { name: "Coluna", exact: true }).fill("municipio");
+  await form.getByRole("combobox", { name: "Coluna da UF" }).fill("uf");
+  await form.getByRole("button", { name: "Aplicar" }).click();
+
+  const s3 = passo(page, "s3");
+  await s3.getByRole("button", { name: "Revisar municípios" }).click();
+  const revisao = page.getByRole("region", { name: "Municípios do passo s3" });
+  await expect(revisao).toContainText("1 valor precisa de revisão.");
+  const item = revisao.locator(".item-municipio", { hasText: "Guarapary" });
+  await expect(item).toContainText("2 linhas");
+  await item.getByRole("button", { name: /Aceitar Guarapari \(ES\)/ }).click();
+
+  await expect(revisao).toContainText("Nada pendente de revisão.");
+  await expect(revisao.locator(".item-municipio", { hasText: "Guarapary" })).toContainText(
+    "decidido por você",
+  );
+  await expect(grade(page, "Depois de s3")).toHaveAttribute("data-total", "6");
+});

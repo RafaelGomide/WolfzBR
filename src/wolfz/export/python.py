@@ -186,6 +186,13 @@ def recipe_to_python(recipe: Recipe, today: date | None = None) -> str:
         f"ABA_REGEX = {match.sheet_name_regex if match else None!r}",
         f"GRADE = {grade!r}  # CSV lido como grade (A, B, ...) e não com cabeçalho",
     ]
+    extras = {k: v for step in steps for k, v in step.python_constants.items()}
+    if extras:
+        constants += [
+            "",
+            "# Arquivos exportados junto com o script",
+            *(f"{k} = {v}" for k, v in extras.items()),
+        ]
 
     body = []
     for step in steps:

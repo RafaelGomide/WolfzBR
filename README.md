@@ -88,14 +88,20 @@ Tableau (`.hyper`) e projeto do Power BI (`.pbip`) estão previstos para versõe
 
 ## Padrões brasileiros
 
-O catálogo tem 31 operações: estrutura (área, cabeçalho, linhas e colunas vazias, preencher para baixo, despivotar), colunas, texto e padrões brasileiros. Os padrões cobrem:
+O catálogo tem 39 operações: estrutura (área, cabeçalho, linhas e colunas vazias, preencher para baixo, despivotar), colunas, texto e padrões brasileiros. Os padrões cobrem:
 
-- números (`1.234,56`, `(1,5)`, `10-` do SAP, `R$`);
+- números (`1.234,56`, `(1,5)`, `10-` do SAP, `R$`) e a escala da unidade ("Mil Reais");
+- valores do IBGE com os sinais `-`, `..`, `...` e `X`, sem virar zero o que não é zero;
 - percentual, datas e mês/ano;
 - sim/não;
-- CPF, CNPJ (inclusive o alfanumérico), CEP e UF.
+- CPF, CNPJ (inclusive o alfanumérico), coluna com CPF ou CNPJ, CEP, telefone e UF;
+- município e UF no mesmo campo ("Vitória - ES");
+- **município do IBGE**: casa o nome digitado com a lista oficial (exato, abreviação como "V. Velha" e parecido), com o código de 7 dígitos. O que não casa com segurança fica para você revisar na tela; nada é trocado em silêncio;
+- acento estragado (`SÃ£o Paulo`) e marca de nota de rodapé (`Abacaxi*`).
 
-Cada operação tem a mesma regra no motor (Polars), no M e no script Python, com teste de equivalência.
+Cada operação tem a mesma regra no motor (Polars), no M e no script Python, com teste de equivalência. A exceção é o casamento de municípios por semelhança, que o M não sabe fazer: a exportação leva junto a tabela de-para (`depara_municipios.csv`) e o M e o script fazem a ligação exata com ela.
+
+A lista de municípios vem da API de localidades do IBGE e fica dentro do pacote (funciona sem internet); fonte e data no [NOTICE](NOTICE).
 
 ## Limites
 
