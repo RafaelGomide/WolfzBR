@@ -11,8 +11,12 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import threading
+import time
+from collections.abc import Callable
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 
 from filelock import FileLock, Timeout
@@ -22,6 +26,23 @@ from wolfz.core.engine.cache import projeto_travado
 from wolfz.core.workspace import PROJECT_FILE, Workspace
 
 LOCK_META = ".lock.json"
+TENTATIVAS_APAGAR = 40  # x 50 ms: até 2 s esperando outro handle do .lock fechar
+
+
+def _tentando(acao: Callable[[], object]) -> None:
+    """Apaga esperando o compartilhamento do Windows: um arquivo aberto por
+    outra thread ("já está sendo usado por outro processo"), como o
+    ``project.json`` que a listagem está lendo, fecha em milissegundos."""
+    for tentativa in range(TENTATIVAS_APAGAR):
+        try:
+            acao()
+            return
+        except FileNotFoundError:
+            return
+        except PermissionError:
+            if tentativa == TENTATIVAS_APAGAR - 1:
+                raise
+            time.sleep(0.05)
 
 
 class Projetos:
@@ -49,7 +70,11 @@ class Projetos:
         with self._mutex:
             if project_id in self._locks:
                 return pasta
-            lock = FileLock(pasta / ".lock")
+            # thread_local=False: o projeto é aberto numa thread de requisição e
+            # fechado em outra (o servidor atende num pool de threads). Com o
+            # padrão do filelock (por thread), o release da outra thread não
+            # faz nada e o .lock fica preso até o processo morrer.
+            lock = FileLock(pasta / ".lock", thread_local=False)
             try:
                 lock.acquire(timeout=0)
             except Timeout as exc:
@@ -83,6 +108,25 @@ class Projetos:
             pasta = Path(lock.lock_file).parent
             (pasta / LOCK_META).unlink(missing_ok=True)
             lock.release()
+
+    def apagar(self, project_id: str) -> None:
+        """Apaga o projeto (423 se está aberto em outra instância).
+
+        No Windows, arquivo aberto em outra thread não pode ser apagado, e a
+        listagem de projetos lê o ``project.json`` e abre o ``.lock`` de cada
+        um. Por isso: com o lock ainda seguro, apaga o conteúdo, começando
+        pelo ``project.json`` (a listagem para de ver o projeto); depois
+        solta o lock e remove o resto. Cada remoção tenta de novo por um
+        instante se outro handle ainda estiver aberto."""
+        pasta = self.abrir(project_id)
+        with self.lock_preview(project_id):
+            _tentando((pasta / PROJECT_FILE).unlink)
+            for item in list(pasta.iterdir()):
+                if item.name in (".lock", LOCK_META):
+                    continue
+                _tentando(partial(shutil.rmtree, item) if item.is_dir() else item.unlink)
+        self.fechar(project_id)
+        _tentando(partial(shutil.rmtree, pasta))
 
     def fechar_todos(self) -> None:
         for project_id in list(self._locks):

@@ -4,7 +4,7 @@ import io
 import socket
 
 import pytest
-from apoio_api import PORTA, TOKEN, cliente
+from apoio_api import PORTA, TOKEN, cliente, enviar
 from fastapi import UploadFile
 
 from wolfz.api.problems import Problem
@@ -172,3 +172,76 @@ def test_upload_dentro_do_limite_passa(tmp_path):
     with cliente(settings) as c:
         r = c.post("/api/projects", files={"file": ("x.csv", b"a;b\n1;2\n", "text/csv")})
     assert r.status_code == 201, r.text
+
+
+def test_lock_aberto_numa_thread_e_fechado_em_outra(tmp_path):
+    """O servidor atende num pool de threads: o projeto é aberto numa
+    requisição e fechado (ou apagado) em outra. O lock tem de soltar de
+    verdade. Com o filelock por thread, o release da outra thread não fazia
+    nada: o projeto aparecia "aberto em outra janela" no próprio servidor e
+    o Windows não deixava apagar o .lock ("já está sendo usado por outro
+    processo")."""
+    import shutil
+    import threading
+
+    from wolfz.api.projetos import Projetos
+    from wolfz.core.engine.cache import projeto_travado
+    from wolfz.core.workspace import PROJECT_FILE, Workspace
+
+    ws = Workspace(tmp_path / "home")
+    project_id, pasta = ws.new_project()
+    (pasta / PROJECT_FILE).write_text("{}", encoding="utf-8")
+    projetos = Projetos(ws, 8765)
+
+    # A thread que abriu continua viva, como as do pool: se ela morresse, o
+    # filelock fecharia o arquivo sozinho e o bug não apareceria.
+    aberto, fim = threading.Event(), threading.Event()
+
+    def abrir_e_esperar():
+        projetos.abrir(project_id)
+        aberto.set()
+        fim.wait(10)
+
+    dona = threading.Thread(target=abrir_e_esperar)
+    dona.start()
+    try:
+        aberto.wait(10)
+        # Outra referência ao lock, como as que o servidor mantém (o filelock
+        # só solta a posse de outra thread quando o último objeto some).
+        referencia = projetos._locks[project_id]
+        fechar = threading.Thread(target=projetos.fechar, args=(project_id,))
+        fechar.start()
+        fechar.join()
+        assert not projeto_travado(pasta)
+        assert not projetos.aberto_em_outra(project_id, pasta)
+        shutil.rmtree(pasta)  # o WinError 32 do relato aparecia aqui
+        del referencia
+    finally:
+        fim.set()
+        dona.join()
+
+
+def test_apagar_enquanto_a_listagem_le_os_projetos(client):
+    """Apagar enquanto outra requisição lista os projetos (lê o project.json
+    e abre o .lock de cada um) não pode falhar no Windows."""
+    import threading
+
+    parar, erros = threading.Event(), []
+
+    def listar():
+        while not parar.is_set():
+            r = client.get("/api/projects")
+            if r.status_code != 200:
+                erros.append(r.text)
+
+    t = threading.Thread(target=listar)
+    t.start()
+    try:
+        for _ in range(8):
+            pid = enviar(client).json()["id"]
+            r = client.delete(f"/api/projects/{pid}")
+            assert r.status_code == 204, r.text
+    finally:
+        parar.set()
+        t.join()
+    assert not erros

@@ -13,6 +13,10 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 - API: `GET /projects/{id}/suggestions` e `POST /projects/{id}/suggestions/rejections`.
 - Uma regra que falha vai para o log (`wolfz.suggest`) e é ignorada; as outras continuam.
 
+### Corrigido
+
+- No Windows, apagar um projeto falhava com "o arquivo já está sendo usado por outro processo" (`.lock`) e o projeto ficava marcado como "aberto em outra janela" até fechar o WolfzBR. O lock do projeto era por thread (padrão do `filelock`): aberto numa requisição e fechado em outra, ele não soltava. Agora o lock vale para o processo, e apagar tira primeiro o conteúdo do projeto e tenta de novo por um instante se a listagem estiver lendo os arquivos no mesmo momento.
+
 ## [0.6.0] - 2026-10-18
 
 Pacote brasileiro completo: município casado com a lista oficial do IBGE (com revisão na tela e de-para exportado para o Power BI), sete operações novas de padrões brasileiros e a detecção v2, que reconhece cabeçalho em vários níveis, subtotais pela soma e mais de uma tabela na mesma aba.

@@ -199,9 +199,7 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
 
     @api.delete("/projects/{project_id}", status_code=204)
     def apagar_projeto(project_id: str) -> Response:
-        pasta = projetos.abrir(project_id)  # 423 se estiver aberto em outra instância
-        projetos.fechar(project_id)
-        shutil.rmtree(pasta)
+        projetos.apagar(project_id)  # 423 se estiver aberto em outra instância
         return Response(status_code=204)
 
     @api.get("/projects/{project_id}/structure", response_model=m.Estrutura)
