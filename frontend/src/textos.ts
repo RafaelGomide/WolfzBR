@@ -53,6 +53,12 @@ export const T = {
       linhas == null ? "" : `${linhas.toLocaleString("pt-BR")} × ${colunas ?? "?"}`,
     importar: "Importar esta aba",
   },
+  tema: {
+    nomes: { auto: "automático", claro: "claro", escuro: "escuro" },
+    botao: (nome: string) => `Tema: ${nome}`,
+    dica: (atual: string, proximo: string) =>
+      `Tema ${atual}. Clique para usar o ${proximo}. O automático segue o sistema.`,
+  },
   projeto: {
     aba: (aba: string) => `aba ${aba}`,
     exportar: "Exportar",

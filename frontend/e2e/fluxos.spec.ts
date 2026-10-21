@@ -280,3 +280,32 @@ test("aba da fonte: definir o padrão para o arquivo do mês seguinte", async ({
   await esperarProjeto(page, "receita_municipal.xlsx");
   await expect(page.locator(".aba-fonte")).toContainText("(?i)Receita.*");
 });
+
+test("tema escuro fica guardado ao recarregar", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await abrir(page);
+  const html = page.locator("html");
+  const botao = page.getByRole("button", { name: /^Tema / });
+  // Automático segue o sistema (claro aqui).
+  await expect(html).toHaveAttribute("data-tema", "claro");
+  await expect(botao).toHaveText("Tema: automático");
+
+  await botao.click(); // claro
+  await botao.click(); // escuro
+  await expect(botao).toHaveText("Tema: escuro");
+  await expect(html).toHaveAttribute("data-tema", "escuro");
+  await expect(html).toHaveCSS("background-color", "rgb(15, 18, 23)");
+
+  // Recarregar: o tema vem antes do React montar (o atributo já está no
+  // primeiro HTML pintado) e continua escuro.
+  await page.reload();
+  await expect(html).toHaveAttribute("data-tema", "escuro");
+  await expect(page.getByRole("button", { name: /^Tema / })).toHaveText("Tema: escuro");
+  await expect(html).toHaveCSS("background-color", "rgb(15, 18, 23)");
+
+  // De volta ao automático: segue o sistema de novo.
+  await page.getByRole("button", { name: /^Tema / }).click();
+  await expect(html).toHaveAttribute("data-tema", "claro");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(html).toHaveAttribute("data-tema", "escuro");
+});

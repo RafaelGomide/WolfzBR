@@ -4,6 +4,7 @@
 import { useRef, useState, type DragEvent } from "react";
 import { api, chamar, formulario, type Aba, type ProjetoResumo } from "../api/cliente";
 import { CaixaErro, Carregando } from "../componentes/Estado";
+import { SeletorTema } from "../componentes/SeletorTema";
 import { T } from "../textos";
 import { irPara } from "../util/rota";
 import { useCarregar } from "../util/useCarregar";
@@ -196,6 +197,7 @@ export function Inicio() {
     <main className="inicio">
       <header className="topo">
         <h1>{T.app.nome}</h1>
+        <SeletorTema />
       </header>
       <div
         className={`area-soltar${arrastando ? " ativa" : ""}`}

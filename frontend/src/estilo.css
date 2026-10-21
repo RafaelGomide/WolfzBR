@@ -1,17 +1,32 @@
 :root {
+  /* Cores do tema claro; o escuro redefine os mesmos tokens logo abaixo. */
+  color-scheme: light;
   --fundo: #f7f8fa;
   --superficie: #ffffff;
   --borda: #dde1e7;
+  --borda-suave: #dde3ee;
   --texto: #1d2330;
   --texto-suave: #5b6472;
   --primaria: #1f5fd1;
   --primaria-texto: #ffffff;
   --erro: #b42318;
   --erro-fundo: #fef3f2;
+  --erro-borda: #fecdca;
+  --perigo-texto: #ffffff;
   --aviso: #8a5a00;
   --aviso-fundo: #fff8e6;
+  --aviso-borda: #fde4a6;
   --sucesso: #146c43;
   --sucesso-fundo: #ecfdf3;
+  --sucesso-borda: #abefc6;
+  --neutro-fundo: #eceff3;
+  --destaque-fundo: #f5f8ff;
+  --destaque-borda: #c9d7f5;
+  --realce-fundo: #eef4ff;
+  --ficha-fundo: #e8eefb;
+  --codigo-fundo: #1d2330;
+  --codigo-texto: #ffffff;
+  --veu: rgb(15 20 30 / 40%);
   --raio: 6px;
   font-family:
     system-ui,
@@ -22,6 +37,36 @@
   font-size: 14px;
   color: var(--texto);
   background: var(--fundo);
+}
+
+:root[data-tema="escuro"] {
+  color-scheme: dark;
+  --fundo: #0f1217;
+  --superficie: #171b22;
+  --borda: #343c4a;
+  --borda-suave: #2c3340;
+  --texto: #e6e9ef;
+  --texto-suave: #a3acba;
+  --primaria: #6ea2ff;
+  --primaria-texto: #0b1220;
+  --erro: #ff8a80;
+  --erro-fundo: #2d1513;
+  --erro-borda: #6b2a24;
+  --perigo-texto: #1a0705;
+  --aviso: #f5c451;
+  --aviso-fundo: #2b2108;
+  --aviso-borda: #5e4a14;
+  --sucesso: #6fdc9c;
+  --sucesso-fundo: #0e2a1c;
+  --sucesso-borda: #1f5c3c;
+  --neutro-fundo: #262c37;
+  --destaque-fundo: #161f30;
+  --destaque-borda: #2f4370;
+  --realce-fundo: #1b2a45;
+  --ficha-fundo: #24324d;
+  --codigo-fundo: #0a0d12;
+  --codigo-texto: #e6e9ef;
+  --veu: rgb(0 0 0 / 60%);
 }
 
 * {
@@ -75,7 +120,7 @@ button.primario {
 button.perigo {
   background: var(--erro);
   border-color: var(--erro);
-  color: #fff;
+  color: var(--perigo-texto);
 }
 button:focus-visible,
 input:focus-visible,
@@ -94,6 +139,7 @@ select {
   border: 1px solid var(--borda);
   border-radius: var(--raio);
   background: var(--superficie);
+  color: var(--texto);
   min-width: 0;
 }
 
@@ -103,8 +149,8 @@ pre {
   font-size: 0.9em;
 }
 pre {
-  background: #1d2330;
-  color: #fff;
+  background: var(--codigo-fundo);
+  color: var(--codigo-texto);
   padding: 0.5rem 0.75rem;
   border-radius: var(--raio);
 }
@@ -118,7 +164,7 @@ pre {
   margin-left: 0.4rem;
   padding: 0 0.4rem;
   border-radius: 999px;
-  background: #eceff3;
+  background: var(--neutro-fundo);
   color: var(--texto-suave);
   font-size: 0.8em;
   font-style: normal;
@@ -165,17 +211,17 @@ pre {
 .erro {
   background: var(--erro-fundo);
   color: var(--erro);
-  border: 1px solid #fecdca;
+  border: 1px solid var(--erro-borda);
 }
 .aviso {
   background: var(--aviso-fundo);
   color: var(--aviso);
-  border: 1px solid #fde4a6;
+  border: 1px solid var(--aviso-borda);
 }
 .sucesso {
   background: var(--sucesso-fundo);
   color: var(--sucesso);
-  border: 1px solid #abefc6;
+  border: 1px solid var(--sucesso-borda);
 }
 .spinner {
   width: 1rem;
@@ -213,6 +259,10 @@ pre {
   background: var(--superficie);
   border-bottom: 1px solid var(--borda);
 }
+.seletor-tema {
+  margin-left: auto;
+  white-space: nowrap;
+}
 
 /* Início */
 .inicio {
@@ -238,7 +288,7 @@ pre {
 }
 .area-soltar.ativa {
   border-color: var(--primaria);
-  background: #eef4ff;
+  background: var(--realce-fundo);
 }
 .inicio > .estado {
   margin: 0.5rem 1rem;
@@ -272,7 +322,7 @@ pre {
 .dialogo-fundo {
   position: fixed;
   inset: 0;
-  background: rgb(15 20 30 / 40%);
+  background: var(--veu);
   display: grid;
   place-items: center;
   padding: 1rem;
@@ -283,6 +333,7 @@ pre {
   max-height: 90vh;
   overflow: auto;
   background: var(--superficie);
+  border: 1px solid var(--borda);
   border-radius: 10px;
   padding: 1.25rem;
   display: grid;
@@ -364,7 +415,7 @@ pre {
 .abas [aria-selected="true"] {
   background: var(--primaria);
   border-color: var(--primaria);
-  color: #fff;
+  color: var(--primaria-texto);
 }
 .antes-depois {
   flex: 1;
@@ -548,7 +599,7 @@ pre {
   margin: 0.5rem 0;
   border: 1px solid var(--primaria);
   border-radius: var(--raio);
-  background: #f5f8ff;
+  background: var(--destaque-fundo);
 }
 .escolher-op ul {
   list-style: none;
@@ -591,7 +642,7 @@ pre {
   align-items: center;
   gap: 0.2rem;
   padding: 0.05rem 0.45rem;
-  background: #e8eefb;
+  background: var(--ficha-fundo);
   border-radius: 999px;
   font-size: 0.85em;
   color: var(--texto);
@@ -670,7 +721,7 @@ pre {
   margin: 0.5rem 0;
   border: 1px solid var(--primaria);
   border-radius: var(--raio);
-  background: #f5f8ff;
+  background: var(--destaque-fundo);
 }
 .revisao-municipios h3,
 .revisao-municipios p {
@@ -689,8 +740,8 @@ pre {
   display: grid;
   gap: 0.25rem;
   padding: 0.4rem 0.5rem;
-  background: #fff;
-  border: 1px solid #dde3ee;
+  background: var(--superficie);
+  border: 1px solid var(--borda-suave);
   border-radius: var(--raio);
 }
 .item-municipio.status-revisar {
@@ -751,9 +802,9 @@ pre {
   gap: 0.4rem;
   padding: 0.5rem 0.6rem;
   margin: 0.5rem 0;
-  border: 1px solid #c9d7f5;
+  border: 1px solid var(--destaque-borda);
   border-radius: var(--raio);
-  background: #f5f8ff;
+  background: var(--destaque-fundo);
 }
 .sugestoes-cabeca {
   display: flex;
@@ -780,8 +831,8 @@ pre {
   display: grid;
   gap: 0.25rem;
   padding: 0.4rem 0.5rem;
-  background: #fff;
-  border: 1px solid #dde3ee;
+  background: var(--superficie);
+  border: 1px solid var(--borda-suave);
   border-radius: var(--raio);
 }
 .sugestao-item.aviso {
@@ -827,5 +878,5 @@ pre {
   width: 100%;
 }
 .erro-texto {
-  color: #b42318;
+  color: var(--erro);
 }

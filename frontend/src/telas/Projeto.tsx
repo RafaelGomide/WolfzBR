@@ -19,6 +19,7 @@ import { Exportar } from "../componentes/Exportar";
 import { GradeDados } from "../componentes/GradeDados";
 import { PainelPerfil } from "../componentes/PainelPerfil";
 import { PainelReceita } from "../componentes/PainelReceita";
+import { SeletorTema } from "../componentes/SeletorTema";
 import { VisaoBruta } from "../componentes/VisaoBruta";
 import { T } from "../textos";
 import { novoId, passoAnterior } from "../util/receita";
@@ -194,6 +195,7 @@ function Editor({
           {salvamento.tipo === "salvando" && T.projeto.salvando}
           {salvamento.tipo === "salvo" && T.projeto.salvo}
         </span>
+        <SeletorTema />
         <button type="button" className="primario" onClick={() => setExportando(true)}>
           {T.projeto.exportar}
         </button>

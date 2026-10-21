@@ -17,11 +17,42 @@ import DataEditor, {
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { abortado, api, chamar, type Pagina } from "../api/cliente";
 import { T } from "../textos";
+import { useTema, type Tema } from "../util/tema";
 import { CaixaErro, Carregando } from "./Estado";
 
 export const PAGINA = 100;
 const MAX_POR_PEDIDO = 1000; // limite do GET /preview
 const ESPERA_MS = 80;
+
+// A grade é desenhada em canvas: não lê as variáveis do CSS, então cada tema
+// tem as suas cores aqui (as mesmas do estilo.css).
+const TEMAS: Record<Tema, Partial<Theme>> = {
+  claro: { textLight: "#6b6b78" },
+  escuro: {
+    accentColor: "#6ea2ff",
+    accentFg: "#0b1220",
+    accentLight: "rgba(110, 162, 255, 0.2)",
+    textDark: "#e6e9ef",
+    textMedium: "#a3acba",
+    textLight: "#7d8796",
+    textBubble: "#e6e9ef",
+    bgIconHeader: "#a3acba",
+    fgIconHeader: "#171b22",
+    textHeader: "#c9d0db",
+    textHeaderSelected: "#0b1220",
+    bgCell: "#171b22",
+    bgCellMedium: "#1d222b",
+    bgHeader: "#1f242d",
+    bgHeaderHasFocus: "#2a313c",
+    bgHeaderHovered: "#262c37",
+    bgBubble: "#262c37",
+    bgBubbleSelected: "#171b22",
+    bgSearchResult: "#3d300a",
+    borderColor: "rgba(163, 172, 186, 0.18)",
+    drilldownBorder: "rgba(0, 0, 0, 0)",
+    linkColor: "#8cb4ff",
+  },
+};
 
 type Coluna = Pagina["columns"][number];
 
@@ -141,6 +172,7 @@ export function GradeDados(props: PropsGrade) {
   );
 
   const { temaCelula } = props;
+  const temaGrade = TEMAS[useTema()];
   const celula = useCallback(
     ([col, linha]: Item): GridCell => {
       const pagina = paginas.current.get(Math.floor(linha / PAGINA));
@@ -195,6 +227,7 @@ export function GradeDados(props: PropsGrade) {
       {info.total === 0 && <p className="dica">{T.grade.vazia}</p>}
       <div className="grade-corpo">
         <DataEditor
+          theme={temaGrade}
           columns={colunas}
           rows={info.total}
           getCellContent={celula}

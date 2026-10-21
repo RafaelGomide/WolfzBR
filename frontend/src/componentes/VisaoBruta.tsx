@@ -9,15 +9,26 @@ import type { Deteccao, Receita } from "../api/cliente";
 import { T } from "../textos";
 import { deA1, indiceDaLetra, paraA1 } from "../util/a1";
 import { ativo } from "../util/receita";
+import { useTema, type Tema } from "../util/tema";
 import { GradeDados } from "./GradeDados";
 
+// Contraste AA (texto sobre o fundo) nos dois temas.
 const CORES = {
-  titulo: { bgCell: "#eceff3", textDark: "#5b6472" },
-  cabecalho: { bgCell: "#d6e6ff", textDark: "#0b3d91" },
-  totais: { bgCell: "#ffefc2", textDark: "#7a4a00" },
-  rodape: { bgCell: "#efe3ff", textDark: "#55308f" },
-  fora: { bgCell: "#f6f6f6", textDark: "#a0a0a0" },
-} satisfies Record<string, Partial<Theme>>;
+  claro: {
+    titulo: { bgCell: "#eceff3", textDark: "#5b6472" },
+    cabecalho: { bgCell: "#d6e6ff", textDark: "#0b3d91" },
+    totais: { bgCell: "#ffefc2", textDark: "#7a4a00" },
+    rodape: { bgCell: "#efe3ff", textDark: "#55308f" },
+    fora: { bgCell: "#f6f6f6", textDark: "#6e6e6e" },
+  },
+  escuro: {
+    titulo: { bgCell: "#262c37", textDark: "#b4bcc8" },
+    cabecalho: { bgCell: "#173159", textDark: "#bcd6ff" },
+    totais: { bgCell: "#3d300a", textDark: "#ffd98a" },
+    rodape: { bgCell: "#30234a", textDark: "#dac8ff" },
+    fora: { bgCell: "#12151a", textDark: "#8b93a0" },
+  },
+} satisfies Record<Tema, Record<string, Partial<Theme>>>;
 
 interface Area {
   l0: number;
@@ -60,18 +71,19 @@ export function VisaoBruta({
   const [selecao, setSelecao] = useState<GridSelection>(VAZIA);
   const area = useMemo(() => areaDaReceita(receita, deteccao), [receita, deteccao]);
   const totais = useMemo(() => new Set((deteccao?.totais ?? []).map((l) => l - 1)), [deteccao]);
+  const cores = CORES[useTema()];
 
   const tema = useCallback(
     (col: number, linha: number): Partial<Theme> | undefined => {
       if (!area) return undefined;
-      if (linha < area.l0) return CORES.titulo;
-      if (linha > area.l1) return CORES.rodape;
-      if (col < area.c0 || col > area.c1) return CORES.fora;
-      if (linha < area.l0 + area.cabecalho) return CORES.cabecalho;
-      if (totais.has(linha)) return CORES.totais;
+      if (linha < area.l0) return cores.titulo;
+      if (linha > area.l1) return cores.rodape;
+      if (col < area.c0 || col > area.c1) return cores.fora;
+      if (linha < area.l0 + area.cabecalho) return cores.cabecalho;
+      if (totais.has(linha)) return cores.totais;
       return undefined;
     },
-    [area, totais],
+    [area, totais, cores],
   );
 
   const r = selecao.current?.range;
@@ -121,7 +133,7 @@ export function VisaoBruta({
             <li key={k}>
               <span
                 className="amostra"
-                style={{ background: k === "dados" ? "#fff" : CORES[k].bgCell }}
+                style={{ background: k === "dados" ? "var(--superficie)" : cores[k].bgCell }}
               />
               {rotulo}
             </li>

@@ -18,6 +18,7 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 - Uma regra que falha vai para o log (`wolfz.suggest`) e é ignorada; as outras continuam.
 - Receitas reais de cada versão publicada (0.1.0 a 0.6.0) em `tests/receitas_antigas/`, gravadas pelo código de cada tag com `scripts/receitas_antigas.py`: o teste abre todas com o WolfzBR atual, passando pela migração, e confere que nenhum parâmetro se perde e que a tabela é a mesma.
 - Receita de uma versão mais nova que o WolfzBR instalado: erro próprio (`RecipeTooNewError`) com as duas versões e o comando para atualizar. Na CLI sai com código 2; na API, 422 com o título "Receita de uma versão mais nova do WolfzBR", que a tela do projeto mostra.
+- Interface: tema escuro. Por padrão segue o sistema; o botão "Tema" na barra troca entre automático, claro e escuro, e a escolha fica guardada no navegador. A grade, a visão bruta (com as cores da detecção), os painéis e os diálogos têm cores próprias para o escuro, com contraste AA nos dois temas.
 
 ### Corrigido
 
