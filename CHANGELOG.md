@@ -6,14 +6,18 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 
 ## [Não publicado]
 
+## [0.7.0] - 2026-10-21
+
+Sugestões automáticas e verificações: o WolfzBR propõe os passos com o motivo de cada um (28 regras, "aceitar todas" por etapa), a receita ganha `assert` que para o Power BI quando o arquivo do mês seguinte vem diferente, `wolfz run` processa vários arquivos de uma vez, a aba que muda de nome é achada pelo padrão e receitas de versões anteriores continuam abrindo. Interface com tema escuro.
+
 ### Adicionado
 
 - Operação `assert` (verificação): `not_null`, `unique`, `in_range` (número ou data), `matches` (expressão regular) e `row_count_min`. Não muda os dados; reprovada, a receita para com a mensagem e a primeira linha com problema ("Verificação reprovada"). O script Python faz a mesma verificação; no M vira um `error` que derruba o refresh do Power BI com a mensagem (`matches` não roda no M, que não tem expressão regular).
-- Sugestões de verificação a cada salvamento da receita: colunas 100% preenchidas viram `assert not_null`, e código ou documento sem repetição vira `assert unique`. O "aceitar todas" deixa as verificações para depois dos outros passos.
+- Sugestões de verificação a cada salvamento da receita: colunas 100% preenchidas viram `assert not_null`, e código ou documento sem repetição vira `assert unique`.
 - `wolfz run` em lote: vários arquivos ou um padrão (`"entrada/*.xlsx"`, expandido pelo próprio `wolfz`, inclusive no PowerShell), `-o` como pasta, um arquivo que falha não para os outros, tabela de resultado e `--report` em JSON.
 - Aba que muda de nome todo mês: a importação propõe `source.match.sheet_name_regex` quando o nome da aba tem mês ou número (`DEZEMBRO_2025` aceita `JANEIRO_2026`; `Plan1`, `Sheet1` e afins ficam de fora). A interface mostra e edita o padrão. No M, sem expressão regular, vale a aba com o mesmo molde do nome (mês e dígitos trocados).
-- Sugestões automáticas (`wolfz.core.suggest`): regras registradas com `@rule` olham a tabela no fim da receita e propõem passos com confiança e motivo. Catorze regras: moeda, número e data em texto (com a ordem de AAAAMMDD ou DDMMAAAA), percentual, coluna vazia, espaços extras ou invisíveis, linhas duplicadas, meses em colunas (despivotar), categoria com variação de caixa e acento, CPF e CNPJ com máscara misturada ou zeros perdidos (inclusive na mesma coluna, com o tipo de pessoa), CEP com 7 dígitos, sinais do IBGE e mojibake, mais um aviso para código com zero à esquerda que não deve virar número. Código e ID (`Cód.`, `CD_MUN`, CNPJ já limpo) não são sugeridos como número.
-- Interface: painel de sugestões na receita, com aceitar, editar, rejeitar e "aceitar todas" (na ordem certa: limpar, converter e por último mudar a forma da tabela). A rejeitada fica gravada no projeto e não volta.
+- Sugestões automáticas (`wolfz.core.suggest`): regras registradas com `@rule` olham a tabela no fim da receita e propõem passos com confiança e motivo. As primeiras catorze regras: moeda, número e data em texto (com a ordem de AAAAMMDD ou DDMMAAAA), percentual, coluna vazia, espaços extras ou invisíveis, linhas duplicadas, meses em colunas (despivotar), categoria com variação de caixa e acento, CPF e CNPJ com máscara misturada ou zeros perdidos (inclusive na mesma coluna, com o tipo de pessoa), CEP com 7 dígitos, sinais do IBGE e mojibake, mais um aviso para código com zero à esquerda que não deve virar número. Código e ID (`Cód.`, `CD_MUN`, CNPJ já limpo) não são sugeridos como número.
+- Interface: painel de sugestões na receita, com aceitar, editar, rejeitar e "aceitar todas". A rejeitada fica gravada no projeto e não volta.
 - API: `GET /projects/{id}/suggestions` e `POST /projects/{id}/suggestions/rejections`.
 - Uma regra que falha vai para o log (`wolfz.suggest`) e é ignorada; as outras continuam.
 - Sugestões novas (agora 28 regras):
@@ -210,7 +214,8 @@ Primeira versão: receita, três operações e `wolfz run`. Ainda não publicada
 
 - `clean_cnpj` descartava CNPJ alfanumérico válido que parecia notação científica (ex.: `00.000.000/000E-20`).
 
-[Não publicado]: https://github.com/RafaelGomide/WolfzBR/compare/v0.6.0...HEAD
+[Não publicado]: https://github.com/RafaelGomide/WolfzBR/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.3.0...v0.4.0
