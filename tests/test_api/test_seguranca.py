@@ -238,10 +238,56 @@ def test_apagar_enquanto_a_listagem_le_os_projetos(client):
     t.start()
     try:
         for _ in range(8):
-            pid = enviar(client).json()["id"]
+            r = enviar(client)
+            assert r.status_code == 201, r.text
+            pid = r.json()["id"]
             r = client.delete(f"/api/projects/{pid}")
             assert r.status_code == 204, r.text
     finally:
         parar.set()
         t.join()
     assert not erros
+
+
+def test_abrir_enquanto_a_listagem_testa_o_lock(tmp_path):
+    """A listagem descobre se um projeto está aberto em outra janela pegando
+    e soltando o .lock. Abrir o projeto bem nesse instante dava 423 ("aberto
+    em outra janela") — no CI do Linux, de vez em quando."""
+    import threading
+
+    from filelock import FileLock
+
+    from wolfz.api.projetos import Projetos
+    from wolfz.core.workspace import PROJECT_FILE
+
+    ws = Workspace(tmp_path / "home")
+    project_id, pasta = ws.new_project()
+    (pasta / PROJECT_FILE).write_text("{}", encoding="utf-8")
+    projetos = Projetos(ws, 8765)
+
+    teste = FileLock(pasta / ".lock", thread_local=False)
+    teste.acquire()
+    threading.Timer(0.1, teste.release).start()
+    try:
+        assert projetos.abrir(project_id) == pasta
+    finally:
+        projetos.fechar_todos()
+
+
+def test_outra_instancia_continua_dando_423(tmp_path):
+    from filelock import FileLock
+
+    from wolfz.api.projetos import Projetos
+    from wolfz.core.workspace import PROJECT_FILE
+
+    ws = Workspace(tmp_path / "home")
+    project_id, pasta = ws.new_project()
+    (pasta / PROJECT_FILE).write_text("{}", encoding="utf-8")
+    outra = FileLock(pasta / ".lock", thread_local=False)
+    outra.acquire()
+    try:
+        with pytest.raises(Problem) as exc:
+            Projetos(ws, 8765).abrir(project_id)
+        assert exc.value.status == 423
+    finally:
+        outra.release()

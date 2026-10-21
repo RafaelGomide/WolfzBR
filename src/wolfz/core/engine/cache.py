@@ -140,7 +140,9 @@ def projeto_travado(projeto: Path) -> bool:
         return False
     lock = FileLock(lock_path)
     try:
-        lock.acquire(timeout=0)
+        # Um instante de espera: outro teste destes, ao mesmo tempo, segura
+        # o lock só por um momento e não quer dizer projeto aberto.
+        lock.acquire(timeout=0.05)
     except Timeout:
         return True
     lock.release()

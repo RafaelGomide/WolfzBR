@@ -27,6 +27,7 @@ from wolfz.core.workspace import PROJECT_FILE, Workspace
 
 LOCK_META = ".lock.json"
 TENTATIVAS_APAGAR = 40  # x 50 ms: até 2 s esperando outro handle do .lock fechar
+ESPERA_LOCK = 0.5  # s; o teste da listagem segura o lock só por um instante
 
 
 def _tentando(acao: Callable[[], object]) -> None:
@@ -76,7 +77,10 @@ class Projetos:
             # faz nada e o .lock fica preso até o processo morrer.
             lock = FileLock(pasta / ".lock", thread_local=False)
             try:
-                lock.acquire(timeout=0)
+                # Não é timeout=0: a listagem testa o lock de cada projeto
+                # (pega e solta na hora), e abrir bem nesse instante dava um
+                # 423 falso. Outra instância segura o lock o tempo todo.
+                lock.acquire(timeout=ESPERA_LOCK)
             except Timeout as exc:
                 raise Problem(
                     423,
