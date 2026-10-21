@@ -2278,6 +2278,237 @@ def escolas_mojibake() -> Sintetico:
 # --------------------------------------------------------------------------
 
 
+# --------------------------------------------------------------------------
+# Sugestões da 0.7 (pronto da Fase 2): tabelas largas, regiões, sentinela
+# --------------------------------------------------------------------------
+
+
+@sintetico
+def frota_tipos_com_total() -> Sintetico:
+    rng = _rng("frota_tipos_com_total")
+    tipos = ["AUTOMOVEL", "CAMINHAO", "MOTOCICLETA", "ONIBUS"]
+    municipios = [nome for _, nome in MUNICIPIOS_ES[:12]]
+    valores = {m: [rng.randint(0, 5_000) for _ in tipos] for m in municipios}
+    cab = ["UF", "MUNICIPIO", "TOTAL", *tipos]
+
+    def escrever(path: Path) -> None:
+        aba = Aba("Frota")
+        aba.linha(0, ["Frota de veículos por município e tipo - dezembro"], negrito=True)
+        aba.linha(2, cab, negrito=True)
+        for i, m in enumerate(municipios):
+            aba.linha(3 + i, ["ES", m, sum(valores[m]), *valores[m]])
+        escrever_xlsx(path, [aba])
+
+    saida = tabela(
+        ("UF", TXT, ["ES" for _ in municipios for _ in tipos]),
+        ("MUNICIPIO", TXT, [m for m in municipios for _ in tipos]),
+        ("tipo", TXT, tipos * len(municipios)),
+        ("quantidade", INT, [v for m in municipios for v in valores[m]]),
+    )
+    passos = [
+        {"op": "select_range", "start": "A3", "end_detect": "auto"},
+        {"op": "header_rows", "n": 1},
+        {"op": "drop_cols", "cols": ["TOTAL"]},
+        {"op": "unpivot", "index": ["UF", "MUNICIPIO"], "variable_name": "tipo", "value_name": "quantidade"},
+        {"op": "cast", "types": {"quantidade": "int"}},
+    ]
+    return Sintetico(
+        "frota_tipos_com_total",
+        ("tabela_larga", "padroes_de_limpeza"),
+        "xlsx",
+        "frota de veículos por município e tipo (Senatran)",
+        "Um tipo de veículo por coluna e a coluna TOTAL, que é a soma deles.",
+        escrever,
+        [Saida(saida, passos, "Frota")],
+    )
+
+
+REGIOES_UFS = [
+    ("NORTE", ["RR", "RO", "AC", "AM", "AP", "PA", "TO"]),
+    ("NORDESTE", ["MA", "PI", "CE", "RN", "PB", "PE", "AL", "SE", "BA"]),
+    ("CENTRO-OESTE", ["MT", "MS", "GO", "DF"]),
+    ("SUDESTE", ["MG", "ES", "RJ", "SP"]),
+    ("SUL", ["PR", "SC", "RS"]),
+]
+
+
+@sintetico
+def safras_regioes() -> Sintetico:
+    rng = _rng("safras_regioes")
+    safras = ["2019/20", "2020/21", "2021/22", "2022/23", "2023/24 (1)"]
+    ufs = [uf for _, us in REGIOES_UFS for uf in us]
+    prod = {uf: [round(rng.uniform(0.5, 900.0), 1) for _ in safras] for uf in ufs}
+
+    def soma(lista: list[str]) -> list[float]:
+        return [round(sum(prod[u][j] for u in lista), 1) for j in range(len(safras))]
+
+    linhas: list[list] = []
+    for regiao, us in REGIOES_UFS:
+        linhas.append([regiao, *soma(us)])
+        linhas += [[uf, *prod[uf]] for uf in us]
+    norte_nordeste = REGIOES_UFS[0][1] + REGIOES_UFS[1][1]
+    linhas.append(["NORTE/NORDESTE", *soma(norte_nordeste)])
+    linhas.append(["CENTRO-SUL", *soma([u for u in ufs if u not in norte_nordeste])])
+    linhas.append(["BRASIL", *soma(ufs)])
+    agregados = [r for r, _ in REGIOES_UFS] + ["NORTE/NORDESTE", "CENTRO-SUL", "BRASIL"]
+
+    def escrever(path: Path) -> None:
+        rows = [["REGIÃO/UF", *safras]] + [[n, *(br(v) for v in vs)] for n, *vs in linhas]
+        escrever_csv(path, rows)
+
+    saida = tabela(
+        ("uf", TXT, [uf for uf in ufs for _ in safras]),
+        ("safra", TXT, [s.removesuffix(" (1)") for _ in ufs for s in safras]),
+        ("producao", NUM, [v for uf in ufs for v in prod[uf]]),
+    )
+    passos = [
+        {"op": "drop_rows_where", "col": "REGIÃO/UF", "match": "in", "value": agregados},
+        {"op": "unpivot", "index": ["REGIÃO/UF"], "variable_name": "safra", "value_name": "producao"},
+        {"op": "strip_footnotes", "cols": ["safra"]},
+        {"op": "parse_decimal_br", "cols": ["producao"]},
+        {"op": "rename", "mapping": {"REGIÃO/UF": "uf"}},
+    ]
+    return Sintetico(
+        "safras_regioes",
+        ("tabela_larga", "subtotais", "padroes_de_limpeza"),
+        "csv",
+        "série histórica de safras por UF (Conab)",
+        "Uma safra por coluna ('2019/20'), a última com nota ('2023/24 (1)'); linhas de região, "
+        "de Norte/Nordeste, Centro-Sul e Brasil no meio das UFs.",
+        escrever,
+        [Saida(saida, passos)],
+    )
+
+
+@sintetico
+def estacao_sentinela() -> Sintetico:
+    rng = _rng("estacao_sentinela")
+    medidas = ["PRECIPITACAO (mm)", "TEMPERATURA (°C)", "UMIDADE (%)", "PRESSAO (mB)"]
+    faixas = [(0.0, 12.0), (14.0, 33.0), (20.0, 99.0), (880.0, 895.0)]
+    horas = [(date(2024, 1, 1 + h // 24), f"{h % 24:02d}00 UTC") for h in range(48)]
+    valores: list[list[float | None]] = []
+    for i in range(len(horas)):
+        linha: list[float | None] = []
+        for j, (lo, hi) in enumerate(faixas):
+            falta = (i + 7 * j) % 13 == 0  # cada medida tem buracos em horas diferentes
+            linha.append(None if falta else round(rng.uniform(lo, hi), 1))
+        valores.append(linha)
+
+    def escrever(path: Path) -> None:
+        rows = [["DATA (YYYY-MM-DD)", "HORA (UTC)", *medidas]]
+        for (d, h), vs in zip(horas, valores, strict=True):
+            rows.append([d.isoformat(), h, *("-9999" if v is None else br(v) for v in vs)])
+        escrever_csv(path, rows)
+
+    saida = tabela(
+        ("DATA (YYYY-MM-DD)", DATA, [d for d, _ in horas]),
+        ("HORA (UTC)", TXT, [h for _, h in horas]),
+        *((m, NUM, [vs[j] for vs in valores]) for j, m in enumerate(medidas)),
+    )
+    passos = [
+        {"op": "replace", "cols": medidas, "old": "-9999", "new": None, "whole": True},
+        {"op": "parse_decimal_br", "cols": medidas},
+        {"op": "parse_date_br", "cols": ["DATA (YYYY-MM-DD)"]},
+    ]
+    return Sintetico(
+        "estacao_sentinela",
+        ("padroes_de_limpeza",),
+        "csv",
+        "dados horários de estação meteorológica automática (INMET)",
+        "Medida que falta vem como -9999; decimal com vírgula e data AAAA-MM-DD.",
+        escrever,
+        [Saida(saida, passos)],
+    )
+
+
+@sintetico
+def transferencias_decendios() -> Sintetico:
+    rng = _rng("transferencias_decendios")
+    municipios = MUNICIPIOS_ES[:6]
+    meses = [1, 2, 3]
+    decendios = ["1º Decêndio", "2º Decêndio", "3º Decêndio"]
+    linhas = []
+    for _, nome in municipios:
+        for m in meses:
+            vs = [round(rng.uniform(1_000, 900_000), 2) for _ in decendios]
+            linhas.append((nome, m, vs))
+    linhas[4][2][1] = 104.0  # '104.000': sozinho seria ambíguo; a coluna tem ponto decimal
+
+    def fmt(v: float) -> str:
+        return "104.000" if v == 104.0 else f"{v:.2f}"
+
+    def escrever(path: Path) -> None:
+        rows = [["Município", "UF", "ANO", "Mês", *decendios, "Item transferência"]]
+        rows += [[n, "ES", "2024", str(m), *(fmt(v) for v in vs), "FPM"] for n, m, vs in linhas]
+        escrever_csv(path, rows)
+
+    saida = tabela(
+        ("Município", TXT, [n for n, _, _ in linhas for _ in decendios]),
+        ("UF", TXT, ["ES" for _ in linhas for _ in decendios]),
+        ("data", DATA, [date(2024, m, 1) for _, m, _ in linhas for _ in decendios]),
+        ("decendio", TXT, decendios * len(linhas)),
+        ("valor", NUM, [v for _, _, vs in linhas for v in vs]),
+    )
+    passos = [
+        {"op": "drop_cols", "cols": ["Item transferência"]},
+        {"op": "merge_cols", "cols": ["Mês", "ANO"], "separator": "/", "into": "data"},
+        {"op": "parse_month_year", "cols": ["data"]},
+        {
+            "op": "unpivot",
+            "index": ["Município", "UF", "data"],
+            "variable_name": "decendio",
+            "value_name": "valor",
+        },
+        {"op": "parse_decimal_br", "cols": ["valor"], "decimal": "."},
+    ]
+    return Sintetico(
+        "transferencias_decendios",
+        ("tabela_larga", "padroes_de_limpeza"),
+        "csv",
+        "transferências constitucionais por município e decêndio (Tesouro)",
+        "Ano e mês em colunas separadas, um decêndio por coluna, ponto decimal (com '104.000' no "
+        "meio) e uma coluna com o mesmo valor em todas as linhas.",
+        escrever,
+        [Saida(saida, passos)],
+    )
+
+
+@sintetico
+def frota_codigo_rotulo() -> Sintetico:
+    rng = _rng("frota_codigo_rotulo")
+    municipios = MUNICIPIOS_ES[:5]
+    tipos = ["1. Automóvel", "2. Motocicleta", "3. Caminhão", "4. Ônibus"]
+    linhas = [(cod, nome, t, rng.randint(1, 90_000)) for cod, nome in municipios for t in tipos]
+
+    def escrever(path: Path) -> None:
+        rows = [["co_mun", "no_mun", "ano", "variavel", "inf_subcategoria", "valor"]]
+        rows += [[c, n, "2024", "Frota", t, str(v)] for c, n, t, v in linhas]
+        escrever_csv(path, rows)
+
+    saida = tabela(
+        ("co_mun", TXT, [c for c, *_ in linhas]),
+        ("no_mun", TXT, [n for _, n, *_ in linhas]),
+        ("ano", INT, [2024 for _ in linhas]),
+        ("tipo", TXT, [t.split(". ", 1)[1] for _, _, t, _ in linhas]),
+        ("valor", INT, [v for *_, v in linhas]),
+    )
+    passos = [
+        {"op": "split_col", "col": "inf_subcategoria", "delimiter": ". ", "into": ["codigo", "tipo"]},
+        {"op": "drop_cols", "cols": ["variavel", "codigo"]},
+        {"op": "cast", "types": {"valor": "int", "ano": "int"}},
+    ]
+    return Sintetico(
+        "frota_codigo_rotulo",
+        ("padroes_de_limpeza",),
+        "csv",
+        "frota de veículos por município (portal de dados abertos estadual)",
+        "Código e nome do tipo na mesma célula ('1. Automóvel'), coluna com o mesmo valor em todas "
+        "as linhas e contagens como texto.",
+        escrever,
+        [Saida(saida, passos)],
+    )
+
+
 def _uma(*args, **kwargs) -> Callable[[Sintetico], list[dict]]:
     return lambda s: [est(*args, **kwargs)]
 
@@ -2314,6 +2545,12 @@ ESTRUTURAS: dict[str, Callable[[Sintetico], list[dict]]] = {
     "anuario_tabelas_lado_a_lado": lambda s: [est(2, (3, 10), "AC"), est(2, (3, 10), "EG")],
     "cadastro_mojibake": _uma(1, (2, 13), "AD"),
     "escolas_mojibake": _uma(1, (2, 13), "AC"),
+    "frota_tipos_com_total": _uma(3, (4, 15), "AG"),
+    # As linhas de região e do Brasil são a soma das UFs: totais.
+    "safras_regioes": lambda s: [est(1, (2, 36), "AF", totais=[2, 10, 20, 25, 30, 34, 35, 36])],
+    "estacao_sentinela": _uma(1, (2, 49), "AF"),
+    "transferencias_decendios": _uma(1, (2, 19), "AH"),
+    "frota_codigo_rotulo": _uma(1, (2, 21), "AF"),
 }
 
 

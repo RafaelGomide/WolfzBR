@@ -252,12 +252,18 @@ test("sugestões: aceitar todas aplica na ordem (converter antes de despivotar)"
   await importar(page, arquivo("orcamento_gerencial_meses"));
   await esperarProjeto(page, "orcamento_gerencial_meses.xlsx");
 
+  // Uma etapa por clique: primeiro converter; depois, recalculado na tabela
+  // nova, mudar a forma (tirar a coluna Total e despivotar). As verificações
+  // ficam para o fim.
   const passos = await page.locator("li[data-passo]").count();
-  // As verificações ficam para depois (são calculadas na tabela já despivotada).
-  await page.getByRole("button", { name: /Aceitar todas \(2\)/ }).click();
-  await expect(page.locator("li[data-passo]")).toHaveCount(passos + 2);
-  await expect(page.locator("li[data-passo]").nth(passos)).toContainText("Número brasileiro");
-  await expect(page.locator("li[data-passo]").nth(passos + 1)).toContainText("Despivotar colunas");
+  await page.getByRole("button", { name: /Aceitar todas/ }).click();
+  await expect(page.locator("li[data-passo]").last()).toContainText("Número brasileiro");
+  const convertidos = await page.locator("li[data-passo]").count();
+  expect(convertidos).toBeGreaterThan(passos);
+  await page.getByRole("button", { name: /Aceitar todas/ }).click();
+  await expect(page.locator("li[data-passo]")).toHaveCount(convertidos + 2);
+  await expect(page.locator("li[data-passo]").nth(convertidos)).toContainText("Remover colunas");
+  await expect(page.locator("li[data-passo]").nth(convertidos + 1)).toContainText("Despivotar colunas");
   await page.getByRole("tab", { name: "Antes e depois" }).click();
   await expect(grade(page, "Receita inteira")).toBeVisible();
   await expect(page.locator(".estado.erro")).toHaveCount(0);

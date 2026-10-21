@@ -559,8 +559,10 @@ def _sugestoes(client, projeto, regra=None):
 
 def test_sugestoes(client, projeto):
     (sugestao,) = _sugestoes(client, projeto, "decimal_br")
+    # Número do Excel chega como texto com ponto ('376357.13') e nenhuma
+    # coluna tem vírgula: a tabela usa ponto decimal.
     assert sugestao["steps"] == [
-        {"op": "parse_decimal_br", "cols": ["Previsão Atualizada (R$)", "Arrecadado (R$)"], "decimal": "auto"}
+        {"op": "parse_decimal_br", "cols": ["Previsão Atualizada (R$)", "Arrecadado (R$)"], "decimal": "."}
     ]
     assert sugestao["kind"] == "passo" and sugestao["confidence"] > 0.9
     # Verificações (F2.F2), por último: colunas 100% preenchidas viram

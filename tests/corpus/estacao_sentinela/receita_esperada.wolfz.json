@@ -1,0 +1,40 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "estacao sentinela",
+  "source": {
+    "type": "csv"
+  },
+  "steps": [
+    {
+      "cols": [
+        "PRECIPITACAO (mm)",
+        "TEMPERATURA (°C)",
+        "UMIDADE (%)",
+        "PRESSAO (mB)"
+      ],
+      "id": "s1",
+      "new": null,
+      "old": "-9999",
+      "op": "replace",
+      "whole": true
+    },
+    {
+      "cols": [
+        "PRECIPITACAO (mm)",
+        "TEMPERATURA (°C)",
+        "UMIDADE (%)",
+        "PRESSAO (mB)"
+      ],
+      "id": "s2",
+      "op": "parse_decimal_br"
+    },
+    {
+      "cols": [
+        "DATA (YYYY-MM-DD)"
+      ],
+      "id": "s3",
+      "op": "parse_date_br"
+    }
+  ],
+  "wolfz_version": "0.1"
+}

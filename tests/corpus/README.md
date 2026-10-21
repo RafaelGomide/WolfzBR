@@ -116,6 +116,8 @@ Mínimo de 2 arquivos por categoria e 30 no total.
 | `ods` | ingestão ODS |
 | `duas_tabelas` | duas áreas na mesma aba |
 | `mojibake` | `fix_mojibake` |
+| `tabela_larga` | categorias, safras, datas ou decêndios em colunas; coluna de total que soma as outras |
+| `padroes_de_limpeza` | o que as sugestões reconhecem: sentinela (`-9999`), região entre UFs, nota de rodapé, mês e ano separados, código e nome na mesma célula, ponto decimal, coluna constante |
 
 ## Conjunto de validação
 

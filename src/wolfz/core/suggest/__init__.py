@@ -135,7 +135,50 @@ def suggest(
             if s.cols and any((s.rule, c) in recusadas for c in s.cols):
                 s = _sem_colunas(s, {c for c in s.cols if (s.rule, c) in recusadas})
             saida.append(s)
-    return sorted(saida, key=lambda s: (s.order, -s.confidence, s.rule, s.cols))
+    return _sem_conflito(sorted(saida, key=lambda s: (s.order, -s.confidence, s.rule, s.cols)))
+
+
+def etapa(order: int) -> int:
+    """Etapa do "aceitar todas" (a interface aplica uma por vez): limpar e
+    converter, mudar a forma da tabela, verificar."""
+    return 0 if order < FORMA else 1 if order < VERIFICACAO else 2
+
+
+def _colunas_citadas(passo: dict[str, Any]) -> set[str]:
+    citadas = set(passo.get("cols") or []) | set(passo.get("index") or [])
+    citadas |= set(passo.get("types") or {}) | set(passo.get("mapping") or {})
+    if isinstance(passo.get("col"), str):
+        citadas.add(passo["col"])
+    return citadas
+
+
+def _colunas_tiradas(passo: dict[str, Any]) -> set[str]:
+    if passo["op"] == "drop_cols" or (passo["op"] == "merge_cols" and not passo.get("keep")):
+        return set(passo["cols"])
+    if passo["op"] == "split_col":
+        return {passo["col"]}
+    return set()
+
+
+def _sem_conflito(sugestoes: list[Suggestion]) -> list[Suggestion]:
+    """Na mesma etapa, tira a sugestão que cita uma coluna que outra, antes
+    dela, tira da tabela ("aceitar todas" aplicaria uma depois da outra e a
+    segunda falharia). Ela volta, recalculada, depois que a primeira entra."""
+    saida: list[Suggestion] = []
+    tiradas: dict[int, set[str]] = {}
+    despivotou: set[int] = set()  # dois despivotar seguidos: o segundo já não acha as colunas
+    for s in sugestoes:
+        e = etapa(s.order)
+        ja = tiradas.setdefault(e, set())
+        unpivot = any(p["op"] == "unpivot" for p in s.steps)
+        if any(_colunas_citadas(p) & ja for p in s.steps) or (unpivot and e in despivotou):
+            continue
+        saida.append(s)
+        for p in s.steps:
+            ja |= _colunas_tiradas(p)
+        if unpivot:
+            despivotou.add(e)
+    return saida
 
 
 def _sem_colunas(s: Suggestion, tirar: set[str]) -> Suggestion:
@@ -148,4 +191,4 @@ def _sem_colunas(s: Suggestion, tirar: set[str]) -> Suggestion:
     return Suggestion(s.rule, passos, s.confidence, s.reason, cols, s.kind, s.order)
 
 
-__all__ = ["Contexto", "Suggestion", "registered_rules", "rule", "suggest"]
+__all__ = ["Contexto", "Suggestion", "etapa", "registered_rules", "rule", "suggest"]

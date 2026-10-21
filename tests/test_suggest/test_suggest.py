@@ -301,8 +301,17 @@ def test_aceitar_todas_no_corpus(pasta):
         }
     )
     tabela = collect(inicial, df.lazy())
-    sugestoes = [s for s in suggest(tabela) if s.kind == "passo"]
-    resultado = _aplica(tabela, sugestoes)
+    # Como o "aceitar todas" da interface: uma etapa por vez (limpar e
+    # converter, mudar a forma, verificar), recalculando entre elas.
+    resultado, passos = tabela, list(inicial.model_dump(mode="json")["steps"])
+    for _ in range(3):
+        sugestoes = [s for s in suggest(resultado, steps=passos) if s.kind == "passo"]
+        if not sugestoes:
+            break
+        primeira = min(sug.etapa(s.order) for s in sugestoes)
+        da_etapa = [s for s in sugestoes if sug.etapa(s.order) == primeira]
+        resultado = _aplica(resultado, da_etapa)
+        passos += [p for s in da_etapa for p in s.steps]
     assert resultado.height > 0
     # Aceitas, as sugestões de passo não voltam (a não ser despivotar, que
     # gera colunas novas de texto).

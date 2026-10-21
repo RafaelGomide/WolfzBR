@@ -1,0 +1,46 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "frota tipos com total",
+  "source": {
+    "sheet": "Frota",
+    "type": "excel"
+  },
+  "steps": [
+    {
+      "end_detect": "auto",
+      "id": "s1",
+      "op": "select_range",
+      "start": "A3"
+    },
+    {
+      "id": "s2",
+      "n": 1,
+      "op": "header_rows"
+    },
+    {
+      "cols": [
+        "TOTAL"
+      ],
+      "id": "s3",
+      "op": "drop_cols"
+    },
+    {
+      "id": "s4",
+      "index": [
+        "UF",
+        "MUNICIPIO"
+      ],
+      "op": "unpivot",
+      "value_name": "quantidade",
+      "variable_name": "tipo"
+    },
+    {
+      "id": "s5",
+      "op": "cast",
+      "types": {
+        "quantidade": "int"
+      }
+    }
+  ],
+  "wolfz_version": "0.1"
+}

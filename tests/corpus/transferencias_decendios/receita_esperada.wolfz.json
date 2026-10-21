@@ -1,0 +1,53 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "transferencias decendios",
+  "source": {
+    "type": "csv"
+  },
+  "steps": [
+    {
+      "cols": [
+        "Item transferência"
+      ],
+      "id": "s1",
+      "op": "drop_cols"
+    },
+    {
+      "cols": [
+        "Mês",
+        "ANO"
+      ],
+      "id": "s2",
+      "into": "data",
+      "op": "merge_cols",
+      "separator": "/"
+    },
+    {
+      "cols": [
+        "data"
+      ],
+      "id": "s3",
+      "op": "parse_month_year"
+    },
+    {
+      "id": "s4",
+      "index": [
+        "Município",
+        "UF",
+        "data"
+      ],
+      "op": "unpivot",
+      "value_name": "valor",
+      "variable_name": "decendio"
+    },
+    {
+      "cols": [
+        "valor"
+      ],
+      "decimal": ".",
+      "id": "s5",
+      "op": "parse_decimal_br"
+    }
+  ],
+  "wolfz_version": "0.1"
+}

@@ -38,7 +38,7 @@ Abre o navegador com a interface. Para usar:
 
 1. Arraste o arquivo (`.xlsx`, `.xls`, `.ods` ou `.csv`). Se tiver mais de uma aba, escolha qual.
 2. Confira a estrutura detectada: título, cabeçalho, dados, totais e rodapé aparecem em cores. Se a área estiver errada, clique e arraste na grade para marcar a certa.
-3. Aceite as sugestões: o WolfzBR olha a tabela e propõe os passos (moeda e número em texto, datas, CPF e CEP sem zero, espaços invisíveis, acento estragado, meses em colunas…), cada um com o motivo. Aceite, edite, rejeite ou aceite todas.
+3. Aceite as sugestões: o WolfzBR olha a tabela e propõe os passos (moeda e número em texto, datas, CPF e CEP sem zero, espaços invisíveis, acento estragado, meses, safras ou categorias em colunas, linhas de região entre as UFs, `-9999` no lugar do vazio, mês e ano em colunas separadas…), cada um com o motivo. Aceite, edite, rejeite ou aceite todas: o "aceitar todas" vai por etapa (limpar e converter, depois mudar a forma da tabela, depois as verificações).
 4. Ajuste a receita: adicione, edite, reordene ou desative passos, vendo a tabela antes e depois de cada um. Clique no cabeçalho de uma coluna para ver o perfil dela.
 5. Exporte: CSV (pronto para o Excel em português), Excel, Parquet, Power Query M e script Python.
 

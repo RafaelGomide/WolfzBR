@@ -540,13 +540,20 @@ def _totais(
     # Soma (D2): o valor fecha com as linhas do grupo.
     if not celulas and det.last_row > det.first_row:
         dados = df.slice(det.first_row, det.last_row - det.first_row + 1)
-        for c in sorted(de_valor):
-            if c not in dados.columns or not det.first_col <= column_index(c) <= det.last_col:
-                continue
-            for i in sorted(_somas(_numeros(dados[c].to_list()))):
-                r = det.first_row + i
-                if r not in celulas and (celula := _primeiro_texto(df, r, det, offset)) is not None:
-                    celulas[r] = celula
+        colunas = [
+            c
+            for c in sorted(de_valor)
+            if c in dados.columns and det.first_col <= column_index(c) <= det.last_col
+        ]
+        achadas = {det.first_row + i for c in colunas for i in _somas(_numeros(dados[c].to_list()))}
+        rotulos = {r: _primeiro_texto(df, r, det, offset) for r in range(det.first_row, det.last_row + 1)}
+        repetidos = Counter(c[1] for c in rotulos.values() if c is not None)
+        for r in sorted(achadas):
+            # Subtotal tem nome próprio ('Grande porte', 'Região Norte'). Rótulo
+            # que se repete nas outras linhas ('Vitória' em janeiro, fevereiro e
+            # março) é linha de dado, e a soma fechou por acaso ('3' = '1' + '2').
+            if (celula := rotulos[r]) is not None and repetidos[celula[1]] == 1 and r not in celulas:
+                celulas[r] = celula
 
     det.totals = sorted(celulas)
     det.total_cells = {r: celulas[r] for r in det.totals}

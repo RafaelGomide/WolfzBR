@@ -17,6 +17,10 @@ FALHAS_CONHECIDAS = {
     "cabecalho": {"ibge_ipca_serie_historica"},
     "totais": {
         "erp_totvs_razao",  # 'SALDO ANTERIOR' é linha a tirar, mas não é soma nem tem palavra de total
+        # Regiões antes das UFs e, no fim, Norte/Nordeste, Centro-Sul e Brasil,
+        # que somam regiões: a partição da soma não fecha. A sugestão
+        # linhas_de_regiao propõe tirar todas.
+        "safras_regioes",
     },
     "fill_down": set(),
     "tabelas": {"ibge_ipca_serie_historica"},

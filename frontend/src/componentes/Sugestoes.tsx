@@ -13,7 +13,10 @@ import { CaixaErro } from "./Estado";
 
 type Sugestao = components["schemas"]["Sugestao"];
 
-const VERIFICACAO = 50; // wolfz.core.suggest.VERIFICACAO
+// wolfz.core.suggest: FORMA e VERIFICACAO
+const FORMA = 40;
+const VERIFICACAO = 50;
+const etapa = (order: number) => (order < FORMA ? 0 : order < VERIFICACAO ? 1 : 2);
 
 const pct = (x: number) =>
   x.toLocaleString("pt-BR", { style: "percent", maximumFractionDigits: 0 });
@@ -49,13 +52,13 @@ export function Sugestoes({
   if (erro) return erro instanceof ErroApi && erro.passoComErro ? null : <CaixaErro erro={erro} />;
   const lista = dados ?? [];
   if (lista.length === 0) return null;
-  // "Aceitar todas" deixa as verificações (order 50) para depois quando há
-  // outros passos: elas foram calculadas na tabela de agora, e despivotar ou
-  // tirar colunas muda a tabela. Depois de salvar, voltam calculadas de novo.
+  // "Aceitar todas" vai uma etapa por vez: limpar e converter; depois mudar
+  // a forma da tabela (despivotar, tirar colunas); por último as
+  // verificações. Cada etapa foi calculada na tabela de agora, e a anterior
+  // muda as colunas: depois de salvar, a seguinte volta calculada de novo.
   const passos = lista.filter((s) => s.kind === "passo");
-  const comPasso = passos.some((s) => s.order < VERIFICACAO)
-    ? passos.filter((s) => s.order < VERIFICACAO)
-    : passos;
+  const primeira = Math.min(...passos.map((s) => etapa(s.order)));
+  const comPasso = passos.filter((s) => etapa(s.order) === primeira);
 
   async function acrescentar(passos: Record<string, unknown>[]) {
     setOcupado(true);
@@ -94,7 +97,7 @@ export function Sugestoes({
         >
           {aberto ? "▾" : "▸"} {T.sugestoes.titulo(lista.length)}
         </button>
-        {aberto && comPasso.length > 1 && (
+        {aberto && passos.length > 1 && (
           <button
             type="button"
             className="primario"

@@ -44,6 +44,8 @@ CATEGORIAS = {
     "ods": ".ods",
     "duas_tabelas": "duas tabelas na mesma aba",
     "mojibake": "mojibake",
+    "tabela_larga": "categorias, safras, datas ou decêndios em colunas",
+    "padroes_de_limpeza": "sentinela, região entre UFs, nota de rodapé, mês e ano, código e nome",
 }
 
 # Operações que as receitas do corpus podem citar antes de existirem: o
