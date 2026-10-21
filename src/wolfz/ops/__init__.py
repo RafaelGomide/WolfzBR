@@ -27,8 +27,10 @@ from wolfz.ops.estrutura import DropEmptyCols, DropEmptyRows, FillDown, HeaderRo
 from wolfz.ops.linhas import Dedupe, DropRowsWhere, FillNull, Filter, Sort
 from wolfz.ops.municipio import NormalizeMunicipio
 from wolfz.ops.texto import Case, RemoveAccents, Replace, Trim
+from wolfz.ops.verificacao import Assert
 
 __all__ = [
+    "Assert",
     "Case",
     "Cast",
     "CleanCep",

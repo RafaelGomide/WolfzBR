@@ -805,3 +805,27 @@ pre {
 .sugestao-acoes button {
   font-size: 0.85em;
 }
+
+/* Aba de origem e o padrão do mês seguinte (F2.F4) */
+.aba-fonte {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 0.5rem;
+  margin: 0.4rem 0;
+  font-size: 0.9em;
+}
+.aba-fonte small {
+  color: var(--texto-suave);
+}
+.aba-fonte code {
+  word-break: break-all;
+}
+.aba-fonte-form {
+  display: grid;
+  gap: 0.3rem;
+  width: 100%;
+}
+.erro-texto {
+  color: #b42318;
+}

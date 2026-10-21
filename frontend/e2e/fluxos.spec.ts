@@ -119,7 +119,7 @@ test("planilha com várias abas pergunta qual importar", async ({ page }) => {
   await dialogo.getByLabel("Legenda").check();
   await dialogo.getByRole("button", { name: "Importar esta aba" }).click();
   await esperarProjeto(page, "licitacoes_ods.ods");
-  await expect(page.getByText("aba Legenda")).toBeVisible();
+  await expect(page.getByRole("banner").getByText("aba Legenda")).toBeVisible();
 });
 
 test("ajustar a área arrastando na visão bruta", async ({ page }) => {
@@ -225,23 +225,24 @@ test("sugestões: rejeitar não volta, aceitar acrescenta o passo", async ({ pag
   await importar(page, arquivo("clientes_cpf_cep"));
   await esperarProjeto(page, "clientes_cpf_cep.xlsx");
 
-  const painel = page.getByRole("region", { name: "Sugestões (2)" });
-  await expect(painel).toContainText("CEP com 7 dígitos");
+  const painel = page.locator(".sugestoes-painel");
   const cep = painel.locator(".sugestao-item", { hasText: "CEP com 7 dígitos" });
+  await expect(cep).toBeVisible();
   await cep.getByRole("button", { name: "Rejeitar" }).click();
-  await expect(page.getByRole("region", { name: "Sugestões (1)" })).toBeVisible();
+  await expect(cep).toHaveCount(0);
 
   // A rejeição fica gravada no projeto.
   await page.reload();
   await esperarProjeto(page, "clientes_cpf_cep.xlsx");
-  const restante = page.getByRole("region", { name: "Sugestões (1)" });
-  await expect(restante).not.toContainText("CEP com 7 dígitos");
+  await expect(painel.locator(".sugestao-item", { hasText: "CPF" }).first()).toBeVisible();
+  await expect(painel).not.toContainText("CEP com 7 dígitos");
 
   const passos = await page.locator("li[data-passo]").count();
-  await restante.getByRole("button", { name: "Aceitar" }).click();
+  const cpf = painel.locator(".sugestao-item", { hasText: "Limpar CPF" });
+  await cpf.getByRole("button", { name: "Aceitar" }).click();
   await expect(page.locator("li[data-passo]")).toHaveCount(passos + 1);
   await expect(page.locator("li[data-passo]").last()).toContainText("Limpar CPF");
-  await expect(page.locator(".sugestoes-painel")).toHaveCount(0);
+  await expect(cpf).toHaveCount(0);
 });
 
 test("sugestões: aceitar todas aplica na ordem (converter antes de despivotar)", async ({
@@ -252,6 +253,7 @@ test("sugestões: aceitar todas aplica na ordem (converter antes de despivotar)"
   await esperarProjeto(page, "orcamento_gerencial_meses.xlsx");
 
   const passos = await page.locator("li[data-passo]").count();
+  // As verificações ficam para depois (são calculadas na tabela já despivotada).
   await page.getByRole("button", { name: /Aceitar todas \(2\)/ }).click();
   await expect(page.locator("li[data-passo]")).toHaveCount(passos + 2);
   await expect(page.locator("li[data-passo]").nth(passos)).toContainText("Número brasileiro");
@@ -259,4 +261,22 @@ test("sugestões: aceitar todas aplica na ordem (converter antes de despivotar)"
   await page.getByRole("tab", { name: "Antes e depois" }).click();
   await expect(grade(page, "Receita inteira")).toBeVisible();
   await expect(page.locator(".estado.erro")).toHaveCount(0);
+});
+
+test("aba da fonte: definir o padrão para o arquivo do mês seguinte", async ({ page }) => {
+  await abrir(page);
+  await importar(page, arquivo("receita_municipal"));
+  await esperarProjeto(page, "receita_municipal.xlsx");
+
+  const aba = page.locator(".aba-fonte");
+  await expect(aba).toContainText("Só esta aba");
+  await aba.getByRole("button", { name: "Editar" }).click();
+  await aba.getByLabel(/Padrão do nome da aba/).fill("(?i)Receita.*");
+  await aba.getByRole("button", { name: "Salvar" }).click();
+  await expect(aba).toContainText("(?i)Receita.*");
+
+  // Fica na receita: recarregar mostra o mesmo padrão.
+  await page.reload();
+  await esperarProjeto(page, "receita_municipal.xlsx");
+  await expect(page.locator(".aba-fonte")).toContainText("(?i)Receita.*");
 });

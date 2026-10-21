@@ -55,7 +55,16 @@ wolfz run vendas.wolfz.json vendas_fevereiro.xlsx -o saida/ --format xlsx
 ```
 
 - Se algum passo não se aplicar ao arquivo novo (uma coluna mudou de nome, por exemplo), nada é gravado e a mensagem diz qual passo falhou e quais colunas existem.
-- Se a aba muda de nome todo mês (`Vendas 2024` → `Vendas 2025`), use `source.match.sheet_name_regex` na receita.
+- **Verificações** (`assert`): a receita pode conferir o arquivo novo — coluna sem vazio, código sem repetição, valor dentro de uma faixa, formato, número mínimo de linhas. Se o arquivo vier diferente, a execução para com a mensagem em vez de gravar uma tabela errada. A interface sugere as verificações a partir da tabela de hoje.
+- **Aba que muda de nome** (`DEZEMBRO_2025` → `JANEIRO_2026`): a importação já propõe o padrão (`source.match.sheet_name_regex`), e a interface mostra e deixa editar.
+
+Vários arquivos de uma vez (o padrão vai entre aspas; o próprio `wolfz` expande, inclusive no PowerShell):
+
+```bash
+wolfz run vendas.wolfz.json "entrada/*.xlsx" -o saida/ --report relatorio.json
+```
+
+Cada arquivo é processado à parte: um que falha não para os outros. No fim aparece a tabela do que deu certo e do que falhou, e `--report` grava o mesmo em JSON.
 
 Outros comandos:
 
@@ -65,7 +74,7 @@ wolfz schema                     # JSON Schema da receita
 wolfz --help
 ```
 
-Códigos de saída do `run`: 0 ok · 1 um passo falhou · 2 receita inválida ou uso incorreto · 3 arquivo ilegível.
+Códigos de saída do `run`: 0 ok · 1 um passo falhou ou uma verificação reprovou · 2 receita inválida ou uso incorreto · 3 arquivo ilegível. Em lote, o maior código entre os arquivos.
 
 ### Em Python
 
@@ -89,7 +98,7 @@ Tableau (`.hyper`) e projeto do Power BI (`.pbip`) estão previstos para versõe
 
 ## Padrões brasileiros
 
-O catálogo tem 39 operações: estrutura (área, cabeçalho, linhas e colunas vazias, preencher para baixo, despivotar), colunas, texto e padrões brasileiros. Os padrões cobrem:
+O catálogo tem 40 operações: estrutura (área, cabeçalho, linhas e colunas vazias, preencher para baixo, despivotar), colunas, texto e padrões brasileiros. Os padrões cobrem:
 
 - números (`1.234,56`, `(1,5)`, `10-` do SAP, `R$`) e a escala da unidade ("Mil Reais");
 - valores do IBGE com os sinais `-`, `..`, `...` e `X`, sem virar zero o que não é zero;

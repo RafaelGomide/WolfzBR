@@ -398,8 +398,8 @@ def test_exportar_pedido_invalido(client, projeto, pedido, trecho):
 
 def test_catalogo_de_operacoes(client):
     ops = {o["op"]: o for o in client.get("/api/ops").json()}
-    # Os testes de receita registram operações extras ("teste_…"); as do WolfzBR são 39.
-    assert len([o for o in ops if not o.startswith("teste_")]) == 39
+    # Os testes de receita registram operações extras ("teste_…"); as do WolfzBR são 40.
+    assert len([o for o in ops if not o.startswith("teste_")]) == 40
     assert ops["parse_brl"]["schema"]["properties"]["cols"]["type"] == "array"
     assert ops["sort"]["full_checkpoint"] is True and ops["rename"]["full_checkpoint"] is False
     assert ops["select_range"]["examples"] and ops["trim"]["doc"]
@@ -551,15 +551,25 @@ def test_aba_com_uma_tabela_nao_lista_tabelas(client, projeto):
 # ---------------------------------------------------------------------------
 
 
-def test_sugestoes(client, projeto):
+def _sugestoes(client, projeto, regra=None):
     r = client.get(_url(projeto, "suggestions"))
     assert r.status_code == 200, r.text
-    (sugestao,) = r.json()
-    assert sugestao["rule"] == "decimal_br"
+    return [s for s in r.json() if regra is None or s["rule"] == regra]
+
+
+def test_sugestoes(client, projeto):
+    (sugestao,) = _sugestoes(client, projeto, "decimal_br")
     assert sugestao["steps"] == [
         {"op": "parse_decimal_br", "cols": ["Previsão Atualizada (R$)", "Arrecadado (R$)"], "decimal": "auto"}
     ]
     assert sugestao["kind"] == "passo" and sugestao["confidence"] > 0.9
+    # Verificações (F2.F2), por último: colunas 100% preenchidas viram
+    # assert not_null; o código sem repetição vira assert unique.
+    finais = _sugestoes(client, projeto)[-2:]
+    assert {s["rule"] for s in finais} == {"verificar_preenchidas", "verificar_unicos"}
+    assert all(s["steps"][0]["op"] == "assert" for s in finais)
+    (unico,) = [s for s in finais if s["rule"] == "verificar_unicos"]
+    assert unico["steps"] == [{"op": "assert", "check": "unique", "cols": ["Código"]}]
 
 
 def test_rejeitar_sugestao_vale_para_o_projeto(client, settings, projeto):
@@ -567,7 +577,7 @@ def test_rejeitar_sugestao_vale_para_o_projeto(client, settings, projeto):
     r = client.post(_url(projeto, "suggestions/rejections"), json=pedido)
     assert r.status_code == 204, r.text
     client.post(_url(projeto, "suggestions/rejections"), json=pedido)  # repetir não duplica
-    (sugestao,) = client.get(_url(projeto, "suggestions")).json()
+    (sugestao,) = _sugestoes(client, projeto, "decimal_br")
     assert sugestao["cols"] == ["Previsão Atualizada (R$)"]
     gravado = json.loads(
         (settings.workspace.project_dir(projeto["id"]) / "suggestions.json").read_text(encoding="utf-8")
@@ -575,13 +585,48 @@ def test_rejeitar_sugestao_vale_para_o_projeto(client, settings, projeto):
     assert gravado == {"rejected": [{"rule": "decimal_br", "col": "Arrecadado (R$)"}]}
 
     client.post(_url(projeto, "suggestions/rejections"), json={"rule": "decimal_br"})
-    assert client.get(_url(projeto, "suggestions")).json() == []
+    assert _sugestoes(client, projeto, "decimal_br") == []
 
 
 def test_aceitar_sugestao_tira_ela_da_lista(client, projeto):
-    (sugestao,) = client.get(_url(projeto, "suggestions")).json()
+    (sugestao,) = _sugestoes(client, projeto, "decimal_br")
     receita = projeto["recipe"]
     receita["steps"] += [{"id": f"s{len(receita['steps']) + 1}", **p} for p in sugestao["steps"]]
     r = client.put(_url(projeto, "recipe"), json=receita, headers={"If-Match": projeto["etag"]})
     assert r.status_code == 200, r.text
-    assert client.get(_url(projeto, "suggestions")).json() == []
+    assert _sugestoes(client, projeto, "decimal_br") == []
+
+
+def test_verificacao_aceita_nao_volta(client, projeto):
+    (verificacao,) = _sugestoes(client, projeto, "verificar_preenchidas")
+    receita = projeto["recipe"]
+    receita["steps"] += [{"id": f"s{len(receita['steps']) + 1}", **p} for p in verificacao["steps"]]
+    r = client.put(_url(projeto, "recipe"), json=receita, headers={"If-Match": projeto["etag"]})
+    assert r.status_code == 200, r.text
+    assert _sugestoes(client, projeto, "verificar_preenchidas") == []
+
+
+# ---------------------------------------------------------------------------
+# Aba que muda de nome (F2.F4)
+# ---------------------------------------------------------------------------
+
+
+def test_importar_aba_com_mes_propoe_o_padrao(client, tmp_path):
+    import openpyxl
+
+    caminho = tmp_path / "relatorio.xlsx"
+    wb = openpyxl.Workbook()
+    wb.active.title = "DEZEMBRO_2025"
+    for linha in [["Município", "Valor"], ["Vitória", "10"], ["Serra", "20"]]:
+        wb.active.append(linha)
+    wb.save(caminho)
+    with caminho.open("rb") as f:
+        r = client.post("/api/projects", files={"file": ("relatorio.xlsx", f, XLSX)})
+    assert r.status_code == 201, r.text
+    fonte = r.json()["recipe"]["source"]
+    assert fonte["sheet"] == "DEZEMBRO_2025"
+    assert fonte["match"]["sheet_name_regex"].startswith("(?i)(?:")
+
+
+def test_importar_aba_comum_nao_propoe_padrao(projeto):
+    assert "match" not in projeto["recipe"]["source"]

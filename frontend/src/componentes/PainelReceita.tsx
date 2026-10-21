@@ -7,6 +7,7 @@ import { ErroApi, type Operacao, type Passo, type Receita } from "../api/cliente
 import { T } from "../textos";
 import { ativo, mover, nomeOp, novoId, resumo } from "../util/receita";
 import { passoNovo } from "../util/schema";
+import { AbaDaFonte } from "./AbaDaFonte";
 import { FormPasso } from "./FormPasso";
 import { RevisaoMunicipios } from "./RevisaoMunicipios";
 import { Sugestoes } from "./Sugestoes";
@@ -159,6 +160,8 @@ export function PainelReceita({
           aoCancelar={() => setModo(null)}
         />
       )}
+
+      <AbaDaFonte receita={receita} salvar={salvar} />
 
       {modo === null && (
         <Sugestoes

@@ -11,11 +11,13 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator
 
+import polars as pl
+
 from wolfz.br.constants import MESES
 from wolfz.br.datas import parse_date_br, parse_month_year
 from wolfz.br.documentos import clean_cep, clean_cnpj, clean_cpf, cnpj_is_valid, cpf_is_valid
 from wolfz.br.numeros import decimal_provavel, parse_number_br
-from wolfz.core.suggest import CONVERSAO, DOCUMENTO, FORMA, LIMPEZA, Contexto, Suggestion, rule
+from wolfz.core.suggest import CONVERSAO, DOCUMENTO, FORMA, LIMPEZA, VERIFICACAO, Contexto, Suggestion, rule
 from wolfz.core.text import fix_mojibake, is_null_token, normalize_key, normalize_spaces
 
 TAXA = 0.9  # fração dos valores que precisa casar com o tipo
@@ -462,3 +464,66 @@ def meses_lado_a_lado(ctx: Contexto) -> Iterator[Suggestion]:
         tuple(meses),
         order=FORMA,
     )
+
+
+# ---------------------------------------------------------------------------
+# Verificações (F2.F2): o que vale hoje passa a ser conferido no próximo arquivo
+# ---------------------------------------------------------------------------
+
+
+def _ja_verificadas(ctx: Contexto, check: str) -> set[str]:
+    return {
+        c
+        for p in ctx.passos
+        if p.get("op") == "assert" and p.get("check") == check
+        for c in p.get("cols", [])
+    }
+
+
+@rule
+def verificar_preenchidas(ctx: Contexto) -> Iterator[Suggestion]:
+    """Colunas 100% preenchidas hoje viram ``assert not_null``: se o arquivo
+    do mês seguinte vier com buraco nelas, a receita avisa em vez de seguir."""
+    if not ctx.passos or ctx.total.height == 0:
+        return
+    ja = _ja_verificadas(ctx, "not_null")
+    vazias = ctx.total.select(
+        (pl.col(c).is_null() | (pl.col(c).cast(pl.String).str.strip_chars() == "")).any().alias(c)
+        for c in ctx.total.columns
+    ).row(0)
+    cols = [
+        c for c, tem_vazia in zip(ctx.total.columns, vazias, strict=True) if not tem_vazia and c not in ja
+    ]
+    if cols:
+        yield Suggestion(
+            "verificar_preenchidas",
+            ({"op": "assert", "check": "not_null", "cols": cols},),
+            0.7,
+            f"{_lista(cols)}: nenhuma célula vazia hoje. Verificar isso faz a receita parar, com aviso, "
+            "se o arquivo do mês seguinte vier com buraco.",
+            tuple(cols),
+            order=VERIFICACAO,
+        )
+
+
+@rule
+def verificar_unicos(ctx: Contexto) -> Iterator[Suggestion]:
+    """Código ou documento sem repetição (CPF, CNPJ, código IBGE, ID) vira
+    ``assert unique``: uma linha duplicada no próximo arquivo é avisada."""
+    if not ctx.passos or ctx.total.height < 2:
+        return
+    ja = _ja_verificadas(ctx, "unique")
+    for c in ctx.total.columns:
+        if c in ja or not _NOME_DE_CODIGO.search(_nome(c)):
+            continue
+        s = ctx.total[c]
+        if s.null_count() == 0 and s.n_unique() == ctx.total.height:
+            yield Suggestion(
+                "verificar_unicos",
+                ({"op": "assert", "check": "unique", "cols": [c]},),
+                0.7,
+                f"'{c}' não se repete hoje. Verificar isso avisa se o próximo arquivo "
+                "vier com linha duplicada.",
+                (c,),
+                order=VERIFICACAO,
+            )

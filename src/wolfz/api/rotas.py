@@ -32,6 +32,7 @@ from wolfz.core.detect import Detection, detect_tables, main_table
 from wolfz.core.engine import collect, run
 from wolfz.core.engine.preview import LIMITE_PAGINA, preview_project
 from wolfz.core.ingest import SheetStructure, import_file, list_sheets, open_file
+from wolfz.core.ingest.abas import padrao_de_aba
 from wolfz.core.profile import profile_table
 from wolfz.core.recipe import Recipe, dumps_recipe, load_recipe, recipe_from_dict, registered_ops, save_recipe
 from wolfz.core.recipe.migrate import CURRENT_VERSION
@@ -152,6 +153,9 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
         fonte: dict[str, Any] = {"type": _TIPO_FONTE[projeto["source"]["format"]]}
         if projeto["source"]["sheet"]:
             fonte["sheet"] = projeto["source"]["sheet"]
+            # Aba com mês ou ano no nome: aceita a do próximo arquivo (F2.F4).
+            if padrao := padrao_de_aba(projeto["source"]["sheet"]):
+                fonte["match"] = {"sheet_name_regex": padrao}
         inicial = recipe_from_dict(
             {
                 "wolfz_version": CURRENT_VERSION,
@@ -305,7 +309,8 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
         atual = receita(pasta)
         with projetos.lock_preview(project_id):
             tabela = collect(atual, pl.scan_parquet(pasta / RAW_FILE))
-        return [s.to_dict() for s in suggest(tabela, _rejeitadas(pasta))]
+        passos = [s.model_dump(mode="json") for s in atual.steps]
+        return [s.to_dict() for s in suggest(tabela, _rejeitadas(pasta), steps=passos)]
 
     @api.post("/projects/{project_id}/suggestions/rejections", status_code=204)
     def rejeitar_sugestao(project_id: str, pedido: PedidoRejeicao) -> Response:

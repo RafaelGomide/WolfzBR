@@ -30,7 +30,7 @@ CONFIANCA_MINIMA = 0.6
 # Ordem de aplicação no "aceitar todas": limpar antes de converter, e mudar
 # a forma da tabela (duplicadas, despivotar) por último, quando as colunas
 # que as outras sugestões citam já foram tratadas.
-LIMPEZA, DOCUMENTO, CONVERSAO, FORMA = 10, 20, 30, 40
+LIMPEZA, DOCUMENTO, CONVERSAO, FORMA, VERIFICACAO = 10, 20, 30, 40, 50
 
 
 @dataclass(frozen=True)
@@ -70,6 +70,7 @@ class Contexto:
 
     df: pl.DataFrame
     total: pl.DataFrame  # a tabela inteira, para o que a amostra não vê (duplicadas)
+    passos: list[dict[str, Any]] = field(default_factory=list)  # a receita atual
     _perfis: dict[str, ColumnProfile] = field(default_factory=dict)
 
     @property
@@ -107,14 +108,17 @@ def suggest(
     data: pl.DataFrame | pl.LazyFrame,
     rejected: Iterable[tuple[str, str | None]] = (),
     sample: int = AMOSTRA,
+    steps: Iterable[dict[str, Any]] = (),
 ) -> list[Suggestion]:
     """Sugestões para a tabela, na ordem de aplicação e, dentro dela, da
     mais confiante para a menos. ``rejected`` são pares (regra, coluna) que
-    o usuário rejeitou; coluna ``None`` rejeita a regra inteira."""
+    o usuário rejeitou; coluna ``None`` rejeita a regra inteira. ``steps``
+    são os passos da receita (as regras de verificação não repetem um
+    ``assert`` que já está lá)."""
     import wolfz.core.suggest.regras  # noqa: F401  (registra as regras)
 
     df = data.collect() if isinstance(data, pl.LazyFrame) else data
-    ctx = Contexto(sample_rows(df, sample), df)
+    ctx = Contexto(sample_rows(df, sample), df, list(steps))
     recusadas = set(rejected)
     saida: list[Suggestion] = []
     for nome, regra in _REGRAS.items():

@@ -18,12 +18,13 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Literal
 
 import polars as pl
 
+from wolfz.core.ingest.abas import MESES_DO_MOLDE
 from wolfz.core.ingest.cells import column_index
 from wolfz.core.recipe import Op, Recipe
 
@@ -131,6 +132,9 @@ class FonteM:
 
     tipo: Literal["excel", "csv", "ods"]
     aba: str | None = None
+    # A aba muda de nome todo mês (source.match): sem a aba exata, vale a de
+    # mesmo molde (o M não tem expressão regular).
+    aba_variavel: bool = False
     encoding: str | None = None
     separador: str | None = None
     colunas: int | None = None
@@ -236,6 +240,32 @@ _M_VAZIO_NULO = """
 """
 
 
+# molde_de_aba (wolfz.core.ingest.abas): minúsculo e sem acento (WolfzChave),
+# mês inteiro vira '#' e cada dígito vira '0'.
+_M_MOLDE_ABA = f"""
+(nome as text) as text =>
+    let
+        letra = (c as text) as logical => List.Contains({{"a".."z"}}, c),
+        digito = (c as text) as text => if List.Contains({{"0".."9"}}, c) then "0" else c,
+        tokens = List.Accumulate(
+            Text.ToList(WolfzChave(nome)),
+            {{}},
+            (acc, c) =>
+                if not List.IsEmpty(acc) and letra(c) and letra(Text.End(List.Last(acc), 1))
+                then List.RemoveLastN(acc, 1) & {{List.Last(acc) & c}}
+                else acc & {{c}}
+        ),
+        meses = {m_list(MESES_DO_MOLDE)},
+        trocado = List.Transform(
+            tokens,
+            (t) => if List.Contains(meses, t) then "#"
+                else Text.Combine(List.Transform(Text.ToList(t), digito))
+        )
+    in
+        Text.Combine(trocado)
+"""
+
+
 def _source_steps(fonte: FonteM, grade: bool) -> tuple[dict[str, str], list[str]]:
     """Funções auxiliares e passos que leem o arquivo e terminam em
     ``Fonte``. Cada passo é ``nome = expressão``, com comentários antes."""
@@ -269,6 +299,20 @@ def _source_steps(fonte: FonteM, grade: bool) -> tuple[dict[str, str], list[str]
     if fonte.aba is None:
         aba = 'Table.SelectRows(Arquivo, each [Kind] = "Sheet" and not [Hidden]){0}[Data]'
         descricao = "primeira aba visível"
+    elif fonte.aba_variavel:
+        aba = (
+            "let\n"
+            '        abas = Table.SelectRows(Arquivo, each [Kind] = "Sheet"),\n'
+            f"        exata = Table.SelectRows(abas, each [Item] = {m_text(fonte.aba)}),\n"
+            f"        molde = WolfzMoldeAba({m_text(fonte.aba)}),\n"
+            "        parecidas = Table.SelectRows(abas, each WolfzMoldeAba([Item]) = molde)\n"
+            "    in\n"
+            "        if not Table.IsEmpty(exata) then exata{0}[Data]\n"
+            "        else if not Table.IsEmpty(parecidas) then parecidas{0}[Data]\n"
+            '        else error Error.Record("WolfzBR: aba não encontrada", '
+            f'"Nenhuma aba se chama " & {m_text(fonte.aba)} & " nem tem nome parecido (mês e ano trocados).")'
+        )
+        descricao = f"aba {fonte.aba} (ou a do mês seguinte, com o nome no mesmo molde)"
     else:
         aba = f'Arquivo{{[Item = {m_text(fonte.aba)}, Kind = "Sheet"]}}[Data]'
         descricao = f"aba {fonte.aba}"
@@ -280,7 +324,13 @@ def _source_steps(fonte: FonteM, grade: bool) -> tuple[dict[str, str], list[str]
         f"Aba = {aba}",
         f"Fonte = WolfzGrade(Aba, {fonte.linha0}, {fonte.coluna0})",
     ]
-    return {"WolfzTexto": _M_TEXTO, "WolfzLetra": _M_LETRA, "WolfzGrade": _M_GRADE}, passos
+    ajudantes = {"WolfzTexto": _M_TEXTO, "WolfzLetra": _M_LETRA, "WolfzGrade": _M_GRADE}
+    if fonte.aba_variavel and fonte.aba is not None:
+        # Import tardio: wolfz.ops.m_br importa este módulo.
+        from wolfz.ops import m_br
+
+        ajudantes |= {**m_br.BASE, "WolfzMoldeAba": _M_MOLDE_ABA}
+    return ajudantes, passos
 
 
 # ---------------------------------------------------------------------------
@@ -313,6 +363,9 @@ def recipe_to_m(recipe: Recipe, fonte: FonteM | None = None) -> str:
     passos ativos da receita. Sem ``fonte``, usa o tipo e a aba da receita."""
     if fonte is None:
         fonte = FonteM(recipe.source.type, aba=recipe.source.sheet)
+    match = recipe.source.match
+    if match is not None and match.sheet_name_regex and not fonte.aba_variavel:
+        fonte = replace(fonte, aba_variavel=True)
     steps = recipe.active_steps
     grade = bool(steps) and steps[0].op in _PASSOS_DE_GRADE
     helpers, fonte_passos = _source_steps(fonte, grade or fonte.tipo != "csv")

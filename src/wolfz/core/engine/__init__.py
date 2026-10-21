@@ -41,6 +41,14 @@ def _step_error(step: Op, previous: Op | None, columns: list[str], exc: Exceptio
             title="Coluna não encontrada",
         )
     reason = str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__
+    if isinstance(exc, AssertionError):  # passo assert (F2.F1): o arquivo não é o esperado
+        return StepError(
+            step.id,
+            step.op,
+            f"O passo {step.id} (verificação) reprovou: {reason}",
+            columns,
+            title="Verificação reprovada",
+        )
     return StepError(step.id, step.op, f"O passo {step.id} ({step.op}) falhou: {reason}", columns)
 
 

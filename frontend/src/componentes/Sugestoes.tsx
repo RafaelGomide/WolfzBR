@@ -13,6 +13,8 @@ import { CaixaErro } from "./Estado";
 
 type Sugestao = components["schemas"]["Sugestao"];
 
+const VERIFICACAO = 50; // wolfz.core.suggest.VERIFICACAO
+
 const pct = (x: number) =>
   x.toLocaleString("pt-BR", { style: "percent", maximumFractionDigits: 0 });
 
@@ -47,7 +49,13 @@ export function Sugestoes({
   if (erro) return erro instanceof ErroApi && erro.passoComErro ? null : <CaixaErro erro={erro} />;
   const lista = dados ?? [];
   if (lista.length === 0) return null;
-  const comPasso = lista.filter((s) => s.kind === "passo");
+  // "Aceitar todas" deixa as verificações (order 50) para depois quando há
+  // outros passos: elas foram calculadas na tabela de agora, e despivotar ou
+  // tirar colunas muda a tabela. Depois de salvar, voltam calculadas de novo.
+  const passos = lista.filter((s) => s.kind === "passo");
+  const comPasso = passos.some((s) => s.order < VERIFICACAO)
+    ? passos.filter((s) => s.order < VERIFICACAO)
+    : passos;
 
   async function acrescentar(passos: Record<string, unknown>[]) {
     setOcupado(true);

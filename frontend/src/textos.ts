@@ -110,6 +110,15 @@ export const T = {
     novoPasso: "Novo passo",
     editarPasso: (id: string) => `Editar ${id}`,
   },
+  aba: {
+    rotulo: "Aba",
+    tambem: "No próximo arquivo, se ela não existir, vale a que casar com",
+    soEsta: "Só esta aba",
+    editar: "Editar",
+    padrao: "Padrão do nome da aba (expressão regular; vazio desliga)",
+    exemplo: "ex.: (?i)Vendas \\d{4}",
+    dica: "Para o relatório cuja aba muda de nome todo mês: DEZEMBRO_2025, JANEIRO_2026…",
+  },
   sugestoes: {
     titulo: (n: number) => `Sugestões (${n})`,
     aceitar: "Aceitar",
@@ -279,6 +288,7 @@ export const T = {
     scale_by_unit: "Escala da unidade (mil, milhões)",
     fix_mojibake: "Consertar acentos (SÃ£o → São)",
     strip_footnotes: "Tirar marca de nota (*, ¹, (1))",
+    assert: "Verificar (assert)",
   } as Record<string, string>,
   params: {
     cols: "Colunas",
@@ -328,5 +338,10 @@ export const T = {
     unit_col: "Coluna com a unidade",
     threshold: "Nota mínima do parecido (50 a 100)",
     manual: "Decisões da revisão",
+    check: "Verificação",
+    min: "Mínimo",
+    max: "Máximo",
+    pattern: "Padrão (expressão regular)",
+    min_rows: "Mínimo de linhas",
   } as Record<string, string>,
 };

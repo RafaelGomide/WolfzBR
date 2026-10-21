@@ -316,3 +316,106 @@ def test_run_avisa_e_neutraliza_formulas(receita, tmp_path):
     result = _run(receita, entrada, "-o", saida, "--overwrite", "--neutralize-formulas")
     assert result.exit_code == 0 and "Atenção" not in result.output
     assert "\n'=HYPERLINK(1)," in saida.read_text(encoding="utf-8-sig")
+
+
+# ---------------------------------------------------------------------------
+# Verificação na reaplicação (F2.F1) e lote (F2.F3)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def receita_com_verificacao(tmp_path):
+    path = tmp_path / "vendas_verificada.wolfz.json"
+    data = {
+        "wolfz_version": "0.1",
+        "name": "vendas",
+        "created_at": "2026-01-01T00:00:00Z",
+        "source": {"type": "csv"},
+        "steps": [
+            *PASSOS,
+            {"id": "s4", "op": "assert", "check": "not_null", "cols": ["valor"]},
+            {"id": "s5", "op": "assert", "check": "row_count_min", "min_rows": 2},
+        ],
+    }
+    save_recipe(recipe_from_dict(data), path)
+    return path
+
+
+def _csv(path, linhas):
+    path.write_bytes(("regiao;Vlr\n" + "".join(f"{r};{v}\n" for r, v in linhas)).encode("cp1252"))
+    return path
+
+
+def test_verificacao_reprovada_sai_com_1_e_nao_grava(receita_com_verificacao, tmp_path):
+    entrada = _csv(tmp_path / "mes2.csv", [("Sul", "R$ 1,00"), ("Norte", "")])
+    saida = tmp_path / "saida.csv"
+    result = _run(receita_com_verificacao, entrada, "-o", saida)
+    assert result.exit_code == 1
+    assert "Verificação reprovada" in result.stderr
+    assert "'valor' tem 1 linhas vazia" in result.stderr
+    assert not saida.exists()
+
+
+def test_lote_com_relatorio(receita_com_verificacao, tmp_path):
+    entradas = tmp_path / "entrada"
+    entradas.mkdir()
+    _csv(entradas / "jan.csv", [("Sul", "R$ 1,00"), ("Norte", "R$ 2,00")])
+    _csv(entradas / "fev.csv", [("Sul", "R$ 3,00"), ("Norte", "")])  # verificação reprova
+    _csv(entradas / "mar.csv", [("Sul", "R$ 4,00"), ("Leste", "R$ 5,00"), ("Oeste", "R$ 6,00")])
+    saida, relatorio = tmp_path / "saida", tmp_path / "relatorio.json"
+    # O padrão vai entre aspas: no PowerShell ninguém expande, a CLI expande.
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            str(receita_com_verificacao),
+            str(entradas / "*.csv"),
+            "-o",
+            str(saida),
+            "--report",
+            str(relatorio),
+        ],
+        terminal_width=200,
+    )
+    assert result.exit_code == 1, result.output
+    assert sorted(p.name for p in saida.iterdir()) == ["jan.csv", "mar.csv"]
+    assert "2 de 3 arquivos" in result.stdout
+    dados = json.loads(relatorio.read_text(encoding="utf-8"))
+    por_arquivo = {Path(r["arquivo"]).name: r for r in dados["arquivos"]}
+    assert por_arquivo["jan.csv"]["ok"] and por_arquivo["jan.csv"]["linhas"] == 2
+    assert por_arquivo["mar.csv"]["linhas"] == 3
+    assert not por_arquivo["fev.csv"]["ok"] and por_arquivo["fev.csv"]["codigo"] == 1
+    assert "Verificação reprovada" in por_arquivo["fev.csv"]["erro"]
+
+
+def test_lote_tudo_certo_sai_com_0(receita, tmp_path):
+    a = _csv(tmp_path / "a.csv", [("Sul", "R$ 1,00")])
+    b = _csv(tmp_path / "b.csv", [("Norte", "R$ 2,00")])
+    result = runner.invoke(app, ["run", str(receita), str(a), str(b), "-o", str(tmp_path / "saida")])
+    assert result.exit_code == 0, result.output
+    assert sorted(p.name for p in (tmp_path / "saida").iterdir()) == ["a.csv", "b.csv"]
+
+
+def test_lote_com_saida_que_e_arquivo(receita, tmp_path):
+    a = _csv(tmp_path / "a.csv", [("Sul", "R$ 1,00")])
+    b = _csv(tmp_path / "b.csv", [("Norte", "R$ 2,00")])
+    arquivo = tmp_path / "x.csv"
+    arquivo.write_text("x")
+    result = runner.invoke(app, ["run", str(receita), str(a), str(b), "-o", str(arquivo)])
+    assert result.exit_code == 2
+    assert "precisa ser uma pasta" in result.stderr
+
+
+def test_lote_padrao_sem_arquivo(receita, tmp_path):
+    result = runner.invoke(app, ["run", str(receita), str(tmp_path / "*.xlsx"), "-o", str(tmp_path)])
+    assert result.exit_code == 3
+    assert "Nenhum arquivo casa" in result.stderr
+
+
+def test_lote_arquivo_ilegivel_nao_para_os_outros(receita, tmp_path):
+    a = _csv(tmp_path / "a.csv", [("Sul", "R$ 1,00")])
+    ruim = tmp_path / "ruim.xlsx"
+    ruim.write_bytes(b"isto nao e uma planilha")
+    result = runner.invoke(app, ["run", str(receita), str(ruim), str(a), "-o", str(tmp_path / "saida")])
+    assert result.exit_code == 3
+    assert (tmp_path / "saida" / "a.csv").exists()

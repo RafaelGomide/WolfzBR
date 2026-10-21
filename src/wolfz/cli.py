@@ -8,6 +8,7 @@ texto (§5.4).
 
 from __future__ import annotations
 
+import glob
 import json
 from datetime import date
 from enum import IntEnum, StrEnum
@@ -24,7 +25,7 @@ from wolfz.core.engine import StepError, collect, read_input
 from wolfz.core.ingest import IngestError
 from wolfz.core.profile import ColumnProfile, LoadedTable, TableProfile, load_table, profile_table
 from wolfz.core.profile.column import SAMPLE_SIZE
-from wolfz.core.recipe import RecipeError, load_recipe, recipe_json_schema
+from wolfz.core.recipe import Recipe, RecipeError, load_recipe, recipe_json_schema
 from wolfz.export.dados import ExportError, OpcoesCsv, celulas_formula, escritor, gravar_juntos
 
 
@@ -91,16 +92,99 @@ def _output_path(saida: str, arquivo: Path, formato: Formato) -> Path:
 
 
 _EPILOG = (
-    "Códigos de saída: 0 ok · 1 um passo falhou neste arquivo · "
-    "2 receita inválida ou uso incorreto · 3 arquivo de entrada ilegível."
+    "Vários arquivos (ou um padrão como 'entrada/*.xlsx'): -o é uma pasta e cada arquivo é processado "
+    "à parte, com um relatório no fim. "
+    "Códigos de saída: 0 ok · 1 um passo falhou (ou uma verificação reprovou) · "
+    "2 receita inválida ou uso incorreto · 3 arquivo de entrada ilegível. "
+    "Em lote, o maior código entre os arquivos."
 )
+
+
+class _Falha(Exception):
+    """Falha de um arquivo: o código de saída e as linhas da mensagem."""
+
+    def __init__(self, code: ExitCode, *lines: str):
+        super().__init__(lines[0] if lines else "")
+        self.code = code
+        self.lines = lines
+
+
+def _carregar_receita(receita: Path) -> Recipe:
+    try:
+        return load_recipe(receita)
+    except FileNotFoundError:
+        _fail(ExitCode.INVALID_RECIPE, f"Receita não encontrada: {receita}")
+    except RecipeError as exc:
+        _fail(ExitCode.INVALID_RECIPE, f"Receita inválida: {receita}", *(f"  {e}" for e in exc.errors))
+    except (UnicodeDecodeError, OSError) as exc:
+        _fail(ExitCode.INVALID_RECIPE, f"Não foi possível ler a receita {receita}: {_first_line(exc)}")
+
+
+def _processar(
+    recipe: Recipe,
+    arquivo: Path,
+    destino: Path,
+    formato: Formato,
+    opcoes: OpcoesCsv,
+    neutralizar: bool,
+    overwrite: bool,
+) -> pl.DataFrame:
+    """Aplica a receita a um arquivo e grava. Nada é gravado se algo falhar."""
+    if destino.exists() and not overwrite:
+        raise _Falha(
+            ExitCode.INVALID_RECIPE, f"A saída já existe: {destino}", "Use --overwrite para substituir."
+        )
+    if not arquivo.is_file():
+        raise _Falha(ExitCode.UNREADABLE_INPUT, f"Arquivo não encontrado: {arquivo}")
+    try:
+        df = read_input(recipe, arquivo)
+    except IngestError as exc:
+        raise _Falha(ExitCode.UNREADABLE_INPUT, f"{exc.title}: {exc.message}") from None
+    except (OSError, pl.exceptions.PolarsError) as exc:
+        raise _Falha(
+            ExitCode.UNREADABLE_INPUT, f"Não foi possível ler {arquivo}: {_first_line(exc)}"
+        ) from None
+    try:
+        result = collect(recipe, df.lazy())
+    except StepError as exc:
+        columns = ", ".join(exc.available_columns) or "(nenhuma)"
+        raise _Falha(
+            ExitCode.STEP_ERROR,
+            f"{exc.title}: {exc.message}",
+            f"Colunas disponíveis antes do passo {exc.step_id}: {columns}",
+            "Nada foi gravado.",
+        ) from None
+    try:
+        gravar_juntos({destino: escritor(formato.value, result, opcoes, neutralizar, aba=recipe.name)})
+    except ExportError as exc:
+        raise _Falha(ExitCode.INVALID_RECIPE, str(exc), "Nada foi gravado.") from None
+    return result
+
+
+def _expandir(arquivos: list[str]) -> list[Path]:
+    """Os arquivos pedidos; padrões ('pasta/*.xlsx') são expandidos aqui,
+    porque o PowerShell e o cmd do Windows não expandem sozinhos."""
+    saida: list[Path] = []
+    for a in arquivos:
+        if any(ch in a for ch in "*?["):
+            achados = sorted(Path(p) for p in glob.glob(a))
+            if not achados:
+                _fail(ExitCode.UNREADABLE_INPUT, f"Nenhum arquivo casa com {a}")
+            saida += achados
+        else:
+            saida.append(Path(a))
+    return list(dict.fromkeys(saida))
 
 
 @app.command(epilog=_EPILOG)
 def run(
     receita: Annotated[Path, typer.Argument(help="Receita .wolfz.json.", show_default=False)],
-    arquivo: Annotated[
-        Path, typer.Argument(help="Planilha a limpar (.xlsx, .xls, .ods ou .csv).", show_default=False)
+    arquivos: Annotated[
+        list[str],
+        typer.Argument(
+            help="Planilha(s) a limpar (.xlsx, .xls, .ods ou .csv), ou um padrão como 'entrada/*.xlsx'.",
+            show_default=False,
+        ),
     ],
     saida: Annotated[
         str,
@@ -125,50 +209,34 @@ def run(
             help="Prefixa com ' o texto do CSV que começa com =, +, -, @ (evita injeção de fórmula).",
         ),
     ] = False,
+    relatorio: Annotated[
+        Path | None,
+        typer.Option("--report", help="Em lote: grava o relatório por arquivo em JSON.", show_default=False),
+    ] = None,
 ) -> None:
-    """Aplica uma receita a uma planilha e grava a tabela limpa.
+    """Aplica uma receita a uma ou mais planilhas e grava a tabela limpa.
 
-    Nada é gravado se algum passo falhar.
+    Nada é gravado para um arquivo se algum passo falhar nele.
     """
-    try:
-        recipe = load_recipe(receita)
-    except FileNotFoundError:
-        _fail(ExitCode.INVALID_RECIPE, f"Receita não encontrada: {receita}")
-    except RecipeError as exc:
-        _fail(ExitCode.INVALID_RECIPE, f"Receita inválida: {receita}", *(f"  {e}" for e in exc.errors))
-    except (UnicodeDecodeError, OSError) as exc:
-        _fail(ExitCode.INVALID_RECIPE, f"Não foi possível ler a receita {receita}: {_first_line(exc)}")
-
-    destino = _output_path(saida, arquivo, formato)
-    if destino.exists() and not overwrite:
-        _fail(ExitCode.INVALID_RECIPE, f"A saída já existe: {destino}", "Use --overwrite para substituir.")
-
-    if not arquivo.is_file():
-        _fail(ExitCode.UNREADABLE_INPUT, f"Arquivo não encontrado: {arquivo}")
-    try:
-        df = read_input(recipe, arquivo)
-    except IngestError as exc:
-        _fail(ExitCode.UNREADABLE_INPUT, f"{exc.title}: {exc.message}")
-    except (OSError, pl.exceptions.PolarsError) as exc:
-        _fail(ExitCode.UNREADABLE_INPUT, f"Não foi possível ler {arquivo}: {_first_line(exc)}")
-
-    try:
-        result = collect(recipe, df.lazy())
-    except StepError as exc:
-        columns = ", ".join(exc.available_columns) or "(nenhuma)"
-        _fail(
-            ExitCode.STEP_ERROR,
-            f"{exc.title}: {exc.message}",
-            f"Colunas disponíveis antes do passo {exc.step_id}: {columns}",
-            "Nada foi gravado.",
-        )
-
+    recipe = _carregar_receita(receita)
+    entradas = _expandir(arquivos)
     opcoes = OpcoesCsv(separator="\t" if sep is Sep.tab else sep.value, decimal_comma=decimal_comma)
-    try:
-        gravar_juntos({destino: escritor(formato.value, result, opcoes, neutralizar, aba=recipe.name)})
-    except ExportError as exc:
-        _fail(ExitCode.INVALID_RECIPE, str(exc), "Nada foi gravado.")
-    typer.echo(f"{result.height} linhas, {result.width} colunas -> {destino}")
+
+    if len(entradas) == 1 and relatorio is None:
+        arquivo = entradas[0]
+        destino = _output_path(saida, arquivo, formato)
+        try:
+            result = _processar(recipe, arquivo, destino, formato, opcoes, neutralizar, overwrite)
+        except _Falha as falha:
+            _fail(falha.code, *falha.lines)
+        typer.echo(f"{result.height} linhas, {result.width} colunas -> {destino}")
+        _avisar_formulas(result, formato, neutralizar)
+        return
+
+    _lote(recipe, entradas, saida, formato, opcoes, neutralizar, overwrite, relatorio)
+
+
+def _avisar_formulas(result: pl.DataFrame, formato: Formato, neutralizar: bool) -> None:
     formulas = celulas_formula(result)
     if formulas and formato is Formato.csv and not neutralizar:
         typer.echo(
@@ -176,6 +244,76 @@ def run(
             "o CSV numa planilha. Use --neutralize-formulas se o arquivo vier de fonte não confiável.",
             err=True,
         )
+
+
+def _lote(
+    recipe: Recipe,
+    entradas: list[Path],
+    saida: str,
+    formato: Formato,
+    opcoes: OpcoesCsv,
+    neutralizar: bool,
+    overwrite: bool,
+    relatorio: Path | None,
+) -> None:
+    """Vários arquivos (F2.F3): cada um à parte; uma falha não para os
+    outros. No fim, a tabela do que deu certo e do que falhou."""
+    pasta = Path(saida)
+    if pasta.exists() and not pasta.is_dir():
+        _fail(ExitCode.INVALID_RECIPE, f"Com vários arquivos, -o precisa ser uma pasta: {saida}")
+    nomes = [a.stem for a in entradas]
+    repetidos = sorted({n for n in nomes if nomes.count(n) > 1})
+    if repetidos:
+        _fail(
+            ExitCode.INVALID_RECIPE, f"Arquivos com o mesmo nome dariam a mesma saída: {', '.join(repetidos)}"
+        )
+    pasta.mkdir(parents=True, exist_ok=True)
+
+    linhas: list[dict] = []
+    pior = ExitCode.OK
+    for arquivo in entradas:
+        destino = pasta / f"{arquivo.stem}.{formato.value}"
+        try:
+            result = _processar(recipe, arquivo, destino, formato, opcoes, neutralizar, overwrite)
+        except _Falha as falha:
+            pior = max(pior, falha.code)
+            linhas.append(
+                {
+                    "arquivo": str(arquivo),
+                    "ok": False,
+                    "codigo": int(falha.code),
+                    "erro": " ".join(falha.lines),
+                }
+            )
+            continue
+        linhas.append(
+            {
+                "arquivo": str(arquivo),
+                "ok": True,
+                "saida": str(destino),
+                "linhas": result.height,
+                "colunas": result.width,
+            }
+        )
+
+    tabela = Table(title=f"{recipe.name}: {sum(r['ok'] for r in linhas)} de {len(linhas)} arquivos")
+    tabela.add_column("Arquivo")
+    tabela.add_column("Resultado")
+    for r in linhas:
+        if r["ok"]:
+            tabela.add_row(
+                Path(r["arquivo"]).name, f"[green]ok[/green] {r['linhas']} linhas -> {Path(r['saida']).name}"
+            )
+        else:
+            tabela.add_row(Path(r["arquivo"]).name, f"[red]falhou[/red] {r['erro']}")
+    Console(width=max(120, Console().width)).print(tabela)
+    if relatorio is not None:
+        relatorio.write_text(
+            json.dumps({"receita": recipe.name, "arquivos": linhas}, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    if pior is not ExitCode.OK:
+        raise typer.Exit(int(pior))
 
 
 @app.command()
