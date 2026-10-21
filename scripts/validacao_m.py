@@ -11,7 +11,8 @@ saída do Polars (``wolfz.run``). O roteiro está em ``dev/validacao_m.md``::
 
 Além do subconjunto fixo, o complementar cobre as traduções para M que
 entraram depois dele (sinais do IBGE, mojibake, CPF ou CNPJ e o de-para de
-municípios). Receita com ``normalize_municipio`` leva também o
+municípios) e, desde a 0.7.0, as verificações (``assert``) e a aba que
+muda de nome. Receita com ``normalize_municipio`` leva também o
 ``depara_municipios.csv`` e o parâmetro ``CaminhoDeparaMunicipios``.
 """
 
@@ -24,7 +25,7 @@ from pathlib import Path
 import polars as pl
 
 import wolfz
-from wolfz.core.engine import read_input
+from wolfz.core.engine import StepError, read_input
 from wolfz.core.recipe import load_recipe
 from wolfz.export.depara import ARQUIVO_DEPARA, depara_municipios, gravar_depara
 from wolfz.export.m import PARAMETRO, parameter_to_m, recipe_to_m, source_from_file
@@ -70,6 +71,26 @@ COMPLEMENTAR = (
         "_fixtures/municipios_digitados.wolfz.json",
         "_fixtures/municipios_digitados.csv",
         ("municipio_codigo_ibge", "municipio_nome_ibge", "municipio_status"),
+    ),
+    # 0.7.0: verificações (assert) e aba que muda de nome. A reprovada tem de
+    # derrubar o refresh com a mensagem, sem tabela.
+    (
+        "verificacoes_aprovadas",
+        "_fixtures/verificacoes_aprovadas.wolfz.json",
+        "anp_glp_2024_s2/original.csv",
+        ("cnpj", "data_coleta", "valor_venda"),
+    ),
+    (
+        "verificacao_reprovada",
+        "_fixtures/verificacao_reprovada.wolfz.json",
+        "anp_glp_2024_s2/original.csv",
+        (),
+    ),
+    (
+        "aba_mes_seguinte",
+        "_fixtures/aba_mes_seguinte.wolfz.json",
+        "_fixtures/aba_mes_seguinte.xlsx",
+        ("loja", "data", "valor"),
     ),
 )
 
@@ -130,7 +151,12 @@ def main() -> None:
     for nome, receita, original, colunas in casos():
         if nome == COMPLEMENTAR[0][0]:
             print("| **Complementar** | | | | |")
-        df = preparar(nome, receita, original, args.saida)
+        try:
+            df = preparar(nome, receita, original, args.saida)
+        except StepError as exc:
+            # Verificação reprovada: o Power BI tem de parar com esta mensagem.
+            print(f"| `{nome}` ({original.suffix}) | erro | | | {_valor(str(exc))} |")
+            continue
         for k, (linha, coluna, valor) in enumerate(amostras(df, colunas)):
             primeira = k == 0
             arquivo = f"`{nome}` ({original.suffix})" if primeira else ""

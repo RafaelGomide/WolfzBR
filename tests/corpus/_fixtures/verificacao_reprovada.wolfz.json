@@ -1,0 +1,76 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "verificação reprovada",
+  "source": {
+    "type": "csv"
+  },
+  "steps": [
+    {
+      "cols": [
+        "Nome da Rua",
+        "Numero Rua",
+        "Complemento",
+        "Bairro",
+        "Cep"
+      ],
+      "id": "s1",
+      "op": "drop_cols"
+    },
+    {
+      "id": "s2",
+      "mapping": {
+        "Bandeira": "bandeira",
+        "CNPJ da Revenda": "cnpj",
+        "Data da Coleta": "data_coleta",
+        "Estado - Sigla": "uf",
+        "Municipio": "municipio",
+        "Produto": "produto",
+        "Regiao - Sigla": "regiao",
+        "Revenda": "revenda",
+        "Unidade de Medida": "unidade",
+        "Valor de Compra": "valor_compra",
+        "Valor de Venda": "valor_venda"
+      },
+      "op": "rename"
+    },
+    {
+      "cols": [
+        "cnpj"
+      ],
+      "flag": false,
+      "id": "s3",
+      "op": "clean_cnpj",
+      "pad_zeros": true
+    },
+    {
+      "accept_excel_serial": true,
+      "century_pivot": 30,
+      "cols": [
+        "data_coleta"
+      ],
+      "eight_digits": "auto",
+      "id": "s4",
+      "op": "parse_date_br"
+    },
+    {
+      "cols": [
+        "valor_venda",
+        "valor_compra"
+      ],
+      "dash_is_zero": false,
+      "debit_negative": false,
+      "decimal": ",",
+      "id": "s5",
+      "op": "parse_decimal_br"
+    },
+    {
+      "check": "unique",
+      "cols": [
+        "cnpj"
+      ],
+      "id": "s6",
+      "op": "assert"
+    }
+  ],
+  "wolfz_version": "0.1"
+}

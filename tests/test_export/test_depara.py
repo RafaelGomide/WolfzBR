@@ -118,3 +118,22 @@ def test_script_le_o_depara_ao_lado():
     assert 'DEPARA_MUNICIPIOS = Path(__file__).with_name("depara_municipios.csv")' in script
     assert 'aplicar_depara_municipios(lf, "s1", "municipio", "uf", DEPARA_MUNICIPIOS)' in script
     assert "rapidfuzz" not in script
+
+
+def test_verificacao_reprovada_nao_impede_o_depara():
+    """O de-para não roda as verificações: uma que reprova nos dados de hoje
+    (aqui, município vazio) não pode impedir a exportação do M."""
+    receita = recipe_from_dict(
+        {
+            "wolfz_version": "0.1",
+            "name": "x",
+            "created_at": "2026-01-01T00:00:00Z",
+            "source": {"type": "csv"},
+            "steps": [
+                {"id": "s1", "op": "assert", "check": "not_null", "cols": ["municipio"]},
+                {"id": "s2", "op": "normalize_municipio", "col": "municipio", "uf_col": "uf"},
+                {"id": "s3", "op": "assert", "check": "row_count_min", "min_rows": 1000},
+            ],
+        }
+    )
+    assert depara_municipios(receita, ENTRADA.lazy()).height == 4

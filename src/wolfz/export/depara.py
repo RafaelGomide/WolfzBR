@@ -19,11 +19,17 @@ ARQUIVO_DEPARA = "depara_municipios.csv"
 def depara_municipios(recipe: Recipe, lf: pl.LazyFrame) -> pl.DataFrame | None:
     """De-para de todos os passos ``normalize_municipio`` ativos, cada um
     calculado sobre a tabela que chega a ele. ``None`` se não há nenhum."""
+    passos = recipe.active_steps
+    ultimo = max((i for i, s in enumerate(passos) if s.op == "normalize_municipio"), default=-1)
     partes = []
-    for step in recipe.active_steps:
+    # Só até o último município, e sem as verificações: elas não mudam a
+    # tabela, e uma reprovada nos dados de hoje não pode impedir a exportação
+    # do M (no Power BI ela vale para o arquivo do mês que vier).
+    for step in passos[: ultimo + 1]:
         if step.op == "normalize_municipio":
             partes.append(step.depara(lf))  # type: ignore[attr-defined]
-        lf = step.to_polars(lf)
+        elif step.op != "assert":
+            lf = step.to_polars(lf)
     return pl.concat(partes) if partes else None
 
 
