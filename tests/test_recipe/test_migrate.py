@@ -6,7 +6,15 @@ import importlib
 
 import pytest
 
-from wolfz.core.recipe.migrate import CURRENT_VERSION, RecipeVersionError, migrate, parse_version
+import wolfz
+from wolfz.core.recipe import RecipeError, RecipeTooNewError, recipe_from_dict
+from wolfz.core.recipe.migrate import (
+    CURRENT_VERSION,
+    NewerRecipeVersion,
+    RecipeVersionError,
+    migrate,
+    parse_version,
+)
 
 # O pacote exporta a função migrate, que esconde o submódulo de mesmo nome.
 migrate_module = importlib.import_module("wolfz.core.recipe.migrate")
@@ -38,9 +46,25 @@ def test_sem_versao():
         migrate({"name": "x"})
 
 
-def test_versao_mais_nova_e_recusada():
-    with pytest.raises(RecipeVersionError, match="pipx upgrade wolfzbr"):
-        migrate({"wolfz_version": "0.2"})
+@pytest.mark.parametrize("version", ["0.2", "1.0", "10.1"])
+def test_versao_mais_nova_e_recusada(version):
+    with pytest.raises(NewerRecipeVersion) as exc:
+        migrate({"wolfz_version": version})
+    assert (exc.value.version, exc.value.supported) == (version, CURRENT_VERSION)
+    mensagem = str(exc.value)
+    assert f"formato {version}" in mensagem
+    assert f"o WolfzBR {wolfz.__version__} instalado lê até o formato {CURRENT_VERSION}" in mensagem
+    assert "pipx upgrade wolfzbr" in mensagem
+
+
+def test_versao_mais_nova_vira_erro_de_receita():
+    """Quem carrega a receita (CLI, API, ``wolfz.run``) recebe um RecipeError
+    próprio, com uma linha só: a de pedir atualização."""
+    with pytest.raises(RecipeTooNewError) as exc:
+        recipe_from_dict({"wolfz_version": "0.2", "name": "x", "steps": []})
+    assert isinstance(exc.value, RecipeError)
+    assert len(exc.value.errors) == 1
+    assert exc.value.errors[0].startswith("Esta receita foi feita numa versão mais nova do WolfzBR")
 
 
 def test_cadeia_de_migracoes(monkeypatch):

@@ -1,5 +1,6 @@
 import json
 
+import pytest
 from typer.testing import CliRunner
 
 from wolfz.cli import app
@@ -96,3 +97,30 @@ def test_cli_schema():
     result = CliRunner().invoke(app, ["schema"])
     assert result.exit_code == 0
     assert json.loads(result.output) == recipe_json_schema()
+
+
+def _exemplos():
+    import wolfz.ops  # noqa: F401  (registra o catálogo)
+    from wolfz.core.recipe import registered_ops
+
+    for nome, cls in sorted(registered_ops().items()):
+        if cls.__module__.startswith("wolfz."):
+            for i, exemplo in enumerate(cls.examples):
+                yield pytest.param(nome, exemplo["step"], id=f"{nome}-{i}")
+
+
+@pytest.mark.parametrize(("op", "passo"), list(_exemplos()))
+def test_todo_passo_salvo_abre_de_novo(op, passo):
+    """O que o WolfzBR grava ele mesmo lê: a gravação omite os nulos, então
+    campo que aceita nulo precisa ter padrão (o ``new`` do ``replace`` não
+    tinha, e a receita salva não abria)."""
+    receita = recipe_from_dict(
+        {
+            "wolfz_version": "0.1",
+            "name": "ida e volta",
+            "created_at": "2026-01-01T00:00:00Z",
+            "source": {"type": "csv"},
+            "steps": [{"id": "s1", "op": op, **passo}],
+        }
+    )
+    assert loads_recipe(dumps_recipe(receita)) == receita

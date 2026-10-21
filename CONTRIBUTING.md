@@ -91,6 +91,16 @@ fix(br): CNPJ alfanumérico com "E" era tratado como notação científica
 docs: decisões pendentes do system design [F0.A]
 ```
 
+## Publicar uma versão
+
+Depois de criar a tag, guarde as receitas daquela versão para o teste de compatibilidade (`tests/test_recipe/test_receitas_antigas.py`):
+
+```bash
+uv run python scripts/receitas_antigas.py v0.7.0
+```
+
+O script roda o código da tag num `git worktree` temporário e grava em `tests/receitas_antigas/v0.7.0/` as receitas como aquela versão salvava, a tabela que ela produzia e um catálogo com um passo por exemplo de cada operação. O teste falha se uma versão do `CHANGELOG.md` (fora a atual) não tiver a sua pasta. Mudou o formato da receita? Suba `CURRENT_VERSION` e escreva a migração em `src/wolfz/core/recipe/migrate.py`: as receitas guardadas precisam continuar abrindo e dando a mesma tabela.
+
 ## Pull requests
 
 Uma tarefa = uma issue = um PR. O modelo de PR traz o checklist da definição de pronto: CI verde, testes com pelo menos um caso de dado sujo real, docstring em português no que for público, `CHANGELOG.md` atualizado e, se a mudança alterar uma decisão de design, `docs/system_design.md` atualizado no mesmo PR.

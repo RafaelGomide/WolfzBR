@@ -76,6 +76,8 @@ wolfz --help
 
 Códigos de saída do `run`: 0 ok · 1 um passo falhou ou uma verificação reprovou · 2 receita inválida ou uso incorreto · 3 arquivo ilegível. Em lote, o maior código entre os arquivos.
 
+Receitas antigas continuam abrindo nas versões novas: quando o formato muda, o WolfzBR converte ao carregar (o arquivo só é regravado quando você salva). Já uma receita feita num WolfzBR mais novo que o instalado não é lida pela metade: a mensagem diz as duas versões e pede `pipx upgrade wolfzbr`.
+
 ### Em Python
 
 ```python

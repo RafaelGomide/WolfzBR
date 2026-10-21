@@ -201,7 +201,9 @@ class Replace(Op):
     m_label = "Valor substituído"
     cols: list[str] = Field(min_length=1)
     old: str = Field(min_length=1)
-    new: str | None
+    # Com padrão: a receita gravada omite os nulos, e ``new`` nulo (apagar a
+    # célula) volta do arquivo como campo ausente.
+    new: str | None = None
     whole: bool = False
 
     examples = (

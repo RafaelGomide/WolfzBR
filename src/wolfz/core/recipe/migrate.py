@@ -29,6 +29,31 @@ class RecipeVersionError(ValueError):
     """Versão da receita ausente, inválida ou sem caminho de migração."""
 
 
+class NewerRecipeVersion(RecipeVersionError):
+    """Receita gravada por um WolfzBR mais novo que o instalado (F2.G2)."""
+
+    def __init__(self, version: str, supported: str):
+        self.version = version
+        self.supported = supported
+        super().__init__(
+            f"esta receita foi feita numa versão mais nova do WolfzBR (formato {version}); "
+            f"o WolfzBR {_instalado()} instalado lê até o formato {supported}. "
+            f"Atualize o WolfzBR: {COMANDO_ATUALIZAR}"
+        )
+
+
+COMANDO_ATUALIZAR = "pipx upgrade wolfzbr (ou pip install --upgrade wolfzbr)"
+
+
+def _instalado() -> str:
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("wolfzbr")
+    except PackageNotFoundError:  # pragma: no cover - rodando sem instalar
+        return "0.0.0+desconhecida"
+
+
 def parse_version(version: object) -> tuple[int, int]:
     """'0.1' -> (0, 1). Só major.minor: a receita não tem versão de patch."""
     if not isinstance(version, str) or not (m := re.fullmatch(r"(\d+)\.(\d+)", version)):
@@ -44,10 +69,7 @@ def migrate(data: RecipeDict, target: str = CURRENT_VERSION) -> RecipeDict:
         raise RecipeVersionError("receita sem o campo 'wolfz_version'")
     version = data["wolfz_version"]
     if parse_version(version) > parse_version(target):
-        raise RecipeVersionError(
-            f"receita feita com uma versão mais nova do WolfzBR (formato {version}); "
-            f"este WolfzBR lê até o formato {target}. Atualize com: pipx upgrade wolfzbr"
-        )
+        raise NewerRecipeVersion(version, target)
     data = dict(data)
     while data["wolfz_version"] != target:
         step = MIGRATIONS.get(data["wolfz_version"])

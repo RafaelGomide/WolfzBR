@@ -630,3 +630,29 @@ def test_importar_aba_com_mes_propoe_o_padrao(client, tmp_path):
 
 def test_importar_aba_comum_nao_propoe_padrao(projeto):
     assert "match" not in projeto["recipe"]["source"]
+
+
+def test_receita_de_versao_mais_nova_pede_para_atualizar(client, settings, projeto):
+    """Projeto salvo por um WolfzBR mais novo (F2.G2): a tela do projeto mostra
+    o título e o pedido de atualização, em vez de abrir a receita pela metade."""
+    pasta = settings.workspace.project_dir(projeto["id"])
+    caminho = pasta / "recipe.wolfz.json"
+    dados = json.loads(caminho.read_text(encoding="utf-8"))
+    caminho.write_text(json.dumps({**dados, "wolfz_version": "9.0"}), encoding="utf-8")
+    r = client.get(f"/api/projects/{projeto['id']}")
+    assert r.status_code == 422
+    corpo = r.json()
+    assert corpo["title"] == "Receita de uma versão mais nova do WolfzBR"
+    assert "formato 9.0" in corpo["detail"]
+    assert "pipx upgrade wolfzbr" in corpo["detail"]
+    assert corpo["recipe_version"] == "9.0"
+    assert corpo["supported_version"] == "0.1"
+    # Salvar uma receita mais nova pela API também é recusado.
+    caminho.write_text(json.dumps(dados), encoding="utf-8")
+    r = client.put(
+        f"/api/projects/{projeto['id']}/recipe",
+        json={**projeto["recipe"], "wolfz_version": "9.0"},
+        headers={"If-Match": projeto["etag"]},
+    )
+    assert r.status_code == 422
+    assert r.json()["title"] == "Receita de uma versão mais nova do WolfzBR"

@@ -16,9 +16,13 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 - Interface: painel de sugestões na receita, com aceitar, editar, rejeitar e "aceitar todas" (na ordem certa: limpar, converter e por último mudar a forma da tabela). A rejeitada fica gravada no projeto e não volta.
 - API: `GET /projects/{id}/suggestions` e `POST /projects/{id}/suggestions/rejections`.
 - Uma regra que falha vai para o log (`wolfz.suggest`) e é ignorada; as outras continuam.
+- Receitas reais de cada versão publicada (0.1.0 a 0.6.0) em `tests/receitas_antigas/`, gravadas pelo código de cada tag com `scripts/receitas_antigas.py`: o teste abre todas com o WolfzBR atual, passando pela migração, e confere que nenhum parâmetro se perde e que a tabela é a mesma.
+- Receita de uma versão mais nova que o WolfzBR instalado: erro próprio (`RecipeTooNewError`) com as duas versões e o comando para atualizar. Na CLI sai com código 2; na API, 422 com o título "Receita de uma versão mais nova do WolfzBR", que a tela do projeto mostra.
 
 ### Corrigido
 
+- Receita com `replace` que apaga a célula (`"new": null`) era gravada sem o campo `new` e depois não abria ("campo obrigatório"). Agora `new` ausente vale nulo, e um teste salva e reabre um passo de cada exemplo de cada operação.
+- Abrir ou criar um projeto bem no instante em que a listagem conferia o `.lock` dele dava 423 ("aberto em outra janela") sem ninguém ter o projeto aberto. Apareceu no CI do Linux; agora a abertura espera meio segundo antes de concluir que outra instância segura o lock.
 - No Windows, apagar um projeto falhava com "o arquivo já está sendo usado por outro processo" (`.lock`) e o projeto ficava marcado como "aberto em outra janela" até fechar o WolfzBR. O lock do projeto era por thread (padrão do `filelock`): aberto numa requisição e fechado em outra, ele não soltava. Agora o lock vale para o processo, e apagar tira primeiro o conteúdo do projeto e tenta de novo por um instante se a listagem estiver lendo os arquivos no mesmo momento.
 
 ## [0.6.0] - 2026-10-18

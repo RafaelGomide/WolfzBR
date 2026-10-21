@@ -1,0 +1,35 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "Exemplo mínimo: vendas por região",
+  "source": {
+    "type": "csv"
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "mapping": {
+        "Observação": "obs",
+        "Região": "regiao",
+        "Vlr Venda": "valor"
+      },
+      "op": "rename"
+    },
+    {
+      "col": "regiao",
+      "id": "s2",
+      "ignore_case": true,
+      "match": "starts_with",
+      "op": "drop_rows_where",
+      "value": "total"
+    },
+    {
+      "cols": [
+        "valor"
+      ],
+      "debit_negative": false,
+      "id": "s3",
+      "op": "parse_brl"
+    }
+  ],
+  "wolfz_version": "0.1"
+}

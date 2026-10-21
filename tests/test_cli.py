@@ -419,3 +419,15 @@ def test_lote_arquivo_ilegivel_nao_para_os_outros(receita, tmp_path):
     result = runner.invoke(app, ["run", str(receita), str(ruim), str(a), "-o", str(tmp_path / "saida")])
     assert result.exit_code == 3
     assert (tmp_path / "saida" / "a.csv").exists()
+
+
+def test_run_receita_de_versao_mais_nova_pede_para_atualizar(entrada, tmp_path):
+    receita = tmp_path / "nova.wolfz.json"
+    receita.write_text(json.dumps({"wolfz_version": "9.0", "name": "x", "steps": []}), encoding="utf-8")
+    result = _run(receita, entrada, "-o", tmp_path / "x.csv")
+    assert result.exit_code == 2
+    linhas = result.output.splitlines()
+    assert linhas[0] == f"Receita de uma versão mais nova do WolfzBR: {receita}"
+    assert f"o WolfzBR {wolfz.__version__} instalado lê até o formato 0.1" in result.output
+    assert "pipx upgrade wolfzbr" in result.output
+    assert not (tmp_path / "x.csv").exists()

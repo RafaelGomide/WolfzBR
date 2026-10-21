@@ -15,7 +15,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from wolfz.core.recipe.migrate import RecipeVersionError, migrate
+from wolfz.core.recipe.migrate import NewerRecipeVersion, RecipeVersionError, migrate
 from wolfz.core.recipe.models import Recipe, recipe_validator
 from wolfz.core.workspace import replace_atomic
 
@@ -27,6 +27,17 @@ class RecipeError(ValueError):
     def __init__(self, errors: list[str]):
         self.errors = errors
         super().__init__("\n".join(errors))
+
+
+class RecipeTooNewError(RecipeError):
+    """Receita de uma versão mais nova do WolfzBR: não é lida pela metade, e
+    a mensagem pede para atualizar (F2.G2)."""
+
+    def __init__(self, exc: NewerRecipeVersion):
+        self.version = exc.version
+        self.supported = exc.supported
+        mensagem = str(exc)
+        super().__init__([mensagem[:1].upper() + mensagem[1:]])
 
 
 def _load_catalog() -> None:
@@ -126,6 +137,8 @@ def recipe_from_dict(data: Any) -> Recipe:
     _load_catalog()
     try:
         data = migrate(data)
+    except NewerRecipeVersion as exc:
+        raise RecipeTooNewError(exc) from None
     except RecipeVersionError as exc:
         raise RecipeError([f"wolfz_version: {exc}"]) from None
     try:

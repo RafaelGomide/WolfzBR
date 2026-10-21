@@ -1,0 +1,70 @@
+{
+  "created_at": "2026-01-01T00:00:00Z",
+  "name": "catálogo",
+  "source": {
+    "type": "csv"
+  },
+  "steps": [
+    {
+      "col": "regiao",
+      "id": "s1",
+      "ignore_case": false,
+      "match": "starts_with",
+      "op": "drop_rows_where",
+      "value": "Total"
+    },
+    {
+      "col": "regiao",
+      "id": "s2",
+      "ignore_case": true,
+      "match": "contains",
+      "op": "drop_rows_where",
+      "value": "total"
+    },
+    {
+      "col": "uf",
+      "id": "s3",
+      "ignore_case": false,
+      "match": "equals",
+      "op": "drop_rows_where",
+      "value": "-"
+    },
+    {
+      "col": "uf",
+      "id": "s4",
+      "ignore_case": true,
+      "match": "in",
+      "op": "drop_rows_where",
+      "value": [
+        "xx",
+        "Br"
+      ]
+    },
+    {
+      "cols": [
+        "valor"
+      ],
+      "debit_negative": false,
+      "id": "s5",
+      "op": "parse_brl"
+    },
+    {
+      "cols": [
+        "debito",
+        "credito"
+      ],
+      "debit_negative": true,
+      "id": "s6",
+      "op": "parse_brl"
+    },
+    {
+      "id": "s7",
+      "mapping": {
+        "Nº \"Pedido\"": "pedido",
+        "Vlr Venda": "valor"
+      },
+      "op": "rename"
+    }
+  ],
+  "wolfz_version": "0.1"
+}

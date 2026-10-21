@@ -25,7 +25,7 @@ from wolfz.core.engine import StepError, collect, read_input
 from wolfz.core.ingest import IngestError
 from wolfz.core.profile import ColumnProfile, LoadedTable, TableProfile, load_table, profile_table
 from wolfz.core.profile.column import SAMPLE_SIZE
-from wolfz.core.recipe import Recipe, RecipeError, load_recipe, recipe_json_schema
+from wolfz.core.recipe import Recipe, RecipeError, RecipeTooNewError, load_recipe, recipe_json_schema
 from wolfz.export.dados import ExportError, OpcoesCsv, celulas_formula, escritor, gravar_juntos
 
 
@@ -114,6 +114,12 @@ def _carregar_receita(receita: Path) -> Recipe:
         return load_recipe(receita)
     except FileNotFoundError:
         _fail(ExitCode.INVALID_RECIPE, f"Receita não encontrada: {receita}")
+    except RecipeTooNewError as exc:
+        _fail(
+            ExitCode.INVALID_RECIPE,
+            f"Receita de uma versão mais nova do WolfzBR: {receita}",
+            *(f"  {e}" for e in exc.errors),
+        )
     except RecipeError as exc:
         _fail(ExitCode.INVALID_RECIPE, f"Receita inválida: {receita}", *(f"  {e}" for e in exc.errors))
     except (UnicodeDecodeError, OSError) as exc:

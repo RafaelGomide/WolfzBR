@@ -18,7 +18,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from wolfz.core.engine import StepError
 from wolfz.core.ingest import IngestError
-from wolfz.core.recipe import RecipeError
+from wolfz.core.recipe import RecipeError, RecipeTooNewError
 
 PROBLEM_JSON = "application/problem+json"
 log = logging.getLogger("wolfz.api")
@@ -82,6 +82,16 @@ def install(app: FastAPI) -> None:
     @app.exception_handler(RecipeError)
     async def _recipe(request: Request, exc: RecipeError) -> JSONResponse:
         detalhe = "; ".join(exc.errors) if exc.errors else str(exc)
+        if isinstance(exc, RecipeTooNewError):
+            return problem_response(
+                request,
+                422,
+                "Receita de uma versão mais nova do WolfzBR",
+                detalhe,
+                errors=exc.errors,
+                recipe_version=exc.version,
+                supported_version=exc.supported,
+            )
         return problem_response(request, 422, "Receita inválida", detalhe, errors=exc.errors)
 
     @app.exception_handler(RequestValidationError)

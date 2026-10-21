@@ -1,0 +1,16 @@
+{
+  "catalogo": [
+    "drop_rows_where",
+    "parse_brl",
+    "rename"
+  ],
+  "entradas": {
+    "exemplo": "tests/corpus/minimo.csv"
+  },
+  "operacoes": [
+    "drop_rows_where",
+    "parse_brl",
+    "rename"
+  ],
+  "tag": "v0.2.0"
+}

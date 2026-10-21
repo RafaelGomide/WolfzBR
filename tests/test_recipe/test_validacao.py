@@ -85,7 +85,7 @@ def test_mensagem_da_excecao_junta_as_linhas(recipe_dict):
         ('{"name": ', "JSON inválido na linha 1, coluna 10"),
         ("[]", "receita: o JSON deve ser um objeto"),
         ('{"name": "x"}', "wolfz_version: receita sem o campo 'wolfz_version'"),
-        ('{"wolfz_version": "9.0"}', "wolfz_version: receita feita com uma versão mais nova"),
+        ('{"wolfz_version": "9.0"}', "Esta receita foi feita numa versão mais nova do WolfzBR"),
     ],
 )
 def test_erros_de_leitura(text, expected):
