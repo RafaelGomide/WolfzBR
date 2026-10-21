@@ -1,0 +1,44 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "clientes cpf cep",
+  "source": {
+    "sheet": "Clientes",
+    "type": "excel"
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "joiner": " ",
+      "n": 1,
+      "op": "header_rows"
+    },
+    {
+      "id": "s2",
+      "mapping": {
+        "CEP": "cep",
+        "CPF": "cpf",
+        "Cidade": "cidade",
+        "Nome": "nome",
+        "UF": "uf"
+      },
+      "op": "rename"
+    },
+    {
+      "cols": [
+        "cpf"
+      ],
+      "flag": false,
+      "id": "s3",
+      "op": "clean_cpf",
+      "pad_zeros": true
+    },
+    {
+      "cols": [
+        "cep"
+      ],
+      "id": "s4",
+      "op": "clean_cep"
+    }
+  ],
+  "wolfz_version": "0.1"
+}

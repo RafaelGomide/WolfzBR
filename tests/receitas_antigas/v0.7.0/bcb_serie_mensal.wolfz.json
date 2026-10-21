@@ -1,0 +1,56 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "bcb serie mensal",
+  "source": {
+    "sheet": "Indicadores",
+    "type": "excel"
+  },
+  "steps": [
+    {
+      "end_detect": "auto",
+      "id": "s1",
+      "op": "select_range",
+      "start": "A3"
+    },
+    {
+      "id": "s2",
+      "joiner": " ",
+      "n": 1,
+      "op": "header_rows"
+    },
+    {
+      "id": "s3",
+      "mapping": {
+        "Indicador": "indicador",
+        "Unidade": "unidade"
+      },
+      "op": "rename"
+    },
+    {
+      "id": "s4",
+      "index": [
+        "indicador",
+        "unidade"
+      ],
+      "op": "unpivot",
+      "value_name": "valor",
+      "variable_name": "mes"
+    },
+    {
+      "century_pivot": 30,
+      "cols": [
+        "mes"
+      ],
+      "id": "s5",
+      "op": "parse_month_year"
+    },
+    {
+      "id": "s6",
+      "op": "cast",
+      "types": {
+        "valor": "float"
+      }
+    }
+  ],
+  "wolfz_version": "0.1"
+}
