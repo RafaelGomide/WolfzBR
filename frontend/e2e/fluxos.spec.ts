@@ -263,7 +263,9 @@ test("sugestões: aceitar todas aplica na ordem (converter antes de despivotar)"
   await page.getByRole("button", { name: /Aceitar todas/ }).click();
   await expect(page.locator("li[data-passo]")).toHaveCount(convertidos + 2);
   await expect(page.locator("li[data-passo]").nth(convertidos)).toContainText("Remover colunas");
-  await expect(page.locator("li[data-passo]").nth(convertidos + 1)).toContainText("Despivotar colunas");
+  await expect(page.locator("li[data-passo]").nth(convertidos + 1)).toContainText(
+    "Despivotar colunas",
+  );
   await page.getByRole("tab", { name: "Antes e depois" }).click();
   await expect(grade(page, "Receita inteira")).toBeVisible();
   await expect(page.locator(".estado.erro")).toHaveCount(0);
