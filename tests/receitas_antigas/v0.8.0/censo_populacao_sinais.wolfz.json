@@ -1,0 +1,44 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "censo populacao sinais",
+  "source": {
+    "type": "csv"
+  },
+  "steps": [
+    {
+      "end": "E16",
+      "id": "s1",
+      "op": "select_range",
+      "start": "A4"
+    },
+    {
+      "id": "s2",
+      "joiner": " ",
+      "n": 1,
+      "op": "header_rows"
+    },
+    {
+      "id": "s3",
+      "mapping": {
+        "Cód.": "cod",
+        "Homens": "homens",
+        "Mulheres": "mulheres",
+        "Município": "municipio",
+        "Total": "total"
+      },
+      "op": "rename"
+    },
+    {
+      "cols": [
+        "total",
+        "homens",
+        "mulheres"
+      ],
+      "decimal": ".",
+      "id": "s4",
+      "op": "parse_ibge_value",
+      "status": false
+    }
+  ],
+  "wolfz_version": "0.1"
+}
