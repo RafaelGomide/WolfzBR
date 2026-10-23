@@ -50,6 +50,7 @@ from wolfz.export.dados import (
 from wolfz.export.depara import ARQUIVO_DEPARA, depara_municipios, gravar_depara
 from wolfz.export.m import PARAMETRO, parameter_to_m, recipe_to_m, source_from_project
 from wolfz.export.python import recipe_to_python
+from wolfz.export.tableau import INSTALAR, escrever_hyper, escrever_tds, formatos_colunas, hyper_disponivel
 from wolfz.ops.municipio import PARAMETRO_DEPARA
 
 RECIPE_FILE = "recipe.wolfz.json"
@@ -375,6 +376,13 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
         indisponiveis = sorted(set(pedido.formats) - set(_EXTENSOES))
         if indisponiveis:
             raise Problem(422, f"Formato ainda não disponível nesta versão: {', '.join(indisponiveis)}.")
+        if "hyper" in pedido.formats and not hyper_disponivel():
+            raise Problem(
+                422,
+                f"A exportação para o Tableau precisa do extra: {INSTALAR}",
+                title="Extra não instalado",
+                code="extra_missing",
+            )
         saida = Path(pedido.output_dir).expanduser() if pedido.output_dir else pasta / "exports"
         if not saida.is_absolute():
             raise Problem(422, "output_dir precisa ser um caminho absoluto.")
@@ -383,6 +391,9 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
         projeto = _ler_json(pasta / PROJECT_FILE)
         base = _nome_seguro(Path(projeto["name"]).stem)
         alvos = {fmt: saida / f"{base}{_EXTENSOES[fmt]}" for fmt in dict.fromkeys(pedido.formats)}
+        if "hyper" in alvos:
+            # O .tds abre o .hyper que está ao lado dele (F3.A3).
+            alvos["tds"] = saida / f"{base}.tds"
         if "powerquery" in alvos:
             # O parâmetro CaminhoArquivo vai num arquivo à parte (F2.A3).
             alvos["powerquery_parametro"] = saida / f"{base}.{PARAMETRO}.pq"
@@ -403,7 +414,7 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
 
         tabela = None
         formulas = None
-        if set(alvos) & set(EXTENSOES):
+        if set(alvos) & {*EXTENSOES, "hyper"}:
             tabela = collect(atual, pl.scan_parquet(pasta / RAW_FILE))
             formulas = celulas_formula(tabela)
         opcoes = OpcoesCsv(separator=pedido.csv_separator, decimal_comma=pedido.decimal_comma)
@@ -421,6 +432,12 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
             elif fmt == "powerquery_depara":
                 texto = parameter_to_m(str(alvos["depara"]), atual.name, PARAMETRO_DEPARA)
                 escritas[alvo] = partial(_escrever_texto, texto)
+            elif fmt == "hyper":
+                escritas[alvo] = partial(escrever_hyper, tabela, formatos=formatos_colunas(atual))
+            elif fmt == "tds":
+                escritas[alvo] = partial(
+                    escrever_tds, tabela, arquivo_hyper=alvos["hyper"].name, formatos=formatos_colunas(atual)
+                )
             elif fmt == "depara":
                 depara = depara_municipios(atual, pl.scan_parquet(pasta / RAW_FILE))
                 escritas[alvo] = partial(gravar_depara, depara)
@@ -436,6 +453,17 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
             "formula_cells": formulas,
             "neutralized": bool(pedido.neutralize_formulas and "csv" in alvos),
         }
+
+    @api.get("/export-formats", response_model=list[m.FormatoExportacao])
+    def formatos_exportacao() -> list[dict[str, Any]]:
+        """Formatos que esta instalação exporta. O ``.hyper`` depende do
+        extra ``wolfzbr[tableau]``: sem ele, a interface mostra a opção
+        desabilitada com a instrução de instalação (F3.A1)."""
+        hyper = hyper_disponivel()
+        return [
+            *({"format": f, "available": True} for f in _EXTENSOES if f != "hyper"),
+            {"format": "hyper", "available": hyper, "install": None if hyper else INSTALAR},
+        ]
 
     # -----------------------------------------------------------------------
     # Catálogo
@@ -459,7 +487,7 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
     return api
 
 
-_EXTENSOES = {**EXTENSOES, "powerquery": ".pq", "python": ".py"}
+_EXTENSOES = {**EXTENSOES, "powerquery": ".pq", "python": ".py", "hyper": ".hyper"}
 
 
 def _escrever_texto(texto: str, path: Path) -> None:

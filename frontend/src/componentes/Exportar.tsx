@@ -1,15 +1,17 @@
 // Tela de exportação (F1.H12, F1.I): formatos, opções do CSV, pasta de
 // saída, confirmação quando já existem arquivos com os mesmos nomes (F0.A6)
-// e aviso de células que podem virar fórmula (F0.A9).
+// e aviso de células que podem virar fórmula (F0.A9). Formato que depende de
+// extra não instalado (Tableau, F3.A1) aparece desabilitado com a instrução.
 
 import { useState } from "react";
 import { api, chamar, ErroApi, type Exportacao } from "../api/cliente";
 import { T } from "../textos";
+import { useCarregar } from "../util/useCarregar";
 import { CaixaErro, Carregando } from "./Estado";
 
-type Formato = "csv" | "parquet" | "xlsx" | "powerquery" | "python";
+type Formato = "csv" | "parquet" | "xlsx" | "powerquery" | "python" | "hyper";
 type Separador = "," | ";" | "\t";
-const FORMATOS: Formato[] = ["csv", "xlsx", "parquet", "powerquery", "python"];
+const FORMATOS: Formato[] = ["csv", "xlsx", "parquet", "powerquery", "python", "hyper"];
 const SEPARADORES: Separador[] = [";", ",", "\t"];
 
 export function Exportar({ projeto, aoFechar }: { projeto: string; aoFechar: () => void }) {
@@ -19,6 +21,13 @@ export function Exportar({ projeto, aoFechar }: { projeto: string; aoFechar: () 
   const [separador, setSeparador] = useState<Separador>(";");
   const [virgulaDecimal, setVirgulaDecimal] = useState(true);
   const [neutralizar, setNeutralizar] = useState(false);
+  const { dados: disponiveis } = useCarregar(
+    (signal) => chamar(api.GET("/api/export-formats", { signal })),
+    [],
+  );
+  // Enquanto a lista não chega, nada fica desabilitado: a API recusa o que faltar.
+  const instalar = (f: Formato) =>
+    disponiveis?.find((d) => d.format === f && !d.available)?.install ?? null;
   const [estado, setEstado] = useState<
     | { tipo: "editando" }
     | { tipo: "exportando" }
@@ -34,7 +43,7 @@ export function Exportar({ projeto, aoFechar }: { projeto: string; aoFechar: () 
         api.POST("/api/projects/{project_id}/exports", {
           params: { path: { project_id: projeto } },
           body: {
-            formats: FORMATOS.filter((f) => formatos.has(f)),
+            formats: FORMATOS.filter((f) => formatos.has(f) && !instalar(f)),
             output_dir: pasta.trim() || null,
             overwrite,
             csv_separator: separador,
@@ -80,12 +89,27 @@ export function Exportar({ projeto, aoFechar }: { projeto: string; aoFechar: () 
         <h2>{T.exportar.titulo}</h2>
         <fieldset disabled={ocupado}>
           <legend>{T.exportar.formatos}</legend>
-          {FORMATOS.map((f) => (
-            <label key={f} className="opcao">
-              <input type="checkbox" checked={formatos.has(f)} onChange={() => alternar(f)} />
-              {T.exportar.nomes[f]}
-            </label>
-          ))}
+          {FORMATOS.map((f) => {
+            const comando = instalar(f);
+            return (
+              <div key={f}>
+                <label className="opcao">
+                  <input
+                    type="checkbox"
+                    checked={formatos.has(f) && !comando}
+                    disabled={comando !== null}
+                    onChange={() => alternar(f)}
+                  />
+                  {T.exportar.nomes[f]}
+                </label>
+                {comando && (
+                  <small className="dica">
+                    {T.exportar.instalar} <code>{comando}</code>
+                  </small>
+                )}
+              </div>
+            );
+          })}
         </fieldset>
 
         {formatos.has("csv") && (

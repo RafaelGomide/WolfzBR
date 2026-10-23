@@ -331,6 +331,37 @@
         "title": "FormaValor",
         "type": "object"
       },
+      "FormatoExportacao": {
+        "additionalProperties": true,
+        "description": "Formato de exportação e se ele está disponível nesta instalação.",
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "format": {
+            "title": "Format",
+            "type": "string"
+          },
+          "install": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Install"
+          }
+        },
+        "required": [
+          "format",
+          "available"
+        ],
+        "title": "FormatoExportacao",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1145,6 +1176,29 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/export-formats": {
+      "get": {
+        "description": "Formatos que esta instalação exporta. O ``.hyper`` depende do\nextra ``wolfzbr[tableau]``: sem ele, a interface mostra a opção\ndesabilitada com a instrução de instalação (F3.A1).",
+        "operationId": "formatos_exportacao_api_export_formats_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FormatoExportacao"
+                  },
+                  "title": "Response Formatos Exportacao Api Export Formats Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Formatos Exportacao"
+      }
+    },
     "/api/municipios": {
       "get": {
         "description": "Busca na lista do IBGE, para a correção manual.",

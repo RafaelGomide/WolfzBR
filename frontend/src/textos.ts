@@ -250,7 +250,9 @@ export const T = {
       xlsx: "Excel (.xlsx)",
       powerquery: "Power Query (M)",
       python: "Script Python",
+      hyper: "Tableau (.hyper + .tds)",
     } as Record<string, string>,
+    instalar: "Para habilitar, instale o extra e reinicie o WolfzBR:",
   },
   // Nomes das operações e dos parâmetros na interface. Operação nova sem
   // nome aqui aparece com o nome técnico e a documentação dela.

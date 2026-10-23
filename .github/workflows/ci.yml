@@ -34,8 +34,10 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
 
+      # Com o extra do Tableau: o teste do .hyper roda nas duas plataformas e
+      # nos dois Pythons (F3.A5).
       - name: Instalar dependências
-        run: uv sync --locked --extra dev
+        run: uv sync --locked --extra dev --extra tableau
 
       # Parser oficial de Power Query M, para validar o M gerado (F0.F5).
       # Os runners já têm Node; --ignore-scripts por segurança.

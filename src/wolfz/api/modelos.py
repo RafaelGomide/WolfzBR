@@ -151,6 +151,15 @@ class Exportacao(_Resposta):
     neutralized: bool = False
 
 
+class FormatoExportacao(_Resposta):
+    """Formato de exportação e se ele está disponível nesta instalação."""
+
+    format: str
+    available: bool
+    # Como habilitar quando falta um extra (``pip install "wolfzbr[tableau]"``).
+    install: str | None = None
+
+
 class Sugestao(_Resposta):
     """Passos propostos por uma regra (F2.E). ``kind="aviso"`` não tem passo."""
 

@@ -379,7 +379,7 @@ def test_exportar_na_pasta_do_projeto(client, settings, projeto):
 @pytest.mark.parametrize(
     ("pedido", "trecho"),
     [
-        ({"formats": ["hyper"]}, "ainda não disponível"),
+        ({"formats": ["pbip"]}, "ainda não disponível"),
         ({"formats": ["csv"], "csv_separator": "|"}, "csv_separator"),
         ({"formats": ["csv"], "output_dir": "relativo/pasta"}, "absoluto"),
         ({"formats": []}, "formats"),
@@ -389,6 +389,35 @@ def test_exportar_na_pasta_do_projeto(client, settings, projeto):
 def test_exportar_pedido_invalido(client, projeto, pedido, trecho):
     r = client.post(_url(projeto, "exports"), json=pedido)
     assert r.status_code == 422 and trecho in r.json()["detail"]
+
+
+def test_exportar_tableau(client, projeto, tmp_path):
+    tmp_path = tmp_path / "saida"
+    pytest.importorskip("tableauhyperapi", reason="extra wolfzbr[tableau] não instalado")
+    r = client.post(_url(projeto, "exports"), json={"formats": ["hyper"], "output_dir": str(tmp_path)})
+    assert r.status_code == 200, r.text
+    assert sorted(Path(f).name for f in r.json()["files"]) == [
+        "receita_municipal.hyper",
+        "receita_municipal.tds",
+    ]
+    assert r.json()["rows"] == 12
+    assert 'dbname="receita_municipal.hyper"' in (tmp_path / "receita_municipal.tds").read_text(
+        encoding="utf-8"
+    )
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["receita_municipal.hyper", "receita_municipal.tds"]
+
+
+def test_tableau_sem_o_extra(client, projeto, tmp_path, monkeypatch):
+    tmp_path = tmp_path / "saida"
+    from wolfz.api import rotas
+
+    monkeypatch.setattr(rotas, "hyper_disponivel", lambda: False)
+    formatos = {f["format"]: f for f in client.get("/api/export-formats").json()}
+    assert formatos["hyper"] == {"format": "hyper", "available": False, "install": rotas.INSTALAR}
+    assert formatos["csv"]["available"] is True and "pbip" not in formatos
+    r = client.post(_url(projeto, "exports"), json={"formats": ["csv", "hyper"], "output_dir": str(tmp_path)})
+    assert r.status_code == 422 and "wolfzbr[tableau]" in r.json()["detail"]
+    assert not tmp_path.exists()
 
 
 # ---------------------------------------------------------------------------

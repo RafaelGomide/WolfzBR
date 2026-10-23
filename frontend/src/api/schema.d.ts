@@ -4,6 +4,28 @@
  */
 
 export interface paths {
+  "/api/export-formats": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Formatos Exportacao
+     * @description Formatos que esta instalação exporta. O ``.hyper`` depende do
+     *     extra ``wolfzbr[tableau]``: sem ele, a interface mostra a opção
+     *     desabilitada com a instrução de instalação (F3.A1).
+     */
+    get: operations["formatos_exportacao_api_export_formats_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/municipios": {
     parameters: {
       query?: never;
@@ -408,6 +430,20 @@ export interface components {
     } & {
       [key: string]: unknown;
     };
+    /**
+     * FormatoExportacao
+     * @description Formato de exportação e se ele está disponível nesta instalação.
+     */
+    FormatoExportacao: {
+      /** Available */
+      available: boolean;
+      /** Format */
+      format: string;
+      /** Install */
+      install?: string | null;
+    } & {
+      [key: string]: unknown;
+    };
     /** HTTPValidationError */
     HTTPValidationError: {
       /** Detail */
@@ -730,6 +766,26 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  formatos_exportacao_api_export_formats_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FormatoExportacao"][];
+        };
+      };
+    };
+  };
   buscar_municipios_api_municipios_get: {
     parameters: {
       query: {
