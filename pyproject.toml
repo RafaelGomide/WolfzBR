@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wolfzbr"
-version = "0.7.0"
+version = "0.8.0"
 description = "Limpeza de planilhas brasileiras com receitas reproduzíveis e exportação para Power Query M, Python, Tableau e Power BI."
 readme = "README.md"
 requires-python = ">=3.12"

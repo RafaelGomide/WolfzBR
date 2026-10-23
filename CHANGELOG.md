@@ -6,6 +6,16 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 
 ## [Não publicado]
 
+## [0.8.0] - 2026-10-22
+
+Exportação para o Tableau: o `.hyper` com os tipos certos e um `.tds` ao lado, com nomes amigáveis e formato brasileiro (`R$`, `dd/mm/aaaa`), num extra opcional (`wolfzbr[tableau]`).
+
+### Adicionado
+
+- Exportação para o Tableau: `.hyper` gravado pela Hyper API oficial, com data como `DATE`, data e hora como `TIMESTAMP`, inteiro como `BIG_INT`, número como `DOUBLE` e texto como `TEXT`; coluna de reais (`parse_brl`) vira `NUMERIC(18,2)` quando nenhum valor tem mais de dois decimais. Junto vai um `.tds` apontando para o `.hyper` da mesma pasta, com nomes amigáveis (`valor_total` → `Valor total`), `R$` nas colunas de reais, percentual nas de `parse_percent` e datas em `dd/mm/aaaa`.
+- Extra `wolfzbr[tableau]` (`tableauhyperapi`, Windows e Linux x64, Python 3.12 e 3.13). Sem ele, a opção do Tableau aparece desabilitada na exportação com o comando de instalação, e a API recusa o formato `hyper` com a mesma instrução.
+- API: `GET /export-formats`, com os formatos disponíveis nesta instalação.
+
 ## [0.7.0] - 2026-10-21
 
 Sugestões automáticas e verificações: o WolfzBR propõe os passos com o motivo de cada um (28 regras, "aceitar todas" por etapa), a receita ganha `assert` que para o Power BI quando o arquivo do mês seguinte vem diferente, `wolfz run` processa vários arquivos de uma vez, a aba que muda de nome é achada pelo padrão e receitas de versões anteriores continuam abrindo. Interface com tema escuro.
@@ -214,7 +224,8 @@ Primeira versão: receita, três operações e `wolfz run`. Ainda não publicada
 
 - `clean_cnpj` descartava CNPJ alfanumérico válido que parecia notação científica (ex.: `00.000.000/000E-20`).
 
-[Não publicado]: https://github.com/RafaelGomide/WolfzBR/compare/v0.7.0...HEAD
+[Não publicado]: https://github.com/RafaelGomide/WolfzBR/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.4.0...v0.5.0
