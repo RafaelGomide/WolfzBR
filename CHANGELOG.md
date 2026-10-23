@@ -6,6 +6,10 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 
 ## [Não publicado]
 
+## [0.9.0] - 2026-10-22
+
+Exportação para o Power BI como projeto PBIP: o modelo com a tabela, os tipos, `R$` e as medidas `Total`, a consulta M da receita com o parâmetro `CaminhoArquivo` e uma tabela calendário opcional em português. Abre direto no Power BI Desktop; para o mês seguinte, troca-se o parâmetro e atualiza.
+
 ### Adicionado
 
 - Exportação para o Power BI como projeto PBIP (`<nome>.pbip`, `<nome>.SemanticModel/` em TMDL e `<nome>.Report/` em PBIR, com uma página vazia). O modelo tem a tabela com os tipos da tabela limpa, `R$` nas colunas de reais (`parse_brl`), `%` nas de percentual e datas em `dd/MM/yyyy`; a partição é o M da receita com um último passo que fixa os tipos, lendo o arquivo pelo parâmetro `CaminhoArquivo`. Medidas `Total <coluna>` para cada coluna numérica que não é código, ano ou documento, e `Contagem de linhas`. Receita com município do IBGE leva o de-para e o parâmetro `CaminhoDeparaMunicipios`.
@@ -233,7 +237,8 @@ Primeira versão: receita, três operações e `wolfz run`. Ainda não publicada
 
 - `clean_cnpj` descartava CNPJ alfanumérico válido que parecia notação científica (ex.: `00.000.000/000E-20`).
 
-[Não publicado]: https://github.com/RafaelGomide/WolfzBR/compare/v0.8.0...HEAD
+[Não publicado]: https://github.com/RafaelGomide/WolfzBR/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.5.0...v0.6.0
