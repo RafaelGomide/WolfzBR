@@ -77,14 +77,14 @@ def cast_expr(col: str, tipo: str) -> pl.Expr:
     return pl.when(minusculo == "true").then(True).when(minusculo == "false").then(False)
 
 
-def split_col_lf(lf: pl.LazyFrame, col: str, delimiter: str, into: list[str]) -> pl.LazyFrame:
+def split_col_lf(lf: pl.LazyFrame, col: str, separator: str, into: list[str]) -> pl.LazyFrame:
     """Divide a coluna no lugar dela. A última parte fica com o resto do
     texto ('a;b;c' em 2 partes: 'a' e 'b;c'); parte que falta fica nula."""
     nomes = lf.collect_schema().names()
     if repetidos := sorted(set(into) & (set(nomes) - {col})):
         raise ValueError(f"já existem colunas chamadas {', '.join(map(repr, repetidos))}")
     pos = nomes.index(col)
-    partes = pl.col(col).cast(pl.String).str.splitn(delimiter, len(into)).struct.rename_fields(into)
+    partes = pl.col(col).cast(pl.String).str.splitn(separator, len(into)).struct.rename_fields(into)
     lf = lf.with_columns(partes.alias("__partes__")).drop(col).unnest("__partes__")
     return lf.select([*nomes[:pos], *into, *nomes[pos + 1 :]])
 
@@ -279,13 +279,13 @@ class SplitCol(Op):
     op: Literal["split_col"]
     m_label = "Coluna dividida"
     col: str = Field(min_length=1)
-    delimiter: str = Field(min_length=1)
+    separator: str = Field(min_length=1)
     into: list[str] = Field(min_length=2)
 
     python_helpers = (split_col_lf,)
     examples = (
         {
-            "step": {"col": "mun_uf", "delimiter": " - ", "into": ["municipio", "uf"]},
+            "step": {"col": "mun_uf", "separator": " - ", "into": ["municipio", "uf"]},
             "input": {"id": ["1", "2", "3", "4"], "mun_uf": ["Vitória - ES", "Serra", None, "A - B - C"]},
             "expected": {
                 "id": ["1", "2", "3", "4"],
@@ -303,13 +303,13 @@ class SplitCol(Op):
         return into
 
     def to_polars(self, lf: pl.LazyFrame) -> pl.LazyFrame:
-        return split_col_lf(lf, self.col, self.delimiter, self.into)
+        return split_col_lf(lf, self.col, self.separator, self.into)
 
     def to_python(self) -> str:
-        return f"lf = split_col_lf(lf, {self.col!r}, {self.delimiter!r}, {self.into!r})"
+        return f"lf = split_col_lf(lf, {self.col!r}, {self.separator!r}, {self.into!r})"
 
     def to_m(self, prev: str, name: str) -> str:
-        delimitadores = m_list([self.delimiter] * (len(self.into) - 1))
+        delimitadores = m_list([self.separator] * (len(self.into) - 1))
         splitter = f"Splitter.SplitTextByEachDelimiter({delimitadores})"
         return f"{name} = Table.SplitColumn({prev}, {m_text(self.col)}, {splitter}, {m_list(self.into)})"
 

@@ -69,6 +69,7 @@ def clean_cpf(value: object, pad_zeros: bool = True) -> str | None:
 
 
 def format_cpf(cpf: str | None) -> str | None:
+    """'52998224725' -> '529.982.247-25'. Sem 11 dígitos, ``None``."""
     d = only_digits(cpf)
     return f"{d[:3]}.{d[3:6]}.{d[6:9]}-{d[9:]}" if len(d) == 11 else None
 
@@ -118,6 +119,8 @@ def clean_cnpj(value: object, pad_zeros: bool = True) -> str | None:
 
 
 def format_cnpj(cnpj: str | None) -> str | None:
+    """CNPJ limpo (14 caracteres, de ``clean_cnpj``) com a máscara
+    '00.000.000/0000-00'. Outro tamanho, ``None``."""
     if cnpj is None or len(cnpj) != 14:
         return None
     return f"{cnpj[:2]}.{cnpj[2:5]}.{cnpj[5:8]}/{cnpj[8:12]}-{cnpj[12:]}"

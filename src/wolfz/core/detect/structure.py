@@ -14,7 +14,7 @@
    linha tiver dois ou mais rótulos e algum deles estiver sobre uma célula
    vazia que tem rótulo embaixo ('Janeiro' mesclado sobre 'Masculino' e
    'Feminino'). O passo proposto é ``header_rows`` com ``n`` níveis e
-   ``joiner="_"``: preenche para a direita e junta ('Janeiro_Masculino').
+   ``separator="_"``: preenche para a direita e junta ('Janeiro_Masculino').
 4. **Totais** (C4 e D2): linha cujo rótulo começa com "total", "subtotal"
    ou "soma", ou termina em "- total"; linha em negrito numa região em que o
    negrito é raro; ou linha cujo valor é a soma das linhas de baixo até o
@@ -121,7 +121,7 @@ class Detection:
         if self.header_levels == 1:
             steps.append({"op": "header_rows", "n": 1})
         elif self.header_levels > 1:
-            steps.append({"op": "header_rows", "n": self.header_levels, "joiner": JUNTAR_NIVEIS})
+            steps.append({"op": "header_rows", "n": self.header_levels, "separator": JUNTAR_NIVEIS})
         por_coluna: dict[int, list[str]] = {}
         for r in self.totals:
             col, valor = self.total_cells[r]

@@ -357,7 +357,7 @@ def codigo_e_rotulo(ctx: Contexto) -> Iterator[Suggestion]:
         into = [_nome_livre(f"{c}_codigo", ctx.total.columns), _nome_livre(f"{c}_nome", ctx.total.columns)]
         yield Suggestion(
             "codigo_e_rotulo",
-            ({"op": "split_col", "col": c, "delimiter": separador, "into": into},),
+            ({"op": "split_col", "col": c, "separator": separador, "into": into},),
             0.75,
             f"'{c}': código e nome na mesma célula{_exemplo(ctx, c)}; separados, dá para filtrar "
             "pelo código.",
@@ -997,7 +997,7 @@ def niveis_de_cabecalho(ctx: Contexto) -> Iterator[Suggestion]:
     categorias da mesma medida."""
     juntar = next(
         (
-            p.get("joiner") or "_"
+            p.get("separator") or "_"
             for p in reversed(ctx.passos)
             if p.get("op") == "header_rows" and p.get("n", 1) > 1
         ),

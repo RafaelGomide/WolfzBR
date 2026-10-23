@@ -12,7 +12,7 @@ from wolfz.core.recipe import recipe_from_dict, save_recipe
 def _recipe(*steps):
     return recipe_from_dict(
         {
-            "wolfz_version": "0.1",
+            "wolfz_version": "1.0",
             "name": "motor",
             "created_at": "2026-01-01T00:00:00Z",
             "source": {"type": "csv"},
@@ -170,7 +170,7 @@ def test_wolfz_run_le_csv_como_grade_quando_a_receita_recorta(tmp_path):
 def test_wolfz_run_acha_a_aba_pela_regex(tmp_path):
     recipe = recipe_from_dict(
         {
-            "wolfz_version": "0.1",
+            "wolfz_version": "1.0",
             "name": "regex",
             "created_at": "2026-01-01T00:00:00Z",
             "source": {

@@ -180,7 +180,7 @@ ARQUIVOS = [
         None,
         [
             {"op": "drop_rows_where", "col": "inf_subcategoria", "match": "starts_with", "value": "1. "},
-            {"op": "split_col", "col": "inf_subcategoria", "delimiter": ". ", "into": ["codigo", "tipo"]},
+            {"op": "split_col", "col": "inf_subcategoria", "separator": ". ", "into": ["codigo", "tipo"]},
             {"op": "drop_cols", "cols": ["variavel", "inf_categoria", "codigo"]},
             {"op": "cast", "types": {"valor": "int", "ano": "int"}},
         ],
@@ -207,7 +207,7 @@ NUMERO = {"parse_decimal_br", "parse_brl", "parse_ibge_value"}
 def _receita(passos: list[dict]) -> Any:
     return recipe_from_dict(
         {
-            "wolfz_version": "0.1",
+            "wolfz_version": "1.0",
             "name": "medição",
             "created_at": "2026-01-01T00:00:00Z",
             "source": {"type": "csv"},
@@ -293,7 +293,7 @@ def _cobertura(precisa: dict, sugeridos: list[dict]) -> tuple[float, str]:
         ok = any(s["cols"] == precisa["cols"] for s in mesmos)
         return float(ok), "colunas"
     if op == "split_col":
-        ok = any(s["col"] == precisa["col"] and s["delimiter"] == precisa["delimiter"] for s in mesmos)
+        ok = any(s["col"] == precisa["col"] and s["separator"] == precisa["separator"] for s in mesmos)
         return float(ok), "coluna e separador"
     return 1.0, "operação sugerida"
 

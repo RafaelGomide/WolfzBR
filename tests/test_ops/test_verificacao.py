@@ -16,7 +16,7 @@ from wolfz.export.python import recipe_to_python
 def _receita(**passo):
     return recipe_from_dict(
         {
-            "wolfz_version": "0.1",
+            "wolfz_version": "1.0",
             "name": "x",
             "created_at": "2026-01-01T00:00:00Z",
             "source": {"type": "csv"},

@@ -367,6 +367,7 @@ A mesma estrutura alimenta a mensagem de erro da CLI, para que `wolfz run` e a i
 - **API**: sem versionamento de URL. A SPA é compilada e distribuída no mesmo pacote que o backend, então cliente e servidor nunca estão em versões diferentes.
 - **Receita**: é o contrato de verdade, e é versionada pelo campo `wolfz_version`. Receitas antigas são migradas por `recipe/migrate.py` ao carregar. Receita de versão *mais nova* que o WolfzBR instalado é recusada com mensagem pedindo atualização, nunca interpretada parcialmente.
 - Política de compatibilidade da receita: toda receita `1.x` abre em qualquer versão `1.y`. Receitas `0.x` têm migração até a 1.0 e depois deixam de abrir.
+- **Python**: a API pública é o que está em `wolfz.__all__` (`run`, `load_recipe`, `RecipeError`, `StepError`, `br`) e em `wolfz.br.__all__` (as funções de valor), e segue o versionamento semântico do pacote. `wolfz.core`, `wolfz.ops`, `wolfz.export`, `wolfz.api`, `wolfz.cli` e os submódulos de `wolfz.br` são internos e mudam sem aviso; o contrato das operações é o nome e os parâmetros na receita, não as classes Python.
 
 ### 5.8 Idempotência
 

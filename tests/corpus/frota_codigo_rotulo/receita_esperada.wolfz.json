@@ -7,13 +7,13 @@
   "steps": [
     {
       "col": "inf_subcategoria",
-      "delimiter": ". ",
       "id": "s1",
       "into": [
         "codigo",
         "tipo"
       ],
-      "op": "split_col"
+      "op": "split_col",
+      "separator": ". "
     },
     {
       "cols": [
@@ -32,5 +32,5 @@
       }
     }
   ],
-  "wolfz_version": "0.1"
+  "wolfz_version": "1.0"
 }

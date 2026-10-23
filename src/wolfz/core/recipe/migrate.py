@@ -16,13 +16,38 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-CURRENT_VERSION = "0.1"
+CURRENT_VERSION = "1.0"
 
 RecipeDict = dict[str, Any]
 
-# versão de origem -> (versão de destino, função). Vazio enquanto o formato
-# não mudar.
-MIGRATIONS: dict[str, tuple[str, Callable[[RecipeDict], RecipeDict]]] = {}
+# Parâmetros renomeados no congelamento da 1.0 (FH.A2): operação -> {antigo: novo}.
+# Todo texto que se intercala ao juntar ou dividir é ``separator``, e opção
+# booleana que acrescenta coluna começa com ``add_`` (``*_col`` é sempre o
+# nome de uma coluna).
+RENOMEADOS_1_0: dict[str, dict[str, str]] = {
+    "split_col": {"delimiter": "separator"},
+    "header_rows": {"joiner": "separator"},
+    "clean_cpf": {"flag": "add_valid_col"},
+    "clean_cnpj": {"flag": "add_valid_col"},
+    "parse_ibge_value": {"status": "add_status_col"},
+}
+
+
+def _de_0_1_para_1_0(data: RecipeDict) -> RecipeDict:
+    steps = data.get("steps")
+    if not isinstance(steps, list):
+        return dict(data)
+    novos = []
+    for step in steps:
+        nomes = RENOMEADOS_1_0.get(step.get("op")) if isinstance(step, dict) else None
+        novos.append({nomes.get(k, k): v for k, v in step.items()} if nomes else step)
+    return {**data, "steps": novos}
+
+
+# versão de origem -> (versão de destino, função).
+MIGRATIONS: dict[str, tuple[str, Callable[[RecipeDict], RecipeDict]]] = {
+    "0.1": ("1.0", _de_0_1_para_1_0),
+}
 
 
 class RecipeVersionError(ValueError):
@@ -55,9 +80,9 @@ def _instalado() -> str:
 
 
 def parse_version(version: object) -> tuple[int, int]:
-    """'0.1' -> (0, 1). Só major.minor: a receita não tem versão de patch."""
+    """'1.0' -> (1, 0). Só major.minor: a receita não tem versão de patch."""
     if not isinstance(version, str) or not (m := re.fullmatch(r"(\d+)\.(\d+)", version)):
-        raise RecipeVersionError(f"wolfz_version inválida: {version!r} (esperado algo como '0.1')")
+        raise RecipeVersionError(f"wolfz_version inválida: {version!r} (esperado algo como '1.0')")
     return int(m[1]), int(m[2])
 
 

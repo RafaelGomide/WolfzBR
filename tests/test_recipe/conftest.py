@@ -7,7 +7,7 @@ from ops_de_teste import RemoverDeTeste, RenomearDeTeste  # noqa: F401  (registr
 @pytest.fixture
 def recipe_dict():
     return {
-        "wolfz_version": "0.1",
+        "wolfz_version": "1.0",
         "name": "Vendas mensais",
         "created_at": "2026-10-16T14:00:00Z",
         "source": {"type": "excel", "sheet": "Vendas", "match": {"sheet_name_regex": r"Vendas \d{4}"}},

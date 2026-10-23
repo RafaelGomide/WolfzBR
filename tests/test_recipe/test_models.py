@@ -36,7 +36,7 @@ def test_passos_executam_em_sequencia(recipe_dict):
 
 def test_receita_construida_em_codigo():
     recipe = Recipe(
-        wolfz_version="0.1",
+        wolfz_version="1.0",
         name="Teste",
         created_at=datetime(2026, 1, 1, tzinfo=UTC),
         source=Source(type="csv"),

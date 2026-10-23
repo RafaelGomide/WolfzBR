@@ -383,7 +383,7 @@ def receita_json(s: Sintetico, saida: Saida) -> str:
     if saida.aba:
         source["sheet"] = saida.aba
     receita = {
-        "wolfz_version": "0.1",
+        "wolfz_version": "1.0",
         "name": s.nome.replace("_", " "),
         "created_at": CRIADO_EM,
         "source": source,
@@ -689,7 +689,7 @@ def sidra_pam_area() -> Sintetico:
     saida = tabela(("municipio", TXT, municipios), *((c, NUM, limpos[c]) for c in cols))
     passos = [
         {"op": "select_range", "start": "A2", "end": f"E{3 + len(municipios)}"},
-        {"op": "header_rows", "n": 2, "joiner": " "},
+        {"op": "header_rows", "n": 2, "separator": " "},
         {
             "op": "rename",
             "mapping": {
@@ -700,7 +700,7 @@ def sidra_pam_area() -> Sintetico:
                 f"{qtd} 2023": cols[3],
             },
         },
-        {"op": "parse_ibge_value", "cols": cols, "status": False},
+        {"op": "parse_ibge_value", "cols": cols, "add_status_col": False},
     ]
     return Sintetico(
         "sidra_pam_area",
@@ -745,7 +745,7 @@ def boletim_saude_multinivel() -> Sintetico:
     }
     passos = [
         {"op": "select_range", "start": "A3", "end_detect": "auto"},
-        {"op": "header_rows", "n": 2, "joiner": " "},
+        {"op": "header_rows", "n": 2, "separator": " "},
         {"op": "drop_rows_where", "col": "Região de Saúde", "match": "equals", "value": "Total"},
         {"op": "rename", "mapping": mapping},
         {"op": "cast", "types": dict.fromkeys(cols, "int")},
@@ -794,7 +794,7 @@ def sidra_ppm_rebanho() -> Sintetico:
         {"op": "select_range", "start": "A4", "end": f"G{4 + len(municipios)}"},
         {"op": "header_rows", "n": 1},
         {"op": "rename", "mapping": dict(zip(cab, cols, strict=True))},
-        {"op": "parse_ibge_value", "cols": cols[1:], "status": False},
+        {"op": "parse_ibge_value", "cols": cols[1:], "add_status_col": False},
     ]
     return Sintetico(
         "sidra_ppm_rebanho",
@@ -850,7 +850,7 @@ def censo_populacao_sinais() -> Sintetico:
         {"op": "select_range", "start": "A4", "end": f"E{4 + len(linhas)}"},
         {"op": "header_rows", "n": 1},
         {"op": "rename", "mapping": dict(zip(cab, saida.columns, strict=True))},
-        {"op": "parse_ibge_value", "cols": ["total", "homens", "mulheres"], "status": False},
+        {"op": "parse_ibge_value", "cols": ["total", "homens", "mulheres"], "add_status_col": False},
     ]
     return Sintetico(
         "censo_populacao_sinais",
@@ -1134,7 +1134,7 @@ def tabnet_obitos() -> Sintetico:
         {"op": "drop_rows_where", "col": "Município", "match": "equals", "value": "Total"},
         {"op": "drop_cols", "cols": ["Total"]},
         {"op": "rename", "mapping": {"Município": "municipio", **dict(zip(anos, cols, strict=True))}},
-        {"op": "parse_ibge_value", "cols": cols, "status": False},
+        {"op": "parse_ibge_value", "cols": cols, "add_status_col": False},
         {"op": "cast", "types": dict.fromkeys(cols, "int")},
     ]
     return Sintetico(
@@ -2493,7 +2493,7 @@ def frota_codigo_rotulo() -> Sintetico:
         ("valor", INT, [v for *_, v in linhas]),
     )
     passos = [
-        {"op": "split_col", "col": "inf_subcategoria", "delimiter": ". ", "into": ["codigo", "tipo"]},
+        {"op": "split_col", "col": "inf_subcategoria", "separator": ". ", "into": ["codigo", "tipo"]},
         {"op": "drop_cols", "cols": ["variavel", "codigo"]},
         {"op": "cast", "types": {"valor": "int", "ano": "int"}},
     ]

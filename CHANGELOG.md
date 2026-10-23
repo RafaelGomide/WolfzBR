@@ -6,6 +6,15 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 
 ## [Não publicado]
 
+### Alterado
+
+- Formato da receita `wolfz_version: "1.0"`, congelado para a 1.0. Receitas `0.1` (gravadas do WolfzBR 0.1.0 ao 0.9.0) abrem sem mudança de resultado: a migração renomeia os parâmetros abaixo ao carregar, e o arquivo só é regravado quando você salva.
+- Parâmetros renomeados, para o mesmo nome valer na receita toda: `split_col` e `header_rows` usam `separator` (antes `delimiter` e `joiner`), como `merge_cols`; `clean_cpf` e `clean_cnpj` usam `add_valid_col` (antes `flag`); `parse_ibge_value` usa `add_status_col` (antes `status`). Opção que acrescenta coluna começa com `add_`; `*_col` é sempre o nome de uma coluna.
+
+### Adicionado
+
+- API pública em Python definida: `wolfz.run`, `wolfz.load_recipe`, `wolfz.RecipeError`, `wolfz.StepError` e as funções de valor em `wolfz.br` (`wolfz.br.clean_cpf`, `wolfz.br.parse_brl`…), agora importáveis direto do pacote. O resto é interno.
+
 ## [0.9.0] - 2026-10-22
 
 Exportação para o Power BI como projeto PBIP: o modelo com a tabela, os tipos, `R$` e as medidas `Total`, a consulta M da receita com o parâmetro `CaminhoArquivo` e uma tabela calendário opcional em português. Abre direto no Power BI Desktop; para o mês seguinte, troca-se o parâmetro e atualiza.

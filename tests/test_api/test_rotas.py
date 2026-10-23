@@ -9,7 +9,7 @@ from apoio_api import CORPUS, PORTA, TOKEN, XLSX, cliente, enviar
 
 import wolfz
 from wolfz.api.security import Settings
-from wolfz.core.recipe import load_recipe, recipe_from_dict
+from wolfz.core.recipe import CURRENT_VERSION, load_recipe, recipe_from_dict
 from wolfz.core.workspace import Workspace
 from wolfz.export.m import m_text
 
@@ -730,7 +730,7 @@ def test_receita_de_versao_mais_nova_pede_para_atualizar(client, settings, proje
     assert "formato 9.0" in corpo["detail"]
     assert "pipx upgrade wolfzbr" in corpo["detail"]
     assert corpo["recipe_version"] == "9.0"
-    assert corpo["supported_version"] == "0.1"
+    assert corpo["supported_version"] == CURRENT_VERSION
     # Salvar uma receita mais nova pela API também é recusado.
     caminho.write_text(json.dumps(dados), encoding="utf-8")
     r = client.put(

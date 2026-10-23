@@ -1,6 +1,7 @@
-"""Estrutura da migração. ``MIGRATIONS`` está vazio na 0.1; os testes usam
-migrações falsas para garantir que a cadeia funciona antes de existir a
-primeira de verdade."""
+"""Migração de receitas: a cadeia em si (com migrações falsas) e a de
+verdade, do formato 0.1 (WolfzBR 0.1.0 a 0.9.0) para o 1.0. As receitas
+gravadas por cada versão publicada passam por ela em
+``test_receitas_antigas.py``."""
 
 import importlib
 
@@ -21,8 +22,43 @@ migrate_module = importlib.import_module("wolfz.core.recipe.migrate")
 
 
 def test_versao_atual():
-    assert CURRENT_VERSION == "0.1"
-    assert migrate_module.MIGRATIONS == {}
+    assert CURRENT_VERSION == "1.0"
+    assert set(migrate_module.MIGRATIONS) == {"0.1"}
+
+
+def test_de_0_1_para_1_0_renomeia_parametros():
+    original = {
+        "wolfz_version": "0.1",
+        "name": "x",
+        "steps": [
+            {"id": "s1", "op": "header_rows", "n": 2, "joiner": "_"},
+            {"id": "s2", "op": "split_col", "col": "a", "delimiter": " - ", "into": ["b", "c"]},
+            {"id": "s3", "op": "clean_cpf", "cols": ["cpf"], "flag": True, "enabled": False},
+            {"id": "s4", "op": "clean_cnpj", "cols": ["cnpj"], "flag": False},
+            {"id": "s5", "op": "parse_ibge_value", "cols": ["v"], "status": False},
+            {"id": "s6", "op": "merge_cols", "cols": ["a", "b"], "separator": "/", "into": "ab"},
+        ],
+    }
+    assert migrate(original) == {
+        "wolfz_version": "1.0",
+        "name": "x",
+        "steps": [
+            {"id": "s1", "op": "header_rows", "n": 2, "separator": "_"},
+            {"id": "s2", "op": "split_col", "col": "a", "separator": " - ", "into": ["b", "c"]},
+            {"id": "s3", "op": "clean_cpf", "cols": ["cpf"], "add_valid_col": True, "enabled": False},
+            {"id": "s4", "op": "clean_cnpj", "cols": ["cnpj"], "add_valid_col": False},
+            {"id": "s5", "op": "parse_ibge_value", "cols": ["v"], "add_status_col": False},
+            {"id": "s6", "op": "merge_cols", "cols": ["a", "b"], "separator": "/", "into": "ab"},
+        ],
+    }
+    assert original["steps"][0] == {"id": "s1", "op": "header_rows", "n": 2, "joiner": "_"}
+
+
+def test_de_0_1_para_1_0_deixa_passo_malformado_para_a_validacao():
+    """Passo sem ``op`` ou que nem é objeto chega igual à validação, que
+    explica o erro com o caminho do campo."""
+    passos = [{"id": "s1"}, "lixo", {"id": "s2", "op": "xyz", "flag": True}]
+    assert migrate({"wolfz_version": "0.1", "steps": passos})["steps"] == passos
 
 
 def test_versao_atual_passa_sem_mudar():
@@ -30,7 +66,7 @@ def test_versao_atual_passa_sem_mudar():
     assert migrate(data) == data
 
 
-@pytest.mark.parametrize(("version", "expected"), [("0.1", (0, 1)), ("1.10", (1, 10))])
+@pytest.mark.parametrize(("version", "expected"), [("0.1", (0, 1)), ("1.0", (1, 0)), ("1.10", (1, 10))])
 def test_parse_version(version, expected):
     assert parse_version(version) == expected
 
@@ -46,7 +82,7 @@ def test_sem_versao():
         migrate({"name": "x"})
 
 
-@pytest.mark.parametrize("version", ["0.2", "1.0", "10.1"])
+@pytest.mark.parametrize("version", ["1.1", "2.0", "10.1"])
 def test_versao_mais_nova_e_recusada(version):
     with pytest.raises(NewerRecipeVersion) as exc:
         migrate({"wolfz_version": version})
@@ -61,7 +97,7 @@ def test_versao_mais_nova_vira_erro_de_receita():
     """Quem carrega a receita (CLI, API, ``wolfz.run``) recebe um RecipeError
     próprio, com uma linha só: a de pedir atualização."""
     with pytest.raises(RecipeTooNewError) as exc:
-        recipe_from_dict({"wolfz_version": "0.2", "name": "x", "steps": []})
+        recipe_from_dict({"wolfz_version": "1.1", "name": "x", "steps": []})
     assert isinstance(exc.value, RecipeError)
     assert len(exc.value.errors) == 1
     assert exc.value.errors[0].startswith("Esta receita foi feita numa versão mais nova do WolfzBR")

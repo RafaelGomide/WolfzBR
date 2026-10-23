@@ -53,7 +53,7 @@
       ],
       "id": "s6",
       "op": "parse_ibge_value",
-      "status": false
+      "add_status_col": false
     },
     {
       "id": "s7",
@@ -67,5 +67,5 @@
       }
     }
   ],
-  "wolfz_version": "0.1"
+  "wolfz_version": "1.0"
 }

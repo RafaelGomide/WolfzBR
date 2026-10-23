@@ -115,7 +115,7 @@ def test_escapes_hostis_passam_no_parser():
 def _receita(steps, source=None, name="vendas") -> Recipe:
     return recipe_from_dict(
         {
-            "wolfz_version": "0.1",
+            "wolfz_version": "1.0",
             "name": name,
             "created_at": "2026-01-01T00:00:00Z",
             "source": source or {"type": "excel", "sheet": "Vendas"},
@@ -314,7 +314,7 @@ def test_corpus_gera_m_valido():
 
 def test_receita_sem_passos():
     vazia = Recipe(
-        wolfz_version="0.1",
+        wolfz_version="1.0",
         name="vazia",
         created_at=datetime(2026, 1, 1, tzinfo=UTC),
         source=Source(type="csv"),

@@ -19,7 +19,7 @@ ENTRADA = pl.DataFrame(
 def _receita(**passo):
     return recipe_from_dict(
         {
-            "wolfz_version": "0.1",
+            "wolfz_version": "1.0",
             "name": "municípios",
             "created_at": "2026-01-01T00:00:00Z",
             "source": {"type": "csv"},
@@ -93,7 +93,7 @@ def test_depara_abre_no_excel(tmp_path):
 def test_receita_sem_municipio_nao_tem_depara():
     receita = recipe_from_dict(
         {
-            "wolfz_version": "0.1",
+            "wolfz_version": "1.0",
             "name": "x",
             "created_at": "2026-01-01T00:00:00Z",
             "source": {"type": "csv"},
@@ -125,7 +125,7 @@ def test_verificacao_reprovada_nao_impede_o_depara():
     (aqui, município vazio) não pode impedir a exportação do M."""
     receita = recipe_from_dict(
         {
-            "wolfz_version": "0.1",
+            "wolfz_version": "1.0",
             "name": "x",
             "created_at": "2026-01-01T00:00:00Z",
             "source": {"type": "csv"},

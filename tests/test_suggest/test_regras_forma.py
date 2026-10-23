@@ -143,7 +143,7 @@ def test_categorias_por_bloco_do_cabecalho_multinivel():
 
 
 def test_niveis_do_cabecalho_viram_categoria():
-    passos = [{"op": "header_rows", "n": 3, "joiner": "_"}]
+    passos = [{"op": "header_rows", "n": 3, "separator": "_"}]
     df = _df(uf=["RO", "AC"], **{"Mat_Pré_Federal": ["1", "-"], "Mat_Pré_Estadual": ["2", "3"]})
     s = _unica(df, "niveis_de_cabecalho", passos)
     assert s.steps == (
@@ -267,7 +267,7 @@ def test_nota_de_rodape_no_nome():
 def test_codigo_e_nome_na_mesma_celula(valores, separador):
     s = _unica(_df(tipo=valores), "codigo_e_rotulo")
     assert s.steps == (
-        {"op": "split_col", "col": "tipo", "delimiter": separador, "into": ["tipo_codigo", "tipo_nome"]},
+        {"op": "split_col", "col": "tipo", "separator": separador, "into": ["tipo_codigo", "tipo_nome"]},
     )
 
 
@@ -318,7 +318,7 @@ def test_aceitar_etapa_por_etapa_roda():
         passos += [p for s in sugestoes if sug.etapa(s.order) == primeira for p in s.steps]
         receita = recipe_from_dict(
             {
-                "wolfz_version": "0.1",
+                "wolfz_version": "1.0",
                 "name": "x",
                 "created_at": "2026-01-01T00:00:00Z",
                 "source": {"type": "csv"},

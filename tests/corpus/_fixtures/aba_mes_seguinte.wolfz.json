@@ -17,7 +17,7 @@
     },
     {
       "id": "s2",
-      "joiner": " ",
+      "separator": " ",
       "n": 1,
       "op": "header_rows"
     },
@@ -49,5 +49,5 @@
       }
     }
   ],
-  "wolfz_version": "0.1"
+  "wolfz_version": "1.0"
 }

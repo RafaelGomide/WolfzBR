@@ -37,7 +37,7 @@
       "cols": [
         "cnpj"
       ],
-      "flag": false,
+      "add_valid_col": false,
       "id": "s3",
       "op": "clean_cnpj",
       "pad_zeros": true
@@ -72,5 +72,5 @@
       "op": "assert"
     }
   ],
-  "wolfz_version": "0.1"
+  "wolfz_version": "1.0"
 }

@@ -68,7 +68,7 @@ def _receita(match: bool):
         source["match"] = {"sheet_name_regex": padrao_de_aba("DEZEMBRO_2025")}
     return recipe_from_dict(
         {
-            "wolfz_version": "0.1",
+            "wolfz_version": "1.0",
             "name": "mensal",
             "created_at": "2026-01-01T00:00:00Z",
             "source": source,

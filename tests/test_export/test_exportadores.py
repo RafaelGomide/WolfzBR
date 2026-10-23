@@ -31,7 +31,7 @@ def test_m_list():
 
 def _vazia() -> Recipe:
     return Recipe(
-        wolfz_version="0.1",
+        wolfz_version="1.0",
         name="vazia",
         created_at=datetime(2026, 1, 1, tzinfo=UTC),
         source=Source(type="csv"),

@@ -31,6 +31,7 @@
       "op": "rename"
     },
     {
+      "add_status_col": false,
       "cols": [
         "bovino",
         "bubalino",
@@ -40,9 +41,8 @@
         "galinaceos_total"
       ],
       "id": "s4",
-      "op": "parse_ibge_value",
-      "status": false
+      "op": "parse_ibge_value"
     }
   ],
-  "wolfz_version": "0.1"
+  "wolfz_version": "1.0"
 }

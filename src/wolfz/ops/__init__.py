@@ -1,6 +1,9 @@
 """Catálogo de operações: schema + Polars + M + Python para cada passo de receita.
 
 Importar este pacote registra todas as operações (``@register_op``).
+
+Interno em Python: o contrato público das operações é o nome e os
+parâmetros de cada uma na receita (``wolfz schema``), não estas classes.
 """
 
 from wolfz.ops.br import (

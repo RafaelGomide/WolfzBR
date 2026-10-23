@@ -83,10 +83,10 @@ def nomes_unicos(nomes: list[str]) -> list[str]:
     return saida
 
 
-def header_rows_lf(lf: pl.LazyFrame, n: int, joiner: str, names: list[str] | None) -> pl.LazyFrame:
+def header_rows_lf(lf: pl.LazyFrame, n: int, separator: str, names: list[str] | None) -> pl.LazyFrame:
     """As ``n`` primeiras linhas viram o nome das colunas. Com mais de uma
     linha, as de cima são preenchidas para a direita (célula mesclada na
-    horizontal) e as partes são unidas com ``joiner``. Célula vazia mantém o
+    horizontal) e as partes são unidas com ``separator``. Célula vazia mantém o
     nome atual da coluna; nome repetido ganha sufixo (_2, _3…). ``names``
     substitui os nomes, na ordem das colunas."""
     atuais = lf.collect_schema().names()
@@ -111,7 +111,7 @@ def header_rows_lf(lf: pl.LazyFrame, n: int, joiner: str, names: list[str] | Non
         for linha in linhas:
             if linha[j] is not None and (not partes or partes[-1] != linha[j]):
                 partes.append(linha[j])
-        novos.append(joiner.join(partes) or atual)
+        novos.append(separator.join(partes) or atual)
     return lf.slice(n).rename(dict(zip(atuais, nomes_unicos(novos), strict=True)))
 
 
@@ -314,7 +314,7 @@ class HeaderRows(Op):
 
     Com ``n`` maior que 1 (cabeçalho em várias linhas), as linhas de cima
     são preenchidas para a direita, como célula mesclada, e as partes são
-    unidas com ``joiner``: 'Área (ha)' sobre '2022' vira 'Área (ha) 2022'.
+    unidas com ``separator``: 'Área (ha)' sobre '2022' vira 'Área (ha) 2022'.
     Célula de cabeçalho vazia mantém o nome atual; nome repetido ganha
     sufixo (_2, _3…). Com ``names``, as ``n`` linhas são descartadas e as
     colunas recebem esses nomes, na ordem (arquivo sem cabeçalho: ``n=0``)."""
@@ -322,7 +322,7 @@ class HeaderRows(Op):
     op: Literal["header_rows"]
     m_label = "Cabeçalhos promovidos"
     n: int = Field(default=1, ge=0, le=10)
-    joiner: str = " "
+    separator: str = " "
     names: list[str] | None = None
 
     python_helpers = (header_rows_lf,)
@@ -339,7 +339,7 @@ class HeaderRows(Op):
             "expected": {"Nome": ["Ana"], "B": ["1"], "Nome_2": ["x"], "Valor (R$)": ["2"]},
         },
         {
-            "step": {"n": 2, "joiner": " "},
+            "step": {"n": 2, "separator": " "},
             "input": {
                 "A": ["Município", None, "Vitória"],
                 "B": ["Área", "2022", "10"],
@@ -365,16 +365,16 @@ class HeaderRows(Op):
         return self
 
     def to_polars(self, lf: pl.LazyFrame) -> pl.LazyFrame:
-        return header_rows_lf(lf, self.n, self.joiner, self.names)
+        return header_rows_lf(lf, self.n, self.separator, self.names)
 
     def to_python(self) -> str:
-        return f"lf = header_rows_lf(lf, {self.n!r}, {self.joiner!r}, {self.names!r})"
+        return f"lf = header_rows_lf(lf, {self.n!r}, {self.separator!r}, {self.names!r})"
 
     def to_m(self, prev: str, name: str) -> str:
         if self.names is not None:
             pares = f"List.Zip({{Table.ColumnNames({prev}), {m_list(self.names)}}})"
             return f"{name} = Table.RenameColumns(Table.Skip({prev}, {self.n}), {pares})"
-        return f"{name} = WolfzCabecalho({prev}, {self.n}, {m_text(self.joiner)})"
+        return f"{name} = WolfzCabecalho({prev}, {self.n}, {m_text(self.separator)})"
 
 
 @register_op

@@ -40,7 +40,7 @@ CANONICA = """{
       "strict": true
     }
   ],
-  "wolfz_version": "0.1"
+  "wolfz_version": "1.0"
 }
 """
 
@@ -116,7 +116,7 @@ def test_todo_passo_salvo_abre_de_novo(op, passo):
     tinha, e a receita salva não abria)."""
     receita = recipe_from_dict(
         {
-            "wolfz_version": "0.1",
+            "wolfz_version": "1.0",
             "name": "ida e volta",
             "created_at": "2026-01-01T00:00:00Z",
             "source": {"type": "csv"},

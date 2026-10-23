@@ -300,7 +300,7 @@ def ibge_lspa_2025_01(path: Path) -> list[Saida]:
     mapping |= {f"{rotulos[g]} {sub[s]}": f"{g}_{s}" for g in grupos for s, _ in sufixos}
     passos = [
         {"op": "select_range", "start": "A4", "end_detect": "auto"},
-        {"op": "header_rows", "n": 2, "joiner": " "},
+        {"op": "header_rows", "n": 2, "separator": " "},
         {"op": "rename", "mapping": mapping},
         {"op": "drop_rows_where", "col": "produto", "match": "equals", "value": "TOTAL"},
         {"op": "drop_rows_where", "col": "produto", "match": "contains", "value": " - TOTAL"},
@@ -366,7 +366,7 @@ def ibge_ppm_2012_linhares(path: Path) -> list[Saida]:
         {"op": "header_rows", "n": 0, "names": nomes},
         {"op": "trim", "cols": ["especificacao"]},
         {"op": "drop_rows_where", "col": "especificacao", "match": "in", "value": sorted(secoes | portes)},
-        {"op": "parse_ibge_value", "cols": nomes[1:], "status": False},
+        {"op": "parse_ibge_value", "cols": nomes[1:], "add_status_col": False},
     ]
     # Linhas de seção ('Categorias', 'Produtos') ficam na área; só os portes
     # do rebanho são subtotais.
@@ -663,7 +663,7 @@ def _receita(p: Publico, saida: Saida) -> str:
     if saida.aba:
         source["sheet"] = saida.aba
     receita = {
-        "wolfz_version": "0.1",
+        "wolfz_version": "1.0",
         "name": p.nome.replace("_", " "),
         "created_at": CRIADO_EM,
         "source": source,

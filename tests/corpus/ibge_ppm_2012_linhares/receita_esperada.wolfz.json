@@ -48,6 +48,7 @@
       ]
     },
     {
+      "add_status_col": false,
       "cols": [
         "quantidade",
         "part_estadual",
@@ -56,9 +57,8 @@
         "valor"
       ],
       "id": "s5",
-      "op": "parse_ibge_value",
-      "status": false
+      "op": "parse_ibge_value"
     }
   ],
-  "wolfz_version": "0.1"
+  "wolfz_version": "1.0"
 }

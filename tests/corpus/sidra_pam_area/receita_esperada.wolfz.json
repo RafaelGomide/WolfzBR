@@ -14,9 +14,9 @@
     },
     {
       "id": "s2",
-      "joiner": " ",
       "n": 2,
-      "op": "header_rows"
+      "op": "header_rows",
+      "separator": " "
     },
     {
       "id": "s3",
@@ -30,6 +30,7 @@
       "op": "rename"
     },
     {
+      "add_status_col": false,
       "cols": [
         "area_plantada_2022",
         "area_plantada_2023",
@@ -37,9 +38,8 @@
         "quantidade_produzida_2023"
       ],
       "id": "s4",
-      "op": "parse_ibge_value",
-      "status": false
+      "op": "parse_ibge_value"
     }
   ],
-  "wolfz_version": "0.1"
+  "wolfz_version": "1.0"
 }

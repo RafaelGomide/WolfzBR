@@ -12,7 +12,7 @@ from wolfz.ops import DropRowsWhere, ParseBrl, Rename
 
 def _errors(step: dict) -> list[str]:
     data = {
-        "wolfz_version": "0.1",
+        "wolfz_version": "1.0",
         "name": "x",
         "created_at": "2026-01-01T00:00:00Z",
         "source": {"type": "csv"},

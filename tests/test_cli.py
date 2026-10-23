@@ -7,7 +7,7 @@ from typer.testing import CliRunner
 
 import wolfz
 from wolfz.cli import app
-from wolfz.core.recipe import recipe_from_dict, save_recipe
+from wolfz.core.recipe import CURRENT_VERSION, recipe_from_dict, save_recipe
 
 runner = CliRunner()
 
@@ -47,7 +47,7 @@ PASSOS = [
 def receita(tmp_path):
     path = tmp_path / "vendas.wolfz.json"
     data = {
-        "wolfz_version": "0.1",
+        "wolfz_version": "1.0",
         "name": "vendas",
         "created_at": "2026-01-01T00:00:00Z",
         "source": {"type": "csv"},
@@ -132,7 +132,7 @@ def test_mensagem_igual_a_da_api(receita, tmp_path):
 def test_run_receita_invalida_sai_com_2(entrada, tmp_path):
     receita = tmp_path / "ruim.wolfz.json"
     receita.write_text(
-        json.dumps({"wolfz_version": "0.1", "steps": [{"id": "s1", "op": "xyz"}]}), encoding="utf-8"
+        json.dumps({"wolfz_version": "1.0", "steps": [{"id": "s1", "op": "xyz"}]}), encoding="utf-8"
     )
     result = _run(receita, entrada, "-o", tmp_path / "x.csv")
     assert result.exit_code == 2
@@ -327,7 +327,7 @@ def test_run_avisa_e_neutraliza_formulas(receita, tmp_path):
 def receita_com_verificacao(tmp_path):
     path = tmp_path / "vendas_verificada.wolfz.json"
     data = {
-        "wolfz_version": "0.1",
+        "wolfz_version": "1.0",
         "name": "vendas",
         "created_at": "2026-01-01T00:00:00Z",
         "source": {"type": "csv"},
@@ -428,6 +428,6 @@ def test_run_receita_de_versao_mais_nova_pede_para_atualizar(entrada, tmp_path):
     assert result.exit_code == 2
     linhas = result.output.splitlines()
     assert linhas[0] == f"Receita de uma versão mais nova do WolfzBR: {receita}"
-    assert f"o WolfzBR {wolfz.__version__} instalado lê até o formato 0.1" in result.output
+    assert f"o WolfzBR {wolfz.__version__} instalado lê até o formato {CURRENT_VERSION}" in result.output
     assert "pipx upgrade wolfzbr" in result.output
     assert not (tmp_path / "x.csv").exists()

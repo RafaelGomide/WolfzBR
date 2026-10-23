@@ -485,11 +485,11 @@ class ParseBoolBr(_ValorBr):
 
 
 class _Documento(_ValorBr):
-    """Base de CPF e CNPJ: limpa e, com ``flag``, acrescenta a coluna
+    """Base de CPF e CNPJ: limpa e, com ``add_valid_col``, acrescenta a coluna
     ``<coluna>_valido`` com o dígito verificador conferido."""
 
     pad_zeros: bool = True
-    flag: bool = False
+    add_valid_col: bool = False
 
     valido: ClassVar[Callable[[str | None], bool]]
     m_valido: ClassVar[str]
@@ -502,7 +502,7 @@ class _Documento(_ValorBr):
 
     def to_polars(self, lf: pl.LazyFrame) -> pl.LazyFrame:
         lf = super().to_polars(lf)
-        if not self.flag:
+        if not self.add_valid_col:
             return lf
         aplicar = map_unique(type(self).valido, pl.Boolean)
         return lf.with_columns(
@@ -511,7 +511,7 @@ class _Documento(_ValorBr):
 
     def to_python(self) -> str:
         linhas = super().to_python()
-        if self.flag:
+        if self.add_valid_col:
             nome = type(self).valido.__name__
             linhas += (
                 f"\nlf = lf.with_columns(pl.col(c).map_elements({nome}, return_dtype=pl.Boolean)"
@@ -521,7 +521,7 @@ class _Documento(_ValorBr):
 
     def to_m(self, prev: str, name: str) -> str:
         limpo = super().to_m(prev, name)
-        if not self.flag:
+        if not self.add_valid_col:
             return limpo
         expr = limpo.split(" = ", 1)[1]
         for c in self.cols:
@@ -553,7 +553,7 @@ class CleanCpf(_Documento):
     }
     examples = (
         {
-            "step": {"cols": ["cpf"], "flag": True},
+            "step": {"cols": ["cpf"], "add_valid_col": True},
             "input": {
                 "cpf": ["529.982.247-25", "2345678909", "12345678909.0", "***.456.789-**", "1,23E+10", None]
             },
@@ -577,7 +577,7 @@ class CleanCpf(_Documento):
 class CleanCnpj(_Documento):
     """CNPJ como texto de 14 caracteres, sem máscara, letras em maiúscula:
     '12.345.678/0001-95' -> '12345678000195'; '191' -> '00000000000191'.
-    Aceita o CNPJ alfanumérico (julho de 2026); a flag confere o dígito
+    Aceita o CNPJ alfanumérico (julho de 2026); a coluna de validade confere o dígito
     verificador com a regra nova, que vale também para o numérico."""
 
     op: Literal["clean_cnpj"]
@@ -595,7 +595,7 @@ class CleanCnpj(_Documento):
     }
     examples = (
         {
-            "step": {"cols": ["c"], "flag": True},
+            "step": {"cols": ["c"], "add_valid_col": True},
             "input": {
                 "c": ["00.000.000/0001-91", "191", "12.abc.345/01de-35", "11.222.333/0001-80", "abc", None]
             },
@@ -897,7 +897,7 @@ class ParseIbgeValue(Op):
     """Valor de tabela do IBGE (SIDRA, Censo, DATASUS) com os sinais
     convencionais: '-' é zero absoluto, '0' é zero arredondado, '..' não se
     aplica, '...' não disponível, 'X' omitido por sigilo. '-' vira 0; os
-    outros sinais viram nulo, nunca zero. Com ``status`` (padrão), cria a
+    outros sinais viram nulo, nunca zero. Com ``add_status_col`` (padrão), cria a
     coluna ``<coluna>_situacao`` dizendo qual era o caso de cada célula."""
 
     op: Literal["parse_ibge_value"]
@@ -905,7 +905,7 @@ class ParseIbgeValue(Op):
     full_checkpoint = True
     cols: list[str] = Field(min_length=1)
     decimal: Literal[".", ","] = "."
-    status: bool = True
+    add_status_col: bool = True
 
     python_helpers = (parse_ibge_value,)
     m_helpers = {  # noqa: RUF012
@@ -933,7 +933,7 @@ class ParseIbgeValue(Op):
             },
         },
         {
-            "step": {"cols": ["v"], "decimal": ",", "status": False},
+            "step": {"cols": ["v"], "decimal": ",", "add_status_col": False},
             "input": {"v": ["1.234,5", "x", "0,0"]},
             "expected": {"v": [1234.5, None, 0.0]},
         },
@@ -948,7 +948,7 @@ class ParseIbgeValue(Op):
         exprs = [
             pl.col(c).cast(pl.String).map_batches(valor, return_dtype=pl.Float64).alias(c) for c in self.cols
         ]
-        if self.status:
+        if self.add_status_col:
             situacao = map_unique(self._fn(1), pl.String)
             exprs += [
                 pl.col(c)
@@ -968,7 +968,7 @@ class ParseIbgeValue(Op):
             f"    for c in {self.cols!r}",
             ")",
         ]
-        if self.status:
+        if self.add_status_col:
             linhas = [
                 "lf = lf.with_columns(",
                 f"    pl.col(c).map_elements(lambda v: parse_ibge_value(v{args})[1], return_dtype=pl.String)",
@@ -983,7 +983,7 @@ class ParseIbgeValue(Op):
     def to_m(self, prev: str, name: str) -> str:
         cultura = '"pt-BR"' if self.decimal == "," else '"en-US"'
         expr = prev
-        if self.status:
+        if self.add_status_col:
             for c in self.cols:
                 corpo = f"each WolfzIbge({m_field(c)}, {cultura}){{1}}"
                 expr = f"Table.AddColumn({expr}, {m_text(c + '_situacao')}, {corpo}, type text)"
