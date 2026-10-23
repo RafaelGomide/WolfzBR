@@ -624,6 +624,12 @@
             "default": false,
             "title": "Overwrite",
             "type": "boolean"
+          },
+          "pbip_calendar": {
+            "default": false,
+            "description": "No PBIP, inclui uma tabela calendário ligada à primeira coluna de data.",
+            "title": "Pbip Calendar",
+            "type": "boolean"
           }
         },
         "required": [

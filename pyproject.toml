@@ -65,6 +65,8 @@ dev = [
     # TestClient do FastAPI (testes de integração da API, F1.G8)
     "httpx>=0.27",
     "pre-commit>=3.7",
+    # Valida os JSON do PBIP contra os schemas oficiais (F3.B7)
+    "jsonschema>=4.22",
 ]
 
 [project.urls]

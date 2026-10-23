@@ -251,8 +251,13 @@ export const T = {
       powerquery: "Power Query (M)",
       python: "Script Python",
       hyper: "Tableau (.hyper + .tds)",
+      pbip: "Power BI (projeto .pbip)",
     } as Record<string, string>,
     instalar: "Para habilitar, instale o extra e reinicie o WolfzBR:",
+    opcoesPbip: "Opções do Power BI",
+    calendario: "Tabela calendário",
+    calendarioDica:
+      "Uma tabela de datas com os meses em português, ligada à primeira coluna de data. A tabela precisa ter uma coluna de data.",
   },
   // Nomes das operações e dos parâmetros na interface. Operação nova sem
   // nome aqui aparece com o nome técnico e a documentação dela.

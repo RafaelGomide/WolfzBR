@@ -379,7 +379,7 @@ def test_exportar_na_pasta_do_projeto(client, settings, projeto):
 @pytest.mark.parametrize(
     ("pedido", "trecho"),
     [
-        ({"formats": ["pbip"]}, "ainda não disponível"),
+        ({"formats": ["pbip"], "pbip_calendar": True}, "coluna de data"),
         ({"formats": ["csv"], "csv_separator": "|"}, "csv_separator"),
         ({"formats": ["csv"], "output_dir": "relativo/pasta"}, "absoluto"),
         ({"formats": []}, "formats"),
@@ -407,6 +407,29 @@ def test_exportar_tableau(client, projeto, tmp_path):
     assert sorted(p.name for p in tmp_path.iterdir()) == ["receita_municipal.hyper", "receita_municipal.tds"]
 
 
+def test_exportar_pbip(client, projeto, tmp_path):
+    saida = tmp_path / "saida"
+    pedido = {"formats": ["pbip"], "output_dir": str(saida)}
+    r = client.post(_url(projeto, "exports"), json=pedido)
+    assert r.status_code == 200, r.text
+    assert sorted(Path(f).name for f in r.json()["files"]) == [
+        "receita_municipal.Report",
+        "receita_municipal.SemanticModel",
+        "receita_municipal.pbip",
+    ]
+    assert r.json()["rows"] == 12
+    modelo = saida / "receita_municipal.SemanticModel" / "definition"
+    (tabela,) = (modelo / "tables").iterdir()
+    texto = tabela.read_text(encoding="utf-8")
+    assert "Excel.Workbook(File.Contents(CaminhoArquivo), null, true)" in texto
+    assert "receita_municipal.xlsx" in (modelo / "expressions.tmdl").read_text(encoding="utf-8")
+    assert (saida / "receita_municipal.Report" / "definition.pbir").is_file()
+    # A pasta existe: 409, como os outros formatos; com overwrite, troca inteira.
+    assert client.post(_url(projeto, "exports"), json=pedido).status_code == 409
+    assert client.post(_url(projeto, "exports"), json={**pedido, "overwrite": True}).status_code == 200
+    assert not [p for p in saida.iterdir() if p.name.startswith(".wolfz-export")]
+
+
 def test_tableau_sem_o_extra(client, projeto, tmp_path, monkeypatch):
     tmp_path = tmp_path / "saida"
     from wolfz.api import rotas
@@ -414,7 +437,7 @@ def test_tableau_sem_o_extra(client, projeto, tmp_path, monkeypatch):
     monkeypatch.setattr(rotas, "hyper_disponivel", lambda: False)
     formatos = {f["format"]: f for f in client.get("/api/export-formats").json()}
     assert formatos["hyper"] == {"format": "hyper", "available": False, "install": rotas.INSTALAR}
-    assert formatos["csv"]["available"] is True and "pbip" not in formatos
+    assert formatos["csv"]["available"] is True and formatos["pbip"]["available"] is True
     r = client.post(_url(projeto, "exports"), json={"formats": ["csv", "hyper"], "output_dir": str(tmp_path)})
     assert r.status_code == 422 and "wolfzbr[tableau]" in r.json()["detail"]
     assert not tmp_path.exists()

@@ -550,6 +550,12 @@ export interface components {
        * @default false
        */
       overwrite: boolean;
+      /**
+       * Pbip Calendar
+       * @description No PBIP, inclui uma tabela calendário ligada à primeira coluna de data.
+       * @default false
+       */
+      pbip_calendar: boolean;
     };
     /** PedidoRejeicao */
     PedidoRejeicao: {

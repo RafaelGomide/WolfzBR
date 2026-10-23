@@ -9,9 +9,9 @@ import { T } from "../textos";
 import { useCarregar } from "../util/useCarregar";
 import { CaixaErro, Carregando } from "./Estado";
 
-type Formato = "csv" | "parquet" | "xlsx" | "powerquery" | "python" | "hyper";
+type Formato = "csv" | "parquet" | "xlsx" | "powerquery" | "python" | "hyper" | "pbip";
 type Separador = "," | ";" | "\t";
-const FORMATOS: Formato[] = ["csv", "xlsx", "parquet", "powerquery", "python", "hyper"];
+const FORMATOS: Formato[] = ["csv", "xlsx", "parquet", "powerquery", "python", "pbip", "hyper"];
 const SEPARADORES: Separador[] = [";", ",", "\t"];
 
 export function Exportar({ projeto, aoFechar }: { projeto: string; aoFechar: () => void }) {
@@ -21,6 +21,7 @@ export function Exportar({ projeto, aoFechar }: { projeto: string; aoFechar: () 
   const [separador, setSeparador] = useState<Separador>(";");
   const [virgulaDecimal, setVirgulaDecimal] = useState(true);
   const [neutralizar, setNeutralizar] = useState(false);
+  const [calendario, setCalendario] = useState(false);
   const { dados: disponiveis } = useCarregar(
     (signal) => chamar(api.GET("/api/export-formats", { signal })),
     [],
@@ -49,6 +50,7 @@ export function Exportar({ projeto, aoFechar }: { projeto: string; aoFechar: () 
             csv_separator: separador,
             decimal_comma: virgulaDecimal,
             neutralize_formulas: neutralizar,
+            pbip_calendar: calendario,
           },
         }),
       );
@@ -142,6 +144,21 @@ export function Exportar({ projeto, aoFechar }: { projeto: string; aoFechar: () 
               {T.exportar.neutralizar}
             </label>
             <small className="dica">{T.exportar.neutralizarDica}</small>
+          </fieldset>
+        )}
+
+        {formatos.has("pbip") && (
+          <fieldset disabled={ocupado}>
+            <legend>{T.exportar.opcoesPbip}</legend>
+            <label className="opcao">
+              <input
+                type="checkbox"
+                checked={calendario}
+                onChange={(e) => setCalendario(e.target.checked)}
+              />
+              {T.exportar.calendario}
+            </label>
+            <small className="dica">{T.exportar.calendarioDica}</small>
           </fieldset>
         )}
 

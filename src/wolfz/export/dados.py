@@ -221,7 +221,8 @@ def gravar_juntos(escritas: Mapping[Path, Callable[[Path], None]]) -> list[Path]
     Cada função recebe um caminho temporário e escreve nele. Só depois que
     todas terminam, os arquivos são movidos para os destinos (renomear na
     mesma pasta é atômico). Se alguma falhar, nenhum destino é tocado e a
-    pasta temporária some."""
+    pasta temporária some. Uma função pode gravar uma pasta em vez de um
+    arquivo: a pasta antiga do destino é trocada inteira pela nova."""
     por_pasta: dict[Path, list[Path]] = {}
     for destino in escritas:
         por_pasta.setdefault(destino.parent.resolve(), []).append(destino)
@@ -236,6 +237,9 @@ def gravar_juntos(escritas: Mapping[Path, Callable[[Path], None]]) -> list[Path]
             escrever(tmp)
             prontos.append((tmp, destino))
         for tmp, destino in prontos:
+            if tmp.is_dir() and destino.is_dir():
+                # Pasta (o PBIP): a antiga vai para a temporária, que some no fim.
+                destino.replace(tmp.with_name(tmp.name + ".antiga"))
             tmp.replace(destino)
     finally:
         for tmp in temporarias.values():

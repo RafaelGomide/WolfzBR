@@ -1,0 +1,3 @@
+relationship ${tag_relacao}
+	fromColumn: ${de}
+	toColumn: ${para}

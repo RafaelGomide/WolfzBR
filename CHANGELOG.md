@@ -6,6 +6,14 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 
 ## [Não publicado]
 
+### Adicionado
+
+- Exportação para o Power BI como projeto PBIP (`<nome>.pbip`, `<nome>.SemanticModel/` em TMDL e `<nome>.Report/` em PBIR, com uma página vazia). O modelo tem a tabela com os tipos da tabela limpa, `R$` nas colunas de reais (`parse_brl`), `%` nas de percentual e datas em `dd/MM/yyyy`; a partição é o M da receita com um último passo que fixa os tipos, lendo o arquivo pelo parâmetro `CaminhoArquivo`. Medidas `Total <coluna>` para cada coluna numérica que não é código, ano ou documento, e `Contagem de linhas`. Receita com município do IBGE leva o de-para e o parâmetro `CaminhoDeparaMunicipios`.
+- Tabela calendário opcional no PBIP (`pbip_calendar` na API, caixa na tela de exportação): DAX com nome do mês e mês abreviado em português, trimestre e ano e mês, marcada como tabela de datas e ligada à primeira coluna de data.
+- Os arquivos do PBIP que mudam de formato entre versões do Power BI ficam em `src/wolfz/export/pbip/templates/`. Os identificadores são derivados do nome: exportar a mesma receita duas vezes gera os mesmos arquivos.
+- Exportar um formato que é uma pasta (o PBIP) troca a pasta inteira: uma tabela renomeada não deixa o arquivo da antiga para trás.
+- `scripts/validacao_pbip.py`: gera os projetos da validação manual no Power BI Desktop e o que cada um tem de mostrar depois do refresh, inclusive o "mês seguinte" trocando o parâmetro.
+
 ## [0.8.0] - 2026-10-22
 
 Exportação para o Tableau: o `.hyper` com os tipos certos e um `.tds` ao lado, com nomes amigáveis e formato brasileiro (`R$`, `dd/mm/aaaa`), num extra opcional (`wolfzbr[tableau]`).

@@ -96,8 +96,7 @@ df = wolfz.run("vendas.wolfz.json", "vendas_fevereiro.xlsx")  # polars.DataFrame
 | Power Query M | A receita como consulta M que lê o arquivo de origem, para colar no Power BI ou no Excel. Vem com o parâmetro `CaminhoArquivo` num arquivo à parte: para o mês seguinte, troque só o caminho. |
 | Script Python | A receita como script autônomo, que lê a planilha ou o CSV e grava `.csv` ou `.parquet`. Só depende do Polars (e de `fastexcel` e `python-calamine` para ler planilha). |
 | Tableau (`.hyper` + `.tds`) | Extrato do Tableau com os tipos certos (data, número, texto) e uma fonte de dados `.tds` ao lado, com nomes amigáveis e formato brasileiro (`R$`, `dd/mm/aaaa`). Precisa do extra: `pip install "wolfzbr[tableau]"` (Windows e Linux x64). |
-
-Projeto do Power BI (`.pbip`) está previsto para uma versão futura.
+| Power BI (`.pbip`) | Projeto do Power BI Desktop: modelo com a tabela, os tipos, `R$` nas colunas de reais e as medidas `Total` e `Contagem de linhas`; a consulta é o M da receita, com o parâmetro `CaminhoArquivo` (para o mês seguinte, troque o parâmetro e atualize). Tabela calendário opcional, com os meses em português. |
 
 ## Padrões brasileiros
 

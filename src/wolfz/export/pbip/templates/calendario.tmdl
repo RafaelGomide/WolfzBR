@@ -1,0 +1,70 @@
+table ${calendario}
+	dataCategory: Time
+	lineageTag: ${tag_tabela}
+
+	column Data
+		isKey
+		formatString: dd/MM/yyyy
+		lineageTag: ${tag_data}
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Data]
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column Ano
+		formatString: 0
+		lineageTag: ${tag_ano}
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Ano]
+
+	column 'Mês'
+		formatString: 0
+		lineageTag: ${tag_mes}
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Mês]
+
+	column 'Nome do mês'
+		lineageTag: ${tag_nome_mes}
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Nome do mês]
+		sortByColumn: 'Mês'
+
+	column 'Mês abreviado'
+		lineageTag: ${tag_mes_abreviado}
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Mês abreviado]
+		sortByColumn: 'Mês'
+
+	column Trimestre
+		lineageTag: ${tag_trimestre}
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Trimestre]
+
+	column 'Ano e mês'
+		lineageTag: ${tag_ano_mes}
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Ano e mês]
+
+	partition ${calendario} = calculated
+		mode: import
+		source =
+				VAR Inicio = COALESCE(MIN(${coluna_data}), TODAY())
+				VAR Fim = COALESCE(MAX(${coluna_data}), TODAY())
+				RETURN
+				    SELECTCOLUMNS(
+				        CALENDAR(DATE(YEAR(Inicio), 1, 1), DATE(YEAR(Fim), 12, 31)),
+				        "Data", [Date],
+				        "Ano", YEAR([Date]),
+				        "Mês", MONTH([Date]),
+				        "Nome do mês", SWITCH(MONTH([Date]), 1, "janeiro", 2, "fevereiro", 3, "março", 4, "abril", 5, "maio", 6, "junho", 7, "julho", 8, "agosto", 9, "setembro", 10, "outubro", 11, "novembro", 12, "dezembro"),
+				        "Mês abreviado", SWITCH(MONTH([Date]), 1, "jan", 2, "fev", 3, "mar", 4, "abr", 5, "mai", 6, "jun", 7, "jul", 8, "ago", 9, "set", 10, "out", 11, "nov", 12, "dez"),
+				        "Trimestre", "T" & QUARTER([Date]),
+				        "Ano e mês", FORMAT([Date], "yyyy-MM")
+				    )

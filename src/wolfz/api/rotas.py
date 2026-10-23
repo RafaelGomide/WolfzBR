@@ -49,6 +49,7 @@ from wolfz.export.dados import (
 )
 from wolfz.export.depara import ARQUIVO_DEPARA, depara_municipios, gravar_depara
 from wolfz.export.m import PARAMETRO, parameter_to_m, recipe_to_m, source_from_project
+from wolfz.export.pbip import OpcoesPbip, escrever_arquivo, escrever_pasta, parametros_pbip, projeto_pbip
 from wolfz.export.python import recipe_to_python
 from wolfz.export.tableau import INSTALAR, escrever_hyper, escrever_tds, formatos_colunas, hyper_disponivel
 from wolfz.ops.municipio import PARAMETRO_DEPARA
@@ -76,6 +77,9 @@ class PedidoExportacao(BaseModel):
     neutralize_formulas: bool = Field(
         default=False,
         description="Prefixa com ' o texto do CSV que começa com =, +, -, @ (injeção de fórmula, F0.A9).",
+    )
+    pbip_calendar: bool = Field(
+        default=False, description="No PBIP, inclui uma tabela calendário ligada à primeira coluna de data."
     )
 
 
@@ -394,12 +398,16 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
         if "hyper" in alvos:
             # O .tds abre o .hyper que está ao lado dele (F3.A3).
             alvos["tds"] = saida / f"{base}.tds"
+        if "pbip" in alvos:
+            # O .pbip abre o relatório, que aponta para o modelo ao lado (F3.B).
+            alvos["pbip_modelo"] = saida / f"{base}.SemanticModel"
+            alvos["pbip_relatorio"] = saida / f"{base}.Report"
         if "powerquery" in alvos:
             # O parâmetro CaminhoArquivo vai num arquivo à parte (F2.A3).
             alvos["powerquery_parametro"] = saida / f"{base}.{PARAMETRO}.pq"
         # Município casado por fuzzy: o M e o script fazem join com o de-para (ADR-7, F2.C5).
         usa_depara = any(s.op == "normalize_municipio" for s in atual.active_steps)
-        if usa_depara and {"powerquery", "python"} & set(alvos):
+        if usa_depara and {"powerquery", "python", "pbip"} & set(alvos):
             alvos["depara"] = saida / ARQUIVO_DEPARA
             if "powerquery" in alvos:
                 alvos["powerquery_depara"] = saida / f"{base}.{PARAMETRO_DEPARA}.pq"
@@ -414,11 +422,27 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
 
         tabela = None
         formulas = None
-        if set(alvos) & {*EXTENSOES, "hyper"}:
+        if set(alvos) & {*EXTENSOES, "hyper", "pbip"}:
             tabela = collect(atual, pl.scan_parquet(pasta / RAW_FILE))
             formulas = celulas_formula(tabela)
         opcoes = OpcoesCsv(separator=pedido.csv_separator, decimal_comma=pedido.decimal_comma)
+        # Arquivo enviado por upload não tem caminho: fica o nome, para o usuário completar.
+        caminho = projeto["source"].get("path") or rf"C:\caminho\para\{projeto['source']['name']}"
         escritas: dict[Path, Callable[[Path], None]] = {}
+        if "pbip" in alvos:
+            fonte = source_from_project(projeto["source"], pl.scan_parquet(pasta / RAW_FILE))
+            extras = {PARAMETRO_DEPARA: str(alvos["depara"])} if "depara" in alvos else {}
+            try:
+                arquivos_pbip = projeto_pbip(
+                    base,
+                    atual,
+                    tabela.schema,
+                    fonte,
+                    parametros_pbip(atual, caminho, extras),
+                    OpcoesPbip(calendario=pedido.pbip_calendar),
+                )
+            except ExportError as exc:
+                raise Problem(422, str(exc), title="Não cabe neste formato") from None
         for fmt, alvo in alvos.items():
             if fmt in EXTENSOES:
                 escritas[alvo] = escritor(fmt, tabela, opcoes, pedido.neutralize_formulas, aba=atual.name)
@@ -426,8 +450,6 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
                 fonte = source_from_project(projeto["source"], pl.scan_parquet(pasta / RAW_FILE))
                 escritas[alvo] = partial(_escrever_texto, recipe_to_m(atual, fonte))
             elif fmt == "powerquery_parametro":
-                # Arquivo enviado por upload não tem caminho: fica o nome, para o usuário completar.
-                caminho = projeto["source"].get("path") or rf"C:\caminho\para\{projeto['source']['name']}"
                 escritas[alvo] = partial(_escrever_texto, parameter_to_m(caminho, atual.name))
             elif fmt == "powerquery_depara":
                 texto = parameter_to_m(str(alvos["depara"]), atual.name, PARAMETRO_DEPARA)
@@ -438,6 +460,10 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
                 escritas[alvo] = partial(
                     escrever_tds, tabela, arquivo_hyper=alvos["hyper"].name, formatos=formatos_colunas(atual)
                 )
+            elif fmt == "pbip":
+                escritas[alvo] = partial(escrever_arquivo, arquivos_pbip[alvo.name])
+            elif fmt in ("pbip_modelo", "pbip_relatorio"):
+                escritas[alvo] = partial(escrever_pasta, arquivos_pbip, alvo.name)
             elif fmt == "depara":
                 depara = depara_municipios(atual, pl.scan_parquet(pasta / RAW_FILE))
                 escritas[alvo] = partial(gravar_depara, depara)
@@ -487,7 +513,7 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
     return api
 
 
-_EXTENSOES = {**EXTENSOES, "powerquery": ".pq", "python": ".py", "hyper": ".hyper"}
+_EXTENSOES = {**EXTENSOES, "powerquery": ".pq", "python": ".py", "hyper": ".hyper", "pbip": ".pbip"}
 
 
 def _escrever_texto(texto: str, path: Path) -> None:
