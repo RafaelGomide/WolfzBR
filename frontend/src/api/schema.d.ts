@@ -398,6 +398,11 @@ export interface components {
       neutralized: boolean;
       /** Rows */
       rows?: number | null;
+      /**
+       * Source Path Missing
+       * @default false
+       */
+      source_path_missing: boolean;
     } & {
       [key: string]: unknown;
     };
@@ -556,6 +561,11 @@ export interface components {
        * @default false
        */
       pbip_calendar: boolean;
+      /**
+       * Source Path
+       * @description Caminho completo do arquivo de origem, para o parâmetro CaminhoArquivo do M e do PBIP. Fica gravado no projeto: arquivo enviado pela interface não tem caminho.
+       */
+      source_path?: string | null;
     };
     /** PedidoRejeicao */
     PedidoRejeicao: {

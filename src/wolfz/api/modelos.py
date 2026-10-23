@@ -149,6 +149,8 @@ class Exportacao(_Resposta):
     # Células de texto que começam com =, +, -, @… (None: só código exportado).
     formula_cells: int | None = None
     neutralized: bool = False
+    # O M ou o PBIP saiu com um caminho de exemplo no CaminhoArquivo.
+    source_path_missing: bool = False
 
 
 class FormatoExportacao(_Resposta):

@@ -16,7 +16,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from functools import partial
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Annotated, Any, Literal
 
 import polars as pl
@@ -77,6 +77,13 @@ class PedidoExportacao(BaseModel):
     neutralize_formulas: bool = Field(
         default=False,
         description="Prefixa com ' o texto do CSV que começa com =, +, -, @ (injeção de fórmula, F0.A9).",
+    )
+    source_path: str | None = Field(
+        default=None,
+        description=(
+            "Caminho completo do arquivo de origem, para o parâmetro CaminhoArquivo do M e do PBIP. "
+            "Fica gravado no projeto: arquivo enviado pela interface não tem caminho."
+        ),
     )
     pbip_calendar: bool = Field(
         default=False, description="No PBIP, inclui uma tabela calendário ligada à primeira coluna de data."
@@ -393,6 +400,15 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
         saida = saida.resolve()
         atual = receita(pasta)
         projeto = _ler_json(pasta / PROJECT_FILE)
+        if pedido.source_path is not None and pedido.source_path.strip():
+            origem = pedido.source_path.strip().strip('"')
+            if not (Path(origem).is_absolute() or PureWindowsPath(origem).is_absolute()):
+                raise Problem(
+                    422, r"source_path precisa ser um caminho completo (ex.: C:\dados\vendas.xlsx)."
+                )
+            if origem != projeto["source"].get("path"):
+                projeto["source"]["path"] = origem
+                write_json_atomic(pasta / PROJECT_FILE, projeto)
         base = _nome_seguro(Path(projeto["name"]).stem)
         alvos = {fmt: saida / f"{base}{_EXTENSOES[fmt]}" for fmt in dict.fromkeys(pedido.formats)}
         if "hyper" in alvos:
@@ -426,7 +442,8 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
             tabela = collect(atual, pl.scan_parquet(pasta / RAW_FILE))
             formulas = celulas_formula(tabela)
         opcoes = OpcoesCsv(separator=pedido.csv_separator, decimal_comma=pedido.decimal_comma)
-        # Arquivo enviado por upload não tem caminho: fica o nome, para o usuário completar.
+        # Arquivo enviado por upload, sem source_path: fica o nome, para o usuário completar.
+        sem_caminho = not projeto["source"].get("path")
         caminho = projeto["source"].get("path") or rf"C:\caminho\para\{projeto['source']['name']}"
         escritas: dict[Path, Callable[[Path], None]] = {}
         if "pbip" in alvos:
@@ -478,6 +495,7 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
             "rows": tabela.height if tabela is not None else None,
             "formula_cells": formulas,
             "neutralized": bool(pedido.neutralize_formulas and "csv" in alvos),
+            "source_path_missing": sem_caminho and bool({"powerquery", "pbip"} & set(alvos)),
         }
 
     @api.get("/export-formats", response_model=list[m.FormatoExportacao])

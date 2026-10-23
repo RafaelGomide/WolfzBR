@@ -253,6 +253,11 @@
               }
             ],
             "title": "Rows"
+          },
+          "source_path_missing": {
+            "default": false,
+            "title": "Source Path Missing",
+            "type": "boolean"
           }
         },
         "required": [
@@ -630,6 +635,18 @@
             "description": "No PBIP, inclui uma tabela calendário ligada à primeira coluna de data.",
             "title": "Pbip Calendar",
             "type": "boolean"
+          },
+          "source_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Caminho completo do arquivo de origem, para o parâmetro CaminhoArquivo do M e do PBIP. Fica gravado no projeto: arquivo enviado pela interface não tem caminho.",
+            "title": "Source Path"
           }
         },
         "required": [

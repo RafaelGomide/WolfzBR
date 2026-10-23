@@ -297,7 +297,13 @@ function Editor({
           />
         )}
       </div>
-      {exportando && <Exportar projeto={id} aoFechar={() => setExportando(false)} />}
+      {exportando && (
+        <Exportar
+          projeto={id}
+          caminhoOrigem={projeto.source.path}
+          aoFechar={() => setExportando(false)}
+        />
+      )}
     </div>
   );
 }

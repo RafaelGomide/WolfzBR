@@ -12,6 +12,7 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 - Tabela calendário opcional no PBIP (`pbip_calendar` na API, caixa na tela de exportação): DAX com nome do mês e mês abreviado em português, trimestre e ano e mês, marcada como tabela de datas e ligada à primeira coluna de data.
 - Os arquivos do PBIP que mudam de formato entre versões do Power BI ficam em `src/wolfz/export/pbip/templates/`. Os identificadores são derivados do nome: exportar a mesma receita duas vezes gera os mesmos arquivos.
 - Exportar um formato que é uma pasta (o PBIP) troca a pasta inteira: uma tabela renomeada não deixa o arquivo da antiga para trás.
+- Arquivo de origem na tela de exportação: o caminho que o parâmetro `CaminhoArquivo` do M e do PBIP vai usar (`source_path` na API). Arquivo enviado pela interface não tinha caminho e o refresh falhava no `C:\caminho\para\...`; o caminho informado fica guardado no projeto, e sem ele a exportação avisa que o parâmetro precisa ser editado no Power BI.
 - `scripts/validacao_pbip.py`: gera os projetos da validação manual no Power BI Desktop e o que cada um tem de mostrar depois do refresh, inclusive o "mês seguinte" trocando o parâmetro.
 
 ## [0.8.0] - 2026-10-22

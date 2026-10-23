@@ -14,9 +14,20 @@ type Separador = "," | ";" | "\t";
 const FORMATOS: Formato[] = ["csv", "xlsx", "parquet", "powerquery", "python", "pbip", "hyper"];
 const SEPARADORES: Separador[] = [";", ",", "\t"];
 
-export function Exportar({ projeto, aoFechar }: { projeto: string; aoFechar: () => void }) {
+export function Exportar({
+  projeto,
+  caminhoOrigem,
+  aoFechar,
+}: {
+  projeto: string;
+  // Caminho do arquivo de origem guardado no projeto (arquivo enviado pela
+  // interface não tem, até o usuário informar).
+  caminhoOrigem: string | null | undefined;
+  aoFechar: () => void;
+}) {
   const [formatos, setFormatos] = useState<Set<Formato>>(new Set(["csv"]));
   const [pasta, setPasta] = useState("");
+  const [origem, setOrigem] = useState(caminhoOrigem ?? "");
   // Padrão do CSV: o que abre direto no Excel em português.
   const [separador, setSeparador] = useState<Separador>(";");
   const [virgulaDecimal, setVirgulaDecimal] = useState(true);
@@ -36,6 +47,8 @@ export function Exportar({ projeto, aoFechar }: { projeto: string; aoFechar: () 
     | { tipo: "erro"; erro: unknown }
     | { tipo: "pronto"; resultado: Exportacao }
   >({ tipo: "editando" });
+  // O M e o PBIP leem o arquivo de origem pelo parâmetro CaminhoArquivo.
+  const usaOrigem = formatos.has("powerquery") || formatos.has("pbip");
 
   async function exportar(overwrite: boolean) {
     setEstado({ tipo: "exportando" });
@@ -51,6 +64,7 @@ export function Exportar({ projeto, aoFechar }: { projeto: string; aoFechar: () 
             decimal_comma: virgulaDecimal,
             neutralize_formulas: neutralizar,
             pbip_calendar: calendario,
+            source_path: usaOrigem ? origem.trim() || null : null,
           },
         }),
       );
@@ -162,6 +176,20 @@ export function Exportar({ projeto, aoFechar }: { projeto: string; aoFechar: () 
           </fieldset>
         )}
 
+        {usaOrigem && (
+          <label className="campo">
+            <span className="rotulo">{T.exportar.origem}</span>
+            <input
+              type="text"
+              value={origem}
+              placeholder={T.exportar.origemExemplo}
+              onChange={(e) => setOrigem(e.target.value)}
+              disabled={ocupado}
+            />
+            <small className="dica">{T.exportar.origemDica}</small>
+          </label>
+        )}
+
         <label className="campo">
           <span className="rotulo">{T.exportar.pasta}</span>
           <input
@@ -200,6 +228,11 @@ export function Exportar({ projeto, aoFechar }: { projeto: string; aoFechar: () 
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+        {estado.tipo === "pronto" && estado.resultado.source_path_missing && (
+          <div className="estado aviso" role="alert">
+            {T.exportar.avisoOrigem}
           </div>
         )}
         {formulas > 0 && (

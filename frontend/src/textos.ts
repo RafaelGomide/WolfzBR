@@ -255,6 +255,12 @@ export const T = {
     } as Record<string, string>,
     instalar: "Para habilitar, instale o extra e reinicie o WolfzBR:",
     opcoesPbip: "Opções do Power BI",
+    origem: "Arquivo de origem (para o Power BI e o Power Query)",
+    origemExemplo: "C:\\Users\\voce\\Documentos\\vendas.xlsx",
+    origemDica:
+      "Caminho completo da planilha que o Power BI vai ler (o parâmetro CaminhoArquivo). Fica guardado no projeto. Para o mês seguinte, troque o parâmetro no Power BI.",
+    avisoOrigem:
+      "O arquivo de origem não foi informado: o CaminhoArquivo saiu com um caminho de exemplo. No Power BI, use Transformar dados → Editar parâmetros e aponte para a planilha antes de atualizar.",
     calendario: "Tabela calendário",
     calendarioDica:
       "Uma tabela de datas com os meses em português, ligada à primeira coluna de data. A tabela precisa ter uma coluna de data.",

@@ -430,6 +430,36 @@ def test_exportar_pbip(client, projeto, tmp_path):
     assert not [p for p in saida.iterdir() if p.name.startswith(".wolfz-export")]
 
 
+def test_caminho_de_origem_do_arquivo_enviado(client, settings, projeto, tmp_path):
+    """Arquivo enviado pela interface não tem caminho: sem source_path, o
+    CaminhoArquivo sai com um exemplo e a resposta avisa; com ele, o caminho
+    vai para o M e o PBIP e fica guardado no projeto."""
+    saida = tmp_path / "saida"
+    pedido = {"formats": ["pbip", "powerquery"], "output_dir": str(saida)}
+    r = client.post(_url(projeto, "exports"), json=pedido)
+    assert r.status_code == 200 and r.json()["source_path_missing"] is True
+    origem = r"C:\dados\receita municipal.xlsx"
+    r = client.post(
+        _url(projeto, "exports"), json={**pedido, "overwrite": True, "source_path": f'"{origem}"'}
+    )
+    assert r.status_code == 200 and r.json()["source_path_missing"] is False
+    expressoes = saida / "receita_municipal.SemanticModel" / "definition" / "expressions.tmdl"
+    assert m_text(origem) in expressoes.read_text(encoding="utf-8")
+    assert m_text(origem) in (saida / "receita_municipal.CaminhoArquivo.pq").read_text(encoding="utf-8")
+    assert client.get(f"/api/projects/{projeto['id']}").json()["source"]["path"] == origem
+    # Guardado: a exportação seguinte já usa, sem mandar de novo.
+    r = client.post(_url(projeto, "exports"), json={**pedido, "overwrite": True})
+    assert r.json()["source_path_missing"] is False
+    # Só o CSV: o caminho não importa e não há aviso.
+    r = client.post(_url(projeto, "exports"), json={"formats": ["csv"], "output_dir": str(tmp_path / "csv")})
+    assert r.json()["source_path_missing"] is False
+
+
+def test_caminho_de_origem_relativo_e_422(client, projeto):
+    r = client.post(_url(projeto, "exports"), json={"formats": ["pbip"], "source_path": "dados/vendas.xlsx"})
+    assert r.status_code == 422 and "caminho completo" in r.json()["detail"]
+
+
 def test_tableau_sem_o_extra(client, projeto, tmp_path, monkeypatch):
     tmp_path = tmp_path / "saida"
     from wolfz.api import rotas
