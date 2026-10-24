@@ -2,7 +2,7 @@
 
 > Documento de design técnico (nível RFC interno). Escopo: aplicação local e open source para limpeza de planilhas brasileiras — núcleo Python (`wolfz-core`) com motor Polars, API FastAPI em `127.0.0.1`, SPA embutida, CLI, receitas reproduzíveis em JSON e exportação para Power Query M, script Python, `.hyper` e PBIP.
 >
-> **Convenção:** `<<>>` marca uma decisão ou número que depende de você e ainda não foi preenchido. Todos estão listados em §16.4.
+> **Estado:** revisado para a 1.0 (outubro de 2026). As decisões que ficaram em aberto durante o desenho estão resolvidas em §16.4, com o que foi escolhido.
 
 ---
 
@@ -141,15 +141,19 @@ Só duas coisas são fonte de verdade: o **arquivo original** (nunca alterado) e
 Não há banco relacional; o esquema é o layout do workspace e os modelos Pydantic.
 
 ```
-~/.wolfz/
+~/.wolfz/                    # ou a pasta de WOLFZ_HOME
 ├── projects/<id>/
-│   ├── project.json          # metadados: nome, caminho e hash do arquivo original, aba
-│   ├── raw.parquet           # área detectada, tudo como texto
-│   ├── structure.json        # metadados estruturais: mesclagens, negrito, notas de rodapé
+│   ├── project.json          # metadados: nome, caminho e hash do arquivo original, aba, formato
+│   ├── raw.parquet           # a aba inteira (ou o CSV), tudo como texto, na posição original
+│   ├── structure.json        # metadados estruturais: mesclagens, negrito, fórmulas, tipos
+│   ├── detection.json        # a estrutura detectada (área, cabeçalho, totais; várias tabelas)
 │   ├── recipe.wolfz.json     # a receita
+│   ├── suggestions.json      # sugestões rejeitadas neste projeto
 │   ├── checkpoints/          # cache por passo
-│   └── exports/
-└── logs/
+│   ├── exports/              # saída padrão da exportação
+│   ├── .lock                 # lock do sistema operacional: projeto aberto numa instância
+│   └── .lock.json            # porta e pid de quem abriu, só para a mensagem do 423
+└── uploads/                  # arquivo enviado pela interface, apagado depois da importação
 ```
 
 ```python
@@ -332,7 +336,7 @@ components:
           schema: { $ref: "#/components/schemas/ProblemDetails" }
 ```
 
-*(Os demais — `GET /api/projects`, `GET /api/projects/{id}/structure`, `GET /api/projects/{id}/profile`, `GET /api/projects/{id}/suggestions`, `GET /api/ops` com o catálogo e os schemas das operações — seguem o mesmo padrão. O contrato completo é o OpenAPI gerado pelo FastAPI.)*
+*(Os demais seguem o mesmo padrão: `GET /api/projects`, `GET` e `DELETE /api/projects/{id}`, `GET /api/projects/{id}/structure` e `/profile`, `GET /api/projects/{id}/suggestions` e `POST .../suggestions/rejections`, `GET /api/projects/{id}/steps/{step}/municipios` e `GET /api/municipios` para a revisão de municípios, `POST /api/sheets` para listar as abas antes de importar, `GET /api/export-formats` e `GET /api/ops` com o catálogo e os schemas das operações. O contrato completo é o OpenAPI gerado pelo FastAPI, versionado em `frontend/src/api/openapi.json`; um teste falha se ele divergir da API.)*
 
 ### 5.4 Formato de erro padronizado
 
@@ -492,14 +496,14 @@ Request-response síncrono do ponto de vista do cliente. Internamente, os handle
 | Motor | Polars (lazy) | pandas, DuckDB como motor | API declarativa mapeia 1:1 para passos de receita; lazy permite materializar só a página; tipagem estrita expõe erro cedo | Menos familiar que pandas para contribuidores; o script exportado depende de Polars |
 | Leitura Excel (valores) | `fastexcel` / `python-calamine` | `openpyxl`, `pandas.read_excel` | Muito mais rápido; lê `.xls` binário e `.ods` | Não expõe formatação nem mesclagem |
 | Leitura Excel (estrutura) | `openpyxl` | `calamine` apenas | Único que entrega células mescladas e negrito, que são sinais da detecção | Lento e pesado em memória; não lê `.xls` — nesses arquivos a detecção perde os sinais de formatação |
-| CSV / encoding | `charset-normalizer` + `csv.Sniffer` | `chardet`, heurística própria | Cobre cp1252 e UTF-8 com BOM, os dois casos dominantes no Brasil | Detecção é probabilística; precisa permitir correção manual |
+| CSV / encoding | Ordem fixa (BOM → UTF-8 válido → cp1252 → latin-1) + `csv.Sniffer` | `charset-normalizer`, `chardet` | Determinística e certa para dado brasileiro: a detecção estatística escolhia cp1250 no CSV do CEIS e corrompia todo acento | Arquivo em outra página de código (raro no Brasil) sai com acento errado; `fix_mojibake` conserta o caso comum |
 | Modelo da receita | Pydantic v2 | dataclasses + jsonschema | União discriminada por `op`, JSON Schema gerado para a interface montar formulários | Acopla o formato da receita ao Pydantic |
 | API | FastAPI + Uvicorn | Flask, Litestar | OpenAPI automático, integração nativa com Pydantic | Nenhum relevante nesta escala |
 | CLI | Typer | Click, argparse | Mesma base de type hints do resto do código | Dependência a mais |
-| Frontend | <<react>> | html + css | <<mais possibilidades>> |  |
-| Grid | <<Glide Data Grid>> (Glide Data Grid ou AG Grid Community) | — | <<High Performance>> | << sacrifica a flexibilidade e a capacidade de composição que os desenvolvedores web costumam esperar do DOM tradicional>> |
+| Frontend | React + Vite (TypeScript) | Svelte, HTML e CSS sem framework | Ecossistema maior para grid, testes (Playwright) e contribuição; o build é estático e vai dentro do pacote Python | Bundle maior que Svelte; Node só para quem desenvolve, nunca para quem usa |
+| Grid | Glide Data Grid | AG Grid Community | Desenha em canvas: rolagem fluida em centenas de milhares de linhas, pedindo as páginas sob demanda | Sacrifica a flexibilidade e a composição do DOM (célula customizada, seleção de texto, acessibilidade nativa) |
 | Fuzzy match | `rapidfuzz` | `thefuzz`, Levenshtein próprio | Rápido, licença permissiva | Não existe em M — exige a estratégia de de-para (ADR-7) |
-| SQL ad hoc | DuckDB (opcional) | nenhum | Consultar o Parquet de cache sem código | Mais uma dependência pesada; por isso opcional |
+| SQL ad hoc | DuckDB (extra `wolfzbr[sql]`, pós-1.0) | nenhum | Consultar o Parquet de cache sem código | Mais uma dependência pesada; por isso opcional. Na 1.0 o extra existe, mas nenhum código o usa |
 | Tableau | `tableauhyperapi` (extra opcional) | `pantab` | API oficial, tipos corretos | Binário grande e licença proprietária; fica em `wolfzbr[tableau]` |
 | Power BI | Geração de texto (TMDL + PBIR JSON) | Tabular Object Model via .NET | PBIP é baseado em arquivos; não exige Windows nem .NET para gerar | Formato pode mudar; templates isolados em `export/pbip/` |
 | Empacotamento | `pipx install wolfzbr` (fase 1) | PyInstaller, Tauri + sidecar (fase 4) | Zero trabalho de empacotamento para early adopters | Exige Python instalado — barreira para o usuário não técnico |
@@ -609,7 +613,7 @@ Não aplicável — sem fila.
 ### 10.7 Backup, restore, RPO/RTO reais
 
 - **Backup**: o arquivo original nunca é modificado e a receita é um JSON de chaves ordenadas feito para o Git. Com os dois, tudo é reconstruível.
-- **RPO**: a última gravação da receita. Com salvamento automático a cada alteração, é efetivamente zero. Salvamento automático ou manual: <<automatico>>
+- **RPO**: a última gravação da receita. Com salvamento automático a cada alteração (decidido: automático, com gravação atômica e `ETag` contra duas abas editando ao mesmo tempo), é efetivamente zero.
 - **RTO**: o tempo de reimportar o arquivo e reexecutar a receita — segundos a minutos.
 - Apagar `~/.wolfz/` inteiro não perde nada que o usuário não possa refazer, desde que a receita tenha sido salva fora do workspace ou versionada.
 
@@ -627,7 +631,7 @@ O modelo de ameaça não é um atacante na internet: é **outro software na mesm
 
 - O servidor escuta **apenas em `127.0.0.1`**, nunca em `0.0.0.0`, em porta livre aleatória.
 - Um **token de sessão** aleatório é gerado a cada start e entregue à SPA na URL que o `wolfz ui` abre. Toda chamada a `/api` exige o token.
-- Onde o token é transportado nas chamadas: <<header `Authorization`>> (opções: header `Authorization`, ou cookie `HttpOnly` + `SameSite=Strict`)
+- O token vai no header `Authorization: Bearer` de cada chamada. Na URL de abertura ele vem no fragmento (`#token=…`), que o navegador não envia ao servidor e não aparece em log de acesso; a SPA o guarda só na memória da página, sem `localStorage` nem cookie.
 
 ### 11.2 Token
 
@@ -642,7 +646,7 @@ Não aplicável — um usuário, dono de todos os projetos. A fronteira de autor
 - **Validação do header `Host`**: aceitar só `127.0.0.1:<porta>` e `localhost:<porta>`. É a defesa contra DNS rebinding, em que um domínio externo passa a resolver para o loopback.
 - **CORS**: nenhuma origem externa permitida. A SPA é servida pela mesma origem; em desenvolvimento, só a origem do Vite.
 - **Upload**: limite de tamanho (§2.2). `.xlsx` e `.ods` são arquivos zip — limitar também o tamanho *descompactado*, contra zip bomb.
-- **Regex fornecida pelo usuário** (`drop_rows_where`, `regex_extract`): executada pelo motor de regex do Polars (crate `regex` do Rust), que garante tempo linear e não tem backtracking catastrófico. Regex não é avaliada com o módulo `re` do Python no caminho de dados.
+- **Regex fornecida pelo usuário** (`assert` com `matches`): executada pelo motor de regex do Polars (crate `regex` do Rust), que garante tempo linear e não tem backtracking catastrófico. O `re` do Python só compila o padrão para validar a receita e casa o nome da aba (`source.match.sheet_name_regex`), que tem no máximo 31 caracteres; nunca roda sobre os dados. `drop_rows_where`, `filter` e `replace` comparam texto literal.
 - **Caminhos**: nomes de arquivo e `output_dir` são normalizados e não podem escapar do diretório escolhido (path traversal).
 - **Receita vinda de terceiros**: é só dado validado por schema — o catálogo fechado é o que garante que abrir a receita de outra pessoa não executa código.
 
@@ -690,9 +694,9 @@ Sem telemetria (§11.7), a observabilidade é local e serve a dois públicos: o 
 
 ### 12.1 Logs estruturados
 
-- Destino: `~/.wolfz/logs/`, com rotação. Formato JSON, campos: `timestamp`, `level`, `event`, `project_id`, `step_id`, `op`, `duration_ms`, `rows_in`, `rows_out`.
+- Destino na 1.0: o terminal do `wolfz ui` (stderr), pelo `logging` do Python, a partir de `WARNING`, sem log de acesso do uvicorn (a URL pode carregar o texto de uma busca). Arquivo em `~/.wolfz/logs/` com rotação e formato JSON (`timestamp`, `level`, `event`, `project_id`, `step_id`, `op`, `duration_ms`, `rows_in`, `rows_out`) fica para depois da 1.0.
 - **Nunca logar**: valores de célula, amostras de dado, nomes de arquivo completos do usuário em nível INFO. Nomes de coluna são aceitáveis; conteúdo, não.
-- Regra para mensagens de exceção: muitas exceções de parse embutem o valor que falhou na mensagem. Essas mensagens são mostradas ao usuário na interface, mas sanitizadas antes de ir para o arquivo de log.
+- Regra para mensagens de exceção: muitas exceções de parse embutem o valor que falhou na mensagem. Essas mensagens são mostradas ao usuário na interface, mas nunca vão para o log: lá fica só o tipo da exceção e onde ela aconteceu (`wolfz.core.registro.resumo_da_falha`). Erro inesperado na API é tratado dentro do app, e não relançado para o servidor, para o uvicorn não gravar o traceback. Um teste roda o fluxo completo com dado marcado e procura a marca no log.
 
 ### 12.2 Métricas
 
@@ -866,15 +870,13 @@ Riscos secundários: empacotamento pesado por causa de Polars e Hyper API (mitig
 
 ### 16.4 Perguntas em aberto para o time
 
-*(time = você mesmo. Cada item corresponde a um `<<>>` no documento.)*
-
-**Em aberto** (valor provisório entre `<<>>`, a confirmar)
-- Frontend: Svelte ou React (§7).
-- Grid: Glide Data Grid ou AG Grid Community (§7).
-- Salvamento da receita automático ou manual (§10.7).
-- Transporte do token de sessão: header ou cookie (§11.1).
+*(time = quem mantém o projeto. Não há mais decisão em aberto para a 1.0.)*
 
 **Resolvidas**
+- ~~Frontend: Svelte ou React~~: React + Vite, em TypeScript (§7).
+- ~~Grid: Glide Data Grid ou AG Grid Community~~: Glide Data Grid (§7).
+- ~~Salvamento da receita automático ou manual~~: automático, a cada edição (§10.7).
+- ~~Transporte do token de sessão: header ou cookie~~: header `Authorization: Bearer`, com o token entregue no fragmento da URL (§11.1).
 - ~~Tamanho máximo de arquivo e linhas com experiência fluida~~: 100 MB; 500 mil linhas (§2.2).
 - ~~Latência alvo do preview e tempo de importação + detecção~~: p50 ≤ 300 ms, p95 ≤ 1 s; ≤ 1 min (§2.2, §12.4).
 - ~~RAM mínima e orçamento de memória~~: 8 GB; ≤ 2 GB para um arquivo de 100 MB (§2.2, §3.5).

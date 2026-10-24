@@ -61,7 +61,7 @@ Descrição livre: o que o arquivo tem de difícil.
 
 ### Receitas esperadas
 
-Toda receita esperada roda de ponta a ponta com `wolfz.run` sobre o `original.*`, e o resultado é comparado com a `saida_esperada.parquet`. A receita pode citar uma operação que ainda não existe (hoje: `parse_ibge`, `clean_cpf_cnpj`, `fix_mojibake`, `strip_footnote_marks`): o teste confere que o nome está no catálogo planejado (pega erro de digitação) e pula a execução com o motivo. Quando a operação entra, o teste passa a executar a receita sozinho.
+Toda receita esperada roda de ponta a ponta com `wolfz.run` sobre o `original.*`, e o resultado é comparado com a `saida_esperada.parquet`. A receita usa só operações do catálogo; nome de operação desconhecido reprova o teste.
 
 Planilha é lida como grade (colunas `A`, `B`, …; linha 1 é a primeira linha da aba), então a receita começa recortando a tabela com `select_range` e promovendo o cabeçalho com `header_rows`. CSV é lido com cabeçalho, a não ser que a receita comece por um desses dois passos.
 

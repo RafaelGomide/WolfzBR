@@ -4,7 +4,34 @@ Todas as mudanças relevantes do WolfzBR ficam registradas aqui.
 
 O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e o projeto usa [Versionamento Semântico](https://semver.org/lang/pt-BR/). Mudança incompatível no formato da receita é versão *major*.
 
+## Da 0.1 à 1.0
+
+| Versão | Data | Marco |
+|---|---|---|
+| [0.1.0](#010---2026-10-16) | 2026-10-16 | Receita, três operações e `wolfz run` |
+| [0.2.0](#020---2026-10-16) | 2026-10-16 | Leitura de `.xlsx`, `.xls` e `.ods`, corpus de testes e `wolfz inspect` |
+| [0.3.0](#030---2026-10-16) | 2026-10-16 | Detecção de estrutura, 31 operações e preview com cache |
+| [0.4.0](#040---2026-10-17) | 2026-10-17 | Interface (`wolfz ui`) com API local; primeira versão no PyPI |
+| [0.5.0](#050---2026-10-18) | 2026-10-18 | Power Query M e script Python que rodam sozinhos |
+| [0.6.0](#060---2026-10-18) | 2026-10-18 | Município do IBGE, padrões brasileiros completos e detecção v2 |
+| [0.7.0](#070---2026-10-21) | 2026-10-21 | Sugestões automáticas, verificações, `wolfz run` em lote e tema escuro |
+| [0.8.0](#080---2026-10-22) | 2026-10-22 | Tableau (`.hyper` + `.tds`) |
+| [0.9.0](#090---2026-10-22) | 2026-10-22 | Power BI (projeto `.pbip`) |
+| [Não publicado](#não-publicado) | — | Congelamento para a 1.0: formato da receita, API em Python, desempenho, segurança e documentação |
+
 ## [Não publicado]
+
+Congelamento para a 1.0: o formato da receita (`wolfz_version: "1.0"`) e a API pública em Python passam a seguir o versionamento semântico, a importação de arquivo grande fica de 5 a 20 vezes mais rápida, cada risco de segurança do design ganha teste e a documentação fica completa (formato da receita, referência das operações gerada do código e guias de Power BI, Tableau e uso mensal).
+
+### Adicionado
+
+- API pública em Python definida: `wolfz.run`, `wolfz.load_recipe`, `wolfz.RecipeError`, `wolfz.StepError` e as funções de valor em `wolfz.br` (`wolfz.br.clean_cpf`, `wolfz.br.parse_brl`…), agora importáveis direto do pacote. O resto é interno.
+- Documentação: [`docs/receita.md`](docs/receita.md) (o formato `.wolfz.json`, campo a campo, e a compatibilidade entre versões), [`docs/operacoes.md`](docs/operacoes.md) (as 40 operações com parâmetros, exemplos calculados pelo motor e a tradução em M, gerado do catálogo por `scripts/gerar_operacoes.py`, com teste que falha se ficar desatualizado) e três guias em `docs/guias/`: Power BI, Tableau e a receita reaplicada todo mês.
+- README reescrito para a 1.0 (para quem é, privacidade, limites medidos e limitações conhecidas) e GIF novo, no tema escuro: planilha de remuneração → as 6 sugestões aceitas → projeto do Power BI.
+- `CONTRIBUTING.md` completo (ambiente com uv, testes, como adicionar uma operação e um arquivo ao corpus) e `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1, em português).
+- `SECURITY.md`, com como reportar vulnerabilidade em particular pelo GitHub, e o link no formulário de issue.
+- `scripts/benchmark_carga.py`: gera CSV e `.xlsx` sintéticos de 10, 50 e 100 MB e mede, pela API, a importação com a detecção, a memória de pico e o preview depois de editar um passo, mais a recusa de um arquivo acima do limite. Resultado no README, seção "Limites".
+- Teste para cada risco do §11.5 do design, um fluxo completo com a rede bloqueada e a procura por dado de célula no log; teste de que os links da documentação apontam para arquivos e títulos que existem.
 
 ### Alterado
 
@@ -12,20 +39,16 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 - Parâmetros renomeados, para o mesmo nome valer na receita toda: `split_col` e `header_rows` usam `separator` (antes `delimiter` e `joiner`), como `merge_cols`; `clean_cpf` e `clean_cnpj` usam `add_valid_col` (antes `flag`); `parse_ibge_value` usa `add_status_col` (antes `status`). Opção que acrescenta coluna começa com `add_`; `*_col` é sempre o nome de uma coluna.
 - Importação de arquivo grande bem mais rápida, com o mesmo resultado: um CSV de 10 MB levava 37 s para importar e detectar e agora leva 5 s; um `.xlsx` de 10 MB, de 88 s para 4 s. A formatação do `.xlsx` (negrito, fórmulas, mesclagens) é lida só das linhas amostradas, sem percorrer a aba inteira, e a detecção de totais converte cada valor distinto uma vez, com atalho para número simples e para texto que não pode ser número.
 - Arquivo acima de 100 MB: a mensagem diz o tamanho do arquivo, o limite e o que fazer, a mesma na CLI e na API (antes a API dizia só "O limite de upload é 100 MB").
-- `filelock` 4.2.4, `certifi` 2026.10.23 e `virtualenv` 21.14.13 no `uv.lock`, com as correções de vulnerabilidades conhecidas que o `pip-audit` apontou.
 
 ### Corrigido
 
-- Erro inesperado na API não vai mais para o log do servidor com o traceback e a mensagem da exceção, que podia trazer valor de célula: o log tem só o tipo da exceção e onde ela aconteceu. O mesmo vale para regra de sugestão que falha.
 - Apagar um projeto enquanto a tela inicial lista os projetos podia dar erro 500 na listagem.
 
-### Adicionado
+### Segurança
 
-- API pública em Python definida: `wolfz.run`, `wolfz.load_recipe`, `wolfz.RecipeError`, `wolfz.StepError` e as funções de valor em `wolfz.br` (`wolfz.br.clean_cpf`, `wolfz.br.parse_brl`…), agora importáveis direto do pacote. O resto é interno.
-- `SECURITY.md`, com como reportar vulnerabilidade em particular pelo GitHub, e o link no formulário de issue.
+- Erro inesperado na API não vai mais para o log do servidor com o traceback e a mensagem da exceção, que podia trazer valor de célula: o log tem só o tipo da exceção e onde ela aconteceu. O mesmo vale para regra de sugestão que falha.
+- `filelock` 4.2.4, `certifi` 2026.10.23 e `virtualenv` 21.14.13 no `uv.lock`, com as correções das vulnerabilidades conhecidas que o `pip-audit` apontou.
 - `pip-audit` e `npm audit` no CI (`.github/workflows/auditoria.yml`), a cada push e toda semana.
-- Teste para cada risco do §11.5 do design, um fluxo completo com a rede bloqueada e a procura por dado de célula no log.
-- `scripts/benchmark_carga.py`: gera CSV e `.xlsx` sintéticos de 10, 50 e 100 MB e mede, pela API, a importação com a detecção, a memória de pico e o preview depois de editar um passo, mais a recusa de um arquivo acima do limite. Resultado no README, seção "Limites".
 
 ## [0.9.0] - 2026-10-22
 
@@ -166,6 +189,13 @@ Primeira versão com interface: `wolfz ui` abre o navegador com a API local, e a
 - `wolfz run --format xlsx`, `--sep`, `--decimal-comma` e `--neutralize-formulas`.
 - Testes de ponta a ponta com Playwright: importar, editar e exportar; erro de passo; reabrir projeto; escolher aba; ajustar a área.
 
+### Alterado
+
+- O CSV exportado (API e `wolfz run`) passa a ter BOM UTF-8, para o Excel reconhecer a acentuação.
+- `httpx` entra nas dependências de desenvolvimento (cliente de teste do FastAPI).
+- O wheel e o sdist levam a interface compilada (`src/wolfz/static/`); o build do pacote falha se ela não tiver sido compilada (`hatch_build.py`). O usuário final não precisa de Node.
+- CI ganha o job "Interface": ESLint, Prettier, tipos, build e Playwright.
+
 ### Corrigido
 
 - No Windows, o salvamento automático da receita falhava às vezes ("acesso negado") quando um preview lia o arquivo no mesmo instante. Renomear por cima agora tenta de novo por até 1 s.
@@ -175,13 +205,6 @@ Primeira versão com interface: `wolfz ui` abre o navegador com a API local, e a
 - Interface: texto digitado num campo de lista sem clicar em "Adicionar" se perdia ao aplicar o passo. Agora entra junto.
 - Interface: o painel da receita pode ser alargado, para mapas com nomes de coluna longos.
 - O sdist levava o `README.md` do corpus de testes: os padrões de `include` agora são ancorados na raiz do repositório.
-
-### Alterado
-
-- O CSV exportado (API e `wolfz run`) passa a ter BOM UTF-8, para o Excel reconhecer a acentuação.
-- `httpx` entra nas dependências de desenvolvimento (cliente de teste do FastAPI).
-- O wheel e o sdist levam a interface compilada (`src/wolfz/static/`); o build do pacote falha se ela não tiver sido compilada (`hatch_build.py`). O usuário final não precisa de Node.
-- CI ganha o job "Interface": ESLint, Prettier, tipos, build e Playwright.
 
 ## [0.3.0] - 2026-10-16
 
