@@ -16,7 +16,7 @@ O id do projeto aparece no endereço da interface (`…&projeto=01J…`); no Win
 
 Alguns cuidados na primeira vez evitam surpresa depois:
 
-- **Recorte a área com fim automático.** No passo "Recortar a área" (`select_range`), use **fim automático** em vez de uma célula final fixa: o arquivo de fevereiro tem mais linhas que o de janeiro.
+- **Confira o fim da área.** O passo "Recortar a área" (`select_range`) já vem com **fim automático** (`A1:…`, até a primeira linha vazia) quando a tabela termina numa linha vazia ou no fim do arquivo: o arquivo de fevereiro, com mais linhas, vem inteiro. Se ele mostrar uma célula final fixa (`A1:F120`), é porque havia algo colado logo abaixo ou ao lado da tabela; nesse caso, confira se o arquivo do mês seguinte tem o mesmo número de linhas, ou edite o passo e ligue o fim automático.
 - **Aba que muda de nome.** Se a aba se chama `JANEIRO_2026` e no mês seguinte vai ser `FEVEREIRO_2026`, confira o padrão do nome da aba que a importação propõe (`source.match.sheet_name_regex` na receita). Com ele, o WolfzBR e o M exportado acham a aba nova sozinhos.
 - **Remova totais pela palavra, não pela posição.** "Remover linhas" (`drop_rows_where`) com "começa com Total" continua certo quando o total muda de linha.
 - **Ponha verificações.** A interface sugere, a partir da tabela de hoje, verificações (`assert`) como "coluna sem vazio", "código sem repetição", "valor dentro de uma faixa" e "pelo menos N linhas". Se o arquivo do mês vier diferente, a execução para com a mensagem em vez de gravar uma tabela errada.

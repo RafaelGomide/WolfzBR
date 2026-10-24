@@ -126,7 +126,7 @@ test("ajustar a área arrastando na visão bruta", async ({ page }) => {
   await abrir(page);
   await importar(page, arquivo("receita_municipal"));
   await esperarProjeto(page, "receita_municipal.xlsx");
-  await expect(passo(page, "s1")).toContainText("A4:D16");
+  await expect(passo(page, "s1")).toContainText("A4:…");
 
   // Geometria padrão do Glide: cabeçalho de 36 px, linha de 34 px,
   // numeração de 32 px (menos de 100 linhas); a coluna A tem 90 px.
@@ -211,7 +211,7 @@ test("aba com duas tabelas: trocar a receita para a segunda", async ({ page }) =
   page.once("dialog", (d) => d.accept());
   await tabelas.getByRole("button", { name: "Tabela 2 (E2:G10)" }).click();
 
-  await expect(passo(page, "s1")).toContainText("E2:G10");
+  await expect(passo(page, "s1")).toContainText("E2:…");
   await expect(tabelas.getByRole("button", { name: "Tabela 2 (E2:G10)" })).toHaveAttribute(
     "aria-pressed",
     "true",

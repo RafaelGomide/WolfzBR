@@ -172,7 +172,14 @@ Uma tarefa = uma issue = um PR. O modelo de PR traz o checklist da definição d
 
 ## Publicar uma versão
 
-Para quem mantém o projeto. Depois de criar a tag, guarde as receitas daquela versão para o teste de compatibilidade:
+Para quem mantém o projeto. A publicação é feita pelo workflow [`release.yml`](.github/workflows/release.yml), disparado pela tag:
+
+1. Suba a versão em `pyproject.toml` (`1.0.0rc1`, `1.0.0`) e, para a versão final, troque `## [Não publicado]` no `CHANGELOG.md` por `## [1.0.0] - <data>` (uma `rc` usa as notas de "Não publicado").
+2. Com o CI verde no `main`, crie e envie a tag: `git tag v1.0.0rc1 && git push origin v1.0.0rc1`.
+3. O workflow compila a interface, gera o wheel e o sdist, confere o conteúdo (`scripts/conferir_pacote.py`), instala o wheel num ambiente limpo em Linux e Windows, publica no **TestPyPI** e espera a aprovação do environment `pypi` no GitHub.
+4. Instale a versão do TestPyPI e rode o [roteiro de smoke test](docs/smoke_test.md). Passou? Aprove o deploy no Actions: o workflow publica no **PyPI** (Trusted Publishing, sem token salvo) e cria o GitHub Release com as notas do CHANGELOG (`scripts/notas_da_versao.py`), como pré-release se for `rc`.
+
+Depois da tag, guarde as receitas daquela versão para o teste de compatibilidade:
 
 ```bash
 uv run python scripts/receitas_antigas.py v1.0.0

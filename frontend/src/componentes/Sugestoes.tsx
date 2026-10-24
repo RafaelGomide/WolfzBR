@@ -37,7 +37,7 @@ export function Sugestoes({
   const [aberto, setAberto] = useState(true);
   const [ocupado, setOcupado] = useState(false);
   const [rodada, setRodada] = useState(0);
-  const { dados, erro } = useCarregar(
+  const { dados, erro, carregando } = useCarregar(
     (signal) =>
       chamar(
         api.GET("/api/projects/{project_id}/suggestions", {
@@ -52,6 +52,9 @@ export function Sugestoes({
   if (erro) return erro instanceof ErroApi && erro.passoComErro ? null : <CaixaErro erro={erro} />;
   const lista = dados ?? [];
   if (lista.length === 0) return null;
+  // Depois de aceitar, a lista na tela ainda é a da receita anterior até a
+  // nova chegar: aceitar de novo nesse meio-tempo repetiria os passos.
+  const parado = ocupado || carregando;
   // "Aceitar todas" vai uma etapa por vez: limpar e converter; depois mudar
   // a forma da tabela (despivotar, tirar colunas); por último as
   // verificações. Cada etapa foi calculada na tabela de agora, e a anterior
@@ -101,7 +104,7 @@ export function Sugestoes({
           <button
             type="button"
             className="primario"
-            disabled={ocupado}
+            disabled={parado}
             onClick={() => acrescentar(comPasso.flatMap((s) => s.steps))}
           >
             {T.sugestoes.aceitarTodas(comPasso.length)}
@@ -126,24 +129,24 @@ export function Sugestoes({
               <div className="sugestao-acoes">
                 {s.kind === "passo" ? (
                   <>
-                    <button type="button" disabled={ocupado} onClick={() => acrescentar(s.steps)}>
+                    <button type="button" disabled={parado} onClick={() => acrescentar(s.steps)}>
                       {T.sugestoes.aceitar}
                     </button>
                     {s.steps.length === 1 && (
                       <button
                         type="button"
-                        disabled={ocupado}
+                        disabled={parado}
                         onClick={() => aoEditar(numerar(receita, s.steps)[0])}
                       >
                         {T.sugestoes.editar}
                       </button>
                     )}
-                    <button type="button" disabled={ocupado} onClick={() => rejeitar(s)}>
+                    <button type="button" disabled={parado} onClick={() => rejeitar(s)}>
                       {T.sugestoes.rejeitar}
                     </button>
                   </>
                 ) : (
-                  <button type="button" disabled={ocupado} onClick={() => rejeitar(s)}>
+                  <button type="button" disabled={parado} onClick={() => rejeitar(s)}>
                     {T.sugestoes.entendi}
                   </button>
                 )}

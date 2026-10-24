@@ -1,0 +1,182 @@
+name: Release
+
+# Na tag v* (v1.0.0, v1.0.0rc1): compila a interface, gera o wheel e o sdist,
+# confere o conteúdo, instala o wheel num ambiente limpo em Linux e Windows,
+# publica no TestPyPI e depois no PyPI por Trusted Publishing (sem token
+# salvo) e cria o GitHub Release com as notas do CHANGELOG (FH.E1).
+#
+# O PyPI fica atrás do environment "pypi": com revisão obrigatória ligada no
+# GitHub, a publicação espera a aprovação depois do TestPyPI, a hora de
+# instalar a rc de lá e rodar o docs/smoke_test.md.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build e conferência
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      versao: ${{ steps.versao.outputs.versao }}
+      pre: ${{ steps.versao.outputs.pre }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          python-version: "3.13"
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # A tag tem de ser a versão do pyproject.toml: v1.0.0rc1 <-> 1.0.0rc1.
+      - name: Versão
+        id: versao
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          projeto=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          if [ "$tag" != "$projeto" ]; then
+            echo "::error::a tag $GITHUB_REF_NAME não bate com a versão do pyproject.toml ($projeto)"
+            exit 1
+          fi
+          echo "versao=$tag" >> "$GITHUB_OUTPUT"
+          if [[ "$tag" =~ (a|b|rc)[0-9]+$ ]]; then echo "pre=true"; else echo "pre=false"; fi >> "$GITHUB_OUTPUT"
+
+      - name: Interface
+        working-directory: frontend
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run build
+
+      # O hatch_build.py recusa gerar o wheel sem a interface compilada.
+      - name: Wheel e sdist
+        run: uv build
+
+      - name: Conferir o conteúdo do pacote
+        run: uv run --no-project python scripts/conferir_pacote.py dist --versao "${{ steps.versao.outputs.versao }}"
+
+      # Falha aqui, antes de publicar, se o CHANGELOG não tiver a seção da versão.
+      - name: Notas do Release
+        run: uv run --no-project python scripts/notas_da_versao.py "${{ steps.versao.outputs.versao }}" > notas.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: notas
+          path: notas.md
+          retention-days: 30
+
+  instalado:
+    name: Wheel instalado · ${{ matrix.os }}
+    needs: build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # Só para os arquivos de exemplo: o pacote vem do wheel, num ambiente
+      # isolado, sem o src/ do repositório no caminho.
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          python-version: "3.13"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Comandos com o wheel instalado
+        run: |
+          whl=$(ls dist/wolfzbr-*.whl)
+          rodar() { uv run --isolated --no-project --with "$whl" "$@"; }
+          rodar wolfz --version
+          rodar wolfz inspect tests/corpus/receita_municipal/original.xlsx > /dev/null
+          rodar wolfz run exemplo.wolfz.json tests/corpus/minimo.csv -o "$RUNNER_TEMP/saida.csv"
+          rodar python -c "from importlib.resources import files; assert (files('wolfz') / 'static' / 'index.html').is_file(); import wolfz; print(wolfz.br.parse_brl('R\$ 1.234,56'))"
+
+  testpypi:
+    name: TestPyPI
+    needs: [build, instalado]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/wolfzbr
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - uses: pypa/gh-action-pypi-publish@v1.12.4
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          # Rodar o workflow de novo na mesma tag não falha no que já subiu.
+          skip-existing: true
+
+  pypi:
+    name: PyPI
+    needs: testpypi
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/p/wolfzbr
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - uses: pypa/gh-action-pypi-publish@v1.12.4
+
+  github-release:
+    name: GitHub Release
+    needs: [build, pypi]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: notas
+
+      # Título vX.Y.Z, notas do CHANGELOG, sem anexos; versão de teste vai
+      # como pré-release, a final como a mais recente.
+      - name: Criar o Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRE: ${{ needs.build.outputs.pre }}
+        run: |
+          if [ "$PRE" = "true" ]; then marca=--prerelease; else marca=--latest; fi
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "$GITHUB_REF_NAME" --notes-file notas.md "$marca"

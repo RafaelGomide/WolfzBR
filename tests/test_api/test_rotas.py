@@ -623,7 +623,7 @@ def test_aba_com_duas_tabelas(client):
     assert r.status_code == 201, r.text
     deteccao = r.json()["detection"]
     assert [t["colunas"] for t in deteccao["tabelas"]] == [["A", "C"], ["E", "G"]]
-    assert deteccao["tabelas"][1]["passos"][0] == {"op": "select_range", "start": "E2", "end": "G10"}
+    assert deteccao["tabelas"][1]["passos"][0] == {"op": "select_range", "start": "E2", "end_detect": "auto"}
     # A receita inicial usa a principal (empate: a primeira).
     assert r.json()["recipe"]["steps"][0]["start"] == "A2"
     estrutura = client.get(f"/api/projects/{r.json()['id']}/structure").json()

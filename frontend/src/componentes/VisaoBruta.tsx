@@ -98,9 +98,15 @@ export function VisaoBruta({
         <div className="tabelas-da-aba" role="group" aria-label={T.tabelas.aviso(tabelas.length)}>
           <span>{T.tabelas.aviso(tabelas.length)}</span>
           {tabelas.map((t, i) => {
-            const inicio = String(t.passos[0]?.start ?? "");
-            const fim = String(t.passos[0]?.end ?? "");
-            const atual = recorte?.start === inicio && recorte?.end === fim;
+            const area = t.passos[0] ?? {};
+            const inicio = String(area.start ?? "");
+            // O passo pode ter fim automático (sem end): o rótulo mostra a
+            // área detectada, e a tabela atual é a que tem o mesmo recorte.
+            const fim = `${t.colunas[1]}${t.dados[1]}`;
+            const atual =
+              recorte?.start === area.start &&
+              recorte?.end === area.end &&
+              recorte?.end_detect === area.end_detect;
             return (
               <button
                 key={`${inicio}:${fim}`}

@@ -83,6 +83,9 @@ class Detection:
     notes: list[str] = field(default_factory=list)
     labels: dict[int, str] = field(default_factory=dict)  # coluna -> nome depois do header_rows
     total_cells: dict[int, tuple[int, str]] = field(default_factory=dict)  # linha -> (coluna, rótulo)
+    # O fim automático do select_range (até a primeira linha vazia) recorta
+    # esta mesma área: a receita inicial não fixa a última linha.
+    fim_automatico: bool = False
 
     @property
     def top_row(self) -> int:
@@ -114,13 +117,14 @@ class Detection:
 
     def to_steps(self) -> list[dict[str, Any]]:
         """Passos da receita inicial, sem ``id`` (quem monta a receita numera)."""
-        steps: list[dict[str, Any]] = [
-            {
-                "op": "select_range",
-                "start": to_a1(self.top_row, self.first_col),
-                "end": to_a1(self.last_row, self.last_col),
-            }
-        ]
+        # Com fim automático, o arquivo do mês seguinte, com mais linhas, vem
+        # inteiro; com a célula final fixa, ele seria cortado sem aviso.
+        area: dict[str, Any] = {"op": "select_range", "start": to_a1(self.top_row, self.first_col)}
+        if self.fim_automatico:
+            area["end_detect"] = "auto"
+        else:
+            area["end"] = to_a1(self.last_row, self.last_col)
+        steps: list[dict[str, Any]] = [area]
         if self.header_levels == 1:
             steps.append({"op": "header_rows", "n": 1})
         elif self.header_levels > 1:
@@ -329,12 +333,31 @@ def _detect_tables(df: pl.DataFrame, structure: SheetStructure | None) -> list[D
         zona = _recorte(df, linhas, colunas)
         det = _detecta(zona, structure)
         if det is not None and det.last_row >= det.first_row:
+            det.fim_automatico = _fim_automatico_equivale(df, det)
             tabelas.append(det)
     if len(tabelas) > 1:
         # Zona que não tem dados de verdade (uma nota solta, um título) não
         # conta como tabela.
         tabelas = [t for t in tabelas if t.last_row - t.first_row >= 1] or tabelas
     return sorted(tabelas, key=lambda t: (t.top_row, t.first_col))
+
+
+def _fim_automatico_equivale(df: pl.DataFrame, det: Detection) -> bool:
+    """O ``select_range`` com ``end_detect: "auto"`` dá a mesma área que a
+    detectada? Ele vai da linha do topo até a primeira linha inteiramente
+    vazia e até a última coluna da grade (a regra de ``select_range_lf``).
+    Só quando dá a mesma tabela a receita inicial deixa o fim livre: com
+    rodapé colado aos dados, coluna de nota à direita ou linha vazia no meio,
+    o automático pegaria outra área, e a célula final fica fixa."""
+    if max(column_index(c) for c in df.columns) != det.last_col:
+        return False
+    colunas = [c for c in df.columns if column_index(c) >= det.first_col]
+    vazia = pl.all_horizontal(
+        pl.col(c).is_null() | (pl.col(c).cast(pl.String).str.strip_chars() == "") for c in colunas
+    )
+    vazias = df.slice(det.top_row).select(vazia).to_series().arg_true()
+    fim = det.top_row + vazias[0] - 1 if len(vazias) else df.height - 1
+    return fim == det.last_row
 
 
 def _zonas(kinds: pl.DataFrame) -> list[tuple[tuple[int, int], list[str]]]:

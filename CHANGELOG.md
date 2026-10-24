@@ -32,6 +32,8 @@ Congelamento para a 1.0: o formato da receita (`wolfz_version: "1.0"`) e a API p
 - `SECURITY.md`, com como reportar vulnerabilidade em particular pelo GitHub, e o link no formulário de issue.
 - `scripts/benchmark_carga.py`: gera CSV e `.xlsx` sintéticos de 10, 50 e 100 MB e mede, pela API, a importação com a detecção, a memória de pico e o preview depois de editar um passo, mais a recusa de um arquivo acima do limite. Resultado no README, seção "Limites".
 - Teste para cada risco do §11.5 do design, um fluxo completo com a rede bloqueada e a procura por dado de célula no log; teste de que os links da documentação apontam para arquivos e títulos que existem.
+- Publicação automática na tag `v*` (`.github/workflows/release.yml`): compila a interface, gera o wheel e o sdist, confere o conteúdo do pacote (`scripts/conferir_pacote.py`), instala o wheel num ambiente limpo em Linux e Windows, publica no TestPyPI e no PyPI por Trusted Publishing, sem token salvo, e cria o GitHub Release com as notas do CHANGELOG (`scripts/notas_da_versao.py`).
+- [Roteiro de smoke test](docs/smoke_test.md), com três arquivos sintéticos em `tests/corpus/_fixtures/smoke/` (um mês, o mês seguinte e outro layout), e um teste que faz o mesmo de ponta a ponta pela API.
 
 ### Alterado
 
@@ -42,6 +44,8 @@ Congelamento para a 1.0: o formato da receita (`wolfz_version: "1.0"`) e a API p
 
 ### Corrigido
 
+- **A receita reaplicada a um arquivo com mais linhas cortava a tabela sem aviso.** A receita inicial fixava a última célula da área detectada (`A1:I11`): o arquivo do mês seguinte, com o mesmo layout e mais linhas, saía só com as linhas do primeiro, com código 0. Agora a área vem com fim automático (até a primeira linha vazia) sempre que ele recorta a mesma tabela; com algo colado abaixo ou ao lado da tabela, a célula final continua fixa.
+- Clicar em "Aceitar todas" de novo antes de a lista de sugestões ser recalculada repetia os passos da etapa anterior. Os botões das sugestões ficam desabilitados até a lista da receita atual chegar.
 - Apagar um projeto enquanto a tela inicial lista os projetos podia dar erro 500 na listagem.
 
 ### Segurança

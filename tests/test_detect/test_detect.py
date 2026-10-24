@@ -127,7 +127,7 @@ def test_tabela_sem_cabecalho():
     assert det.header_row is None
     assert (det.first_row, det.last_row) == (0, 1)
     assert det.to_dict()["cabecalho"] is None
-    assert det.to_steps() == [{"op": "select_range", "start": "A1", "end": "C2"}]
+    assert det.to_steps() == [{"op": "select_range", "start": "A1", "end_detect": "auto"}]
 
 
 def test_cabecalho_esparso_acima_dos_dados():
@@ -274,7 +274,7 @@ def test_passos_da_receita_inicial():
     df, estrutura = _vendas()
     passos = detect_structure(df, estrutura).to_steps()
     assert passos == [
-        {"op": "select_range", "start": "A1", "end": "C6"},
+        {"op": "select_range", "start": "A1", "end_detect": "auto"},
         {"op": "header_rows", "n": 1},
         {"op": "drop_rows_where", "col": "Região", "match": "in", "value": ["Total"]},
         {"op": "fill_down", "cols": ["Região"]},
@@ -336,7 +336,7 @@ def test_cabecalho_multinivel():
     assert det.to_dict()["dados"] == [5, 7]
     assert det.title == ["Casos notificados"]
     passos = det.to_steps()
-    assert passos[0] == {"op": "select_range", "start": "A3", "end": "E7"}
+    assert passos[0] == {"op": "select_range", "start": "A3", "end_detect": "auto"}
     assert passos[1] == {"op": "header_rows", "n": 2, "separator": "_"}
     assert list(det.labels.values()) == [
         "Região",
@@ -496,8 +496,9 @@ def test_tabelas_lado_a_lado():
     tabelas = detect_tables(grade(linhas))
     assert [t.to_dict()["colunas"] for t in tabelas] == [["A", "C"], ["E", "F"]]
     assert [t.to_steps()[0] for t in tabelas] == [
+        # A da esquerda tem colunas à direita: o automático pegaria a outra tabela.
         {"op": "select_range", "start": "A2", "end": "C4"},
-        {"op": "select_range", "start": "E2", "end": "F4"},
+        {"op": "select_range", "start": "E2", "end_detect": "auto"},
     ]
 
 
@@ -532,3 +533,45 @@ def test_deteccao_devolve_o_coletor_como_estava(ligado):
         assert gc.isenabled() is ligado
     finally:
         (gc.enable if antes else gc.disable)()
+
+
+# ---------------------------------------------------------------------------
+# Fim da área na receita inicial: o arquivo do mês seguinte vem inteiro
+# ---------------------------------------------------------------------------
+
+
+def _receita_inicial(df):
+    from wolfz.core.detect import detect_tables, main_table
+    from wolfz.core.engine import collect
+    from wolfz.core.recipe import recipe_from_dict
+
+    passos = main_table(detect_tables(df)).to_steps()
+    receita = recipe_from_dict(
+        {
+            "wolfz_version": "1.0",
+            "name": "x",
+            "created_at": "2026-01-01T00:00:00Z",
+            "source": {"type": "excel"},
+            "steps": [{"id": f"s{i}", **p} for i, p in enumerate(passos, 1)],
+        }
+    )
+    return passos, lambda grade_nova: collect(receita, grade_nova.lazy())
+
+
+def test_mes_seguinte_com_mais_linhas_vem_inteiro():
+    """A receita feita em janeiro (3 linhas) aplicada a fevereiro (6 linhas,
+    mesmo layout, rodapé depois de uma linha vazia) não corta a tabela."""
+    janeiro = [["Relatório"], ["Nome", "Valor"], ["Ana", "1"], ["Bia", "2"], ["Caio", "3"], [], ["Fonte: X"]]
+    passos, aplicar = _receita_inicial(grade(janeiro))
+    assert passos[0] == {"op": "select_range", "start": "A2", "end_detect": "auto"}
+    fevereiro = [*janeiro[:5], ["Davi", "4"], ["Eva", "5"], ["Fábio", "6"], [], ["Fonte: X"]]
+    assert aplicar(grade(fevereiro))["Nome"].to_list() == ["Ana", "Bia", "Caio", "Davi", "Eva", "Fábio"]
+
+
+def test_rodape_colado_mantem_o_fim_fixo():
+    """Sem linha vazia entre os dados e a nota, o automático levaria a nota
+    junto: a célula final fica fixa."""
+    linhas = [["Nome", "Valor"], ["Ana", "1"], ["Bia", "2"], ["Fonte: IBGE, 2024. Elaboração própria."]]
+    det = detect_structure(grade(linhas))
+    assert det.last_row == 2
+    assert det.to_steps()[0] == {"op": "select_range", "start": "A1", "end": "B3"}
