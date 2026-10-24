@@ -1,0 +1,29 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "cadastro mojibake",
+  "source": {
+    "type": "csv"
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "mapping": {
+        "Bairro": "bairro",
+        "CÃ³digo": "codigo",
+        "MunicÃ­pio": "municipio",
+        "Nome": "nome"
+      },
+      "op": "rename"
+    },
+    {
+      "cols": [
+        "nome",
+        "municipio",
+        "bairro"
+      ],
+      "id": "s2",
+      "op": "fix_mojibake"
+    }
+  ],
+  "wolfz_version": "1.0"
+}

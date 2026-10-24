@@ -1,0 +1,36 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "frota codigo rotulo",
+  "source": {
+    "type": "csv"
+  },
+  "steps": [
+    {
+      "col": "inf_subcategoria",
+      "id": "s1",
+      "into": [
+        "codigo",
+        "tipo"
+      ],
+      "op": "split_col",
+      "separator": ". "
+    },
+    {
+      "cols": [
+        "variavel",
+        "codigo"
+      ],
+      "id": "s2",
+      "op": "drop_cols"
+    },
+    {
+      "id": "s3",
+      "op": "cast",
+      "types": {
+        "ano": "int",
+        "valor": "int"
+      }
+    }
+  ],
+  "wolfz_version": "1.0"
+}

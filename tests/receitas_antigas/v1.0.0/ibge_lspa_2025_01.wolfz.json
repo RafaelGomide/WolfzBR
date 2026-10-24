@@ -1,0 +1,110 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "ibge lspa 2025 01",
+  "source": {
+    "sheet": "Var mensal área",
+    "type": "excel"
+  },
+  "steps": [
+    {
+      "end_detect": "auto",
+      "id": "s1",
+      "op": "select_range",
+      "start": "A4"
+    },
+    {
+      "id": "s2",
+      "n": 2,
+      "op": "header_rows",
+      "separator": " "
+    },
+    {
+      "id": "s3",
+      "mapping": {
+        "Produtos Agrícolas": "produto",
+        "Produção (t) 3º Prognóstico": "producao_3o_prognostico",
+        "Produção (t) Janeiro": "producao_janeiro",
+        "Produção (t) Var %": "producao_var_pct",
+        "Rendimento Médio (kg/ha) 3º Prognóstico": "rendimento_3o_prognostico",
+        "Rendimento Médio (kg/ha) Janeiro": "rendimento_janeiro",
+        "Rendimento Médio (kg/ha) Var %": "rendimento_var_pct",
+        "Área (ha) 3º Prognóstico": "area_3o_prognostico",
+        "Área (ha) Janeiro": "area_janeiro",
+        "Área (ha) Var %": "area_var_pct"
+      },
+      "op": "rename"
+    },
+    {
+      "col": "produto",
+      "id": "s4",
+      "ignore_case": false,
+      "match": "equals",
+      "op": "drop_rows_where",
+      "value": "TOTAL"
+    },
+    {
+      "col": "produto",
+      "id": "s5",
+      "ignore_case": false,
+      "match": "contains",
+      "op": "drop_rows_where",
+      "value": " - TOTAL"
+    },
+    {
+      "collapse_spaces": false,
+      "cols": [
+        "produto"
+      ],
+      "id": "s6",
+      "op": "trim"
+    },
+    {
+      "cols": [
+        "area_3o_prognostico",
+        "area_janeiro",
+        "area_var_pct",
+        "producao_3o_prognostico",
+        "producao_janeiro",
+        "producao_var_pct",
+        "rendimento_3o_prognostico",
+        "rendimento_janeiro",
+        "rendimento_var_pct"
+      ],
+      "id": "s7",
+      "old": "--",
+      "op": "replace",
+      "whole": false
+    },
+    {
+      "cols": [
+        "area_3o_prognostico",
+        "area_janeiro",
+        "producao_3o_prognostico",
+        "producao_janeiro",
+        "rendimento_3o_prognostico",
+        "rendimento_janeiro"
+      ],
+      "id": "s8",
+      "new": "",
+      "old": " ",
+      "op": "replace",
+      "whole": false
+    },
+    {
+      "id": "s9",
+      "op": "cast",
+      "types": {
+        "area_3o_prognostico": "int",
+        "area_janeiro": "int",
+        "area_var_pct": "float",
+        "producao_3o_prognostico": "int",
+        "producao_janeiro": "int",
+        "producao_var_pct": "float",
+        "rendimento_3o_prognostico": "int",
+        "rendimento_janeiro": "int",
+        "rendimento_var_pct": "float"
+      }
+    }
+  ],
+  "wolfz_version": "1.0"
+}
