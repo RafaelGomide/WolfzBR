@@ -8,7 +8,7 @@
 
 Tudo roda na sua máquina. Nenhum dado sai do seu computador.
 
-> **Status:** 0.9, a caminho da 1.0. A partir da 1.0, o formato da receita e a API em Python seguem o versionamento semântico.
+> **Status:** 1.0. O formato da receita e a API pública em Python seguem o versionamento semântico: o que funciona numa `1.x` continua funcionando nas seguintes.
 
 ![Importar a planilha, aceitar as sugestões e exportar o projeto do Power BI](https://raw.githubusercontent.com/RafaelGomide/WolfzBR/main/docs/demo.gif)
 

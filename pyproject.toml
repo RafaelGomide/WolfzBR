@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wolfzbr"
-version = "1.0.0rc1"
+version = "1.0.0"
 description = "Limpeza de planilhas brasileiras com receitas reproduzíveis e exportação para Power Query M, Python, Tableau e Power BI."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -13,7 +13,7 @@ license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "Rafael Gomide" }]
 keywords = ["limpeza de dados", "planilhas", "excel", "power bi", "power query", "polars", "brasil"]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
     "Environment :: Web Environment",
     "Intended Audience :: End Users/Desktop",

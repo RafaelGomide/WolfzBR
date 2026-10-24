@@ -17,11 +17,13 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 | [0.7.0](#070---2026-10-21) | 2026-10-21 | Sugestões automáticas, verificações, `wolfz run` em lote e tema escuro |
 | [0.8.0](#080---2026-10-22) | 2026-10-22 | Tableau (`.hyper` + `.tds`) |
 | [0.9.0](#090---2026-10-22) | 2026-10-22 | Power BI (projeto `.pbip`) |
-| [Não publicado](#não-publicado) | — | Congelamento para a 1.0: formato da receita, API em Python, desempenho, segurança e documentação |
+| [1.0.0](#100---2026-10-24) | 2026-10-24 | Formato da receita e API em Python estáveis, desempenho, segurança, documentação e publicação automática |
 
 ## [Não publicado]
 
-Congelamento para a 1.0: o formato da receita (`wolfz_version: "1.0"`) e a API pública em Python passam a seguir o versionamento semântico, a importação de arquivo grande fica de 5 a 20 vezes mais rápida, cada risco de segurança do design ganha teste e a documentação fica completa (formato da receita, referência das operações gerada do código e guias de Power BI, Tableau e uso mensal).
+## [1.0.0] - 2026-10-24
+
+Primeira versão estável. O formato da receita (`wolfz_version: "1.0"`) e a API pública em Python passam a seguir o versionamento semântico, a importação de arquivo grande fica de 5 a 20 vezes mais rápida, cada risco de segurança do design ganha teste e a documentação fica completa (formato da receita, referência das operações gerada do código e guias de Power BI, Tableau e uso mensal).
 
 ### Adicionado
 
@@ -285,7 +287,8 @@ Primeira versão: receita, três operações e `wolfz run`. Ainda não publicada
 
 - `clean_cnpj` descartava CNPJ alfanumérico válido que parecia notação científica (ex.: `00.000.000/000E-20`).
 
-[Não publicado]: https://github.com/RafaelGomide/WolfzBR/compare/v0.9.0...HEAD
+[Não publicado]: https://github.com/RafaelGomide/WolfzBR/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.9.0...v1.0.0
 [0.9.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.6.0...v0.7.0
