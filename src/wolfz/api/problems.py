@@ -9,16 +9,18 @@ texto que a CLI mostra, porque vem das mesmas exceções do núcleo.
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from wolfz.core.engine import StepError
 from wolfz.core.ingest import IngestError
 from wolfz.core.recipe import RecipeError, RecipeTooNewError
+from wolfz.core.registro import resumo_da_falha
 
 PROBLEM_JSON = "application/problem+json"
 log = logging.getLogger("wolfz.api")
@@ -104,9 +106,13 @@ def install(app: FastAPI) -> None:
         titulo = _TITULOS.get(exc.status_code, "Erro")
         return problem_response(request, exc.status_code, titulo, str(exc.detail))
 
-    @app.exception_handler(Exception)
-    async def _inesperado(request: Request, exc: Exception) -> JSONResponse:
-        # Sem detalhe da exceção na resposta nem no log: a mensagem pode
-        # conter valor de célula (§12.1).
-        log.error("erro não tratado em %s: %s", request.url.path, type(exc).__name__)
-        return problem_response(request, 500, _TITULOS[500], "Erro inesperado. Veja o log do WolfzBR.")
+    # Middleware, e não exception_handler(Exception): este responde o 500 e
+    # depois relança a exceção para o servidor, e o uvicorn grava o traceback
+    # com a mensagem, que pode conter valor de célula (§12.1). Aqui ela para.
+    @app.middleware("http")
+    async def _inesperado(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+        try:
+            return await call_next(request)
+        except Exception as exc:
+            log.error("erro não tratado em %s: %s", request.url.path, resumo_da_falha(exc))
+            return problem_response(request, 500, _TITULOS[500], "Erro inesperado. Veja o log do WolfzBR.")

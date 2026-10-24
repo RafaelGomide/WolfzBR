@@ -1,0 +1,52 @@
+name: Auditoria de dependências
+
+# Vulnerabilidade conhecida nas dependências travadas (FH.C4, §11.5 do
+# design). Roda também toda semana: um aviso novo aparece sem precisar de
+# commit.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 9 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: pip-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          python-version: "3.13"
+
+      # Exatamente o que o uv.lock instala, com todos os extras. Sem
+      # instalar nada: o pip-audit só consulta as versões.
+      - name: Dependências travadas
+        run: uv export --frozen --no-hashes --all-extras --no-emit-project -o requisitos.txt
+
+      - name: pip-audit
+        run: uvx pip-audit==2.10.1 -r requisitos.txt --no-deps --disable-pip
+
+  node:
+    name: npm audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      # Lê só o package-lock.json; falha com vulnerabilidade alta ou crítica.
+      - name: Interface
+        run: npm audit --audit-level=high --prefix frontend
+
+      - name: Parser de M (testes)
+        run: npm audit --audit-level=high --prefix tools/m-parser

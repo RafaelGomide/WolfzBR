@@ -199,7 +199,7 @@ def test_falha_na_gravacao_nao_corrompe_a_receita(settings, monkeypatch):
     def disco_cheio(self, alvo):
         raise OSError(28, "No space left on device")
 
-    with cliente(settings, raise_server_exceptions=False) as client:
+    with cliente(settings) as client:
         projeto = enviar(client).json()
         pasta = settings.workspace.project_dir(projeto["id"])
         antes = (pasta / "recipe.wolfz.json").read_bytes()
@@ -514,17 +514,23 @@ def test_lock_e_liberado_ao_encerrar(settings):
         assert c.get(f"/api/projects/{pid}").status_code == 200
 
 
-def test_erro_inesperado_nao_vaza_detalhe(settings, monkeypatch):
+def test_erro_inesperado_nao_vaza_detalhe(settings, monkeypatch, caplog):
+    """Nem na resposta, nem no log, nem relançado para o servidor (o
+    cliente de teste relança o que chegar ao servidor)."""
+
     def explode(*args, **kwargs):
         raise RuntimeError("CPF 123.456.789-09 na mensagem")
 
     monkeypatch.setattr("wolfz.api.rotas.preview_project", explode)
-    with cliente(settings, raise_server_exceptions=False) as client:
+    caplog.set_level("DEBUG")
+    with cliente(settings) as client:
         projeto = enviar(client).json()
         r = client.get(_url(projeto, "preview"))
     assert r.status_code == 500
     assert "CPF" not in r.text
     assert r.json()["title"] == "Erro interno"
+    assert "123.456" not in caplog.text
+    assert "RuntimeError em test_rotas.py" in caplog.text
 
 
 # ---------------------------------------------------------------------------

@@ -144,6 +144,7 @@ A lista de municípios vem da API de localidades do IBGE e fica dentro do pacote
 - Desenho técnico: [`docs/system_design.md`](docs/system_design.md)
 - Mudanças: [`CHANGELOG.md`](CHANGELOG.md)
 - Como contribuir: [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- Segurança e como reportar vulnerabilidade: [`SECURITY.md`](SECURITY.md)
 
 ## Licença
 

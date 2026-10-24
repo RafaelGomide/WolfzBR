@@ -86,7 +86,9 @@ def test_regra_com_erro_vai_para_o_log_e_as_outras_continuam(caplog):
             sugestoes = suggest(_df(valor=["R$ 1,00", "R$ 2,00"]))
         assert [s.rule for s in sugestoes] == ["moeda"]
         assert "regra_quebrada" in caplog.text
-        assert "bug na regra" in caplog.text
+        assert "RuntimeError em test_suggest.py" in caplog.text
+        # A mensagem pode trazer valor de célula: fica fora do log (§12.1).
+        assert "bug na regra" not in caplog.text
     finally:
         sug._REGRAS.pop("regra_quebrada")
 

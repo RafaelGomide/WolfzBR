@@ -6,7 +6,8 @@ os passos que ela propõe, a confiança (0 a 1) e o motivo em português. A
 sugestão nunca altera a receita sozinha: o usuário aceita, edita ou rejeita
 (§6.2 do design).
 
-Uma regra que lança exceção é registrada no log e ignorada; as outras
+Uma regra que lança exceção é registrada no log (só o tipo e o lugar, sem
+a mensagem, que pode trazer valor de célula: §12.1) e ignorada; as outras
 continuam (§10.5 do design). Sugestão é bônus, não pode derrubar o fluxo.
 """
 
@@ -21,6 +22,7 @@ import polars as pl
 
 from wolfz.core.profile import ColumnProfile, profile_column
 from wolfz.core.profile.column import sample_rows
+from wolfz.core.registro import resumo_da_falha
 
 log = logging.getLogger("wolfz.suggest")
 
@@ -124,8 +126,8 @@ def suggest(
     for nome, regra in _REGRAS.items():
         try:
             achadas = list(regra(ctx))
-        except Exception:
-            log.exception("regra de sugestão %s falhou; ignorada", nome)
+        except Exception as exc:
+            log.error("regra de sugestão %s falhou (%s); ignorada", nome, resumo_da_falha(exc))
             continue
         for s in achadas:
             if s.confidence < CONFIANCA_MINIMA or (s.rule, None) in recusadas:

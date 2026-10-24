@@ -12,10 +12,19 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 - Parâmetros renomeados, para o mesmo nome valer na receita toda: `split_col` e `header_rows` usam `separator` (antes `delimiter` e `joiner`), como `merge_cols`; `clean_cpf` e `clean_cnpj` usam `add_valid_col` (antes `flag`); `parse_ibge_value` usa `add_status_col` (antes `status`). Opção que acrescenta coluna começa com `add_`; `*_col` é sempre o nome de uma coluna.
 - Importação de arquivo grande bem mais rápida, com o mesmo resultado: um CSV de 10 MB levava 37 s para importar e detectar e agora leva 5 s; um `.xlsx` de 10 MB, de 88 s para 4 s. A formatação do `.xlsx` (negrito, fórmulas, mesclagens) é lida só das linhas amostradas, sem percorrer a aba inteira, e a detecção de totais converte cada valor distinto uma vez, com atalho para número simples e para texto que não pode ser número.
 - Arquivo acima de 100 MB: a mensagem diz o tamanho do arquivo, o limite e o que fazer, a mesma na CLI e na API (antes a API dizia só "O limite de upload é 100 MB").
+- `filelock` 4.2.4, `certifi` 2026.10.23 e `virtualenv` 21.14.13 no `uv.lock`, com as correções de vulnerabilidades conhecidas que o `pip-audit` apontou.
+
+### Corrigido
+
+- Erro inesperado na API não vai mais para o log do servidor com o traceback e a mensagem da exceção, que podia trazer valor de célula: o log tem só o tipo da exceção e onde ela aconteceu. O mesmo vale para regra de sugestão que falha.
+- Apagar um projeto enquanto a tela inicial lista os projetos podia dar erro 500 na listagem.
 
 ### Adicionado
 
 - API pública em Python definida: `wolfz.run`, `wolfz.load_recipe`, `wolfz.RecipeError`, `wolfz.StepError` e as funções de valor em `wolfz.br` (`wolfz.br.clean_cpf`, `wolfz.br.parse_brl`…), agora importáveis direto do pacote. O resto é interno.
+- `SECURITY.md`, com como reportar vulnerabilidade em particular pelo GitHub, e o link no formulário de issue.
+- `pip-audit` e `npm audit` no CI (`.github/workflows/auditoria.yml`), a cada push e toda semana.
+- Teste para cada risco do §11.5 do design, um fluxo completo com a rede bloqueada e a procura por dado de célula no log.
 - `scripts/benchmark_carga.py`: gera CSV e `.xlsx` sintéticos de 10, 50 e 100 MB e mede, pela API, a importação com a detecção, a memória de pico e o preview depois de editar um passo, mais a recusa de um arquivo acima do limite. Resultado no README, seção "Limites".
 
 ## [0.9.0] - 2026-10-22

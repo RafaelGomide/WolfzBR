@@ -145,6 +145,10 @@ def projeto_travado(projeto: Path) -> bool:
         lock.acquire(timeout=0.05)
     except Timeout:
         return True
+    except FileNotFoundError:
+        # Apagado entre o exists() e o acquire (outra requisição apagando o
+        # projeto): não está aberto em lugar nenhum.
+        return False
     lock.release()
     return False
 
