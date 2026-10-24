@@ -9,10 +9,30 @@ from __future__ import annotations
 
 import re
 
+from wolfz.br.constants import NULL_TOKENS
 from wolfz.core.text import is_null_token, normalize_key, normalize_spaces
 
 _CURRENCY = re.compile(r"R\$|US\$|U\$|€|\$|\bBRL\b|\bUSD\b|\bEUR\b", re.I)
 _DASHES = {"-", "\u2013", "\u2014"}  # hífen, meia-risca, travessão
+
+
+# Número simples, que o caminho completo leria do mesmo jeito: 'R$' opcional,
+# sinal, parte inteira (com milhar só onde não é ambíguo) e decimais. Uma
+# coluna de 1 milhão de valores passa por aqui sem as normalizações e as
+# regex do caminho completo (FH.B2).
+_SIMPLES = {
+    ",": re.compile(r"(?:R\$ ?)?(?P<n>(-?)([0-9]{1,3}(?:\.[0-9]{3})+|[0-9]+)(?:,([0-9]+))?)"),
+    ".": re.compile(r"(?:R\$ ?)?(?P<n>(-?)([0-9]+)(?:\.([0-9]+))?)"),
+}
+# Texto que não pode ser número: um caractere que nenhum número aceita (só
+# dígito, espaço, separador, sinal, parênteses, moeda, as letras de R$,
+# US$, BRL/USD/EUR, D/C e do E da notação científica, e os invisíveis que a
+# normalização tira) ou um traço entre dígitos (CEP, CPF, '1-2'). Data,
+# descrição e CEP param aqui.
+_NAO_E_NUMERO = re.compile(
+    r"[^\d\s.,+()\-\u2013\u2014$€BCDELRSUbcdelrsu\u200b-\u200d\u2060\ufeff\u00ad]"
+    r"|[0-9]\s*[\-\u2013\u2014]\s*[0-9]"
+)
 
 
 def _normalize_separators(s: str, decimal: str) -> str | None:
@@ -73,6 +93,18 @@ def parse_number_br(
         return None
     if isinstance(value, (int, float)):
         return float(value) if value == value else None
+    if isinstance(value, str):
+        padrao = _SIMPLES.get(decimal)
+        if padrao is not None and (m := padrao.fullmatch(value)) and m["n"] not in NULL_TOKENS:
+            _, sinal, inteiro, frac = m.groups()
+            return float(f"{sinal}{inteiro.replace('.', '')}.{frac or '0'}")
+        if _NAO_E_NUMERO.search(value):
+            return None
+    return _parse_completo(value, decimal, dash_is_zero, debit_negative)
+
+
+def _parse_completo(value: object, decimal: str, dash_is_zero: bool, debit_negative: bool) -> float | None:
+    """``parse_number_br`` sem os atalhos: todas as normalizações."""
     s = normalize_spaces(str(value))
     if "%" in s:
         return None

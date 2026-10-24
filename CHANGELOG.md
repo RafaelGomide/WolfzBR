@@ -10,10 +10,13 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 
 - Formato da receita `wolfz_version: "1.0"`, congelado para a 1.0. Receitas `0.1` (gravadas do WolfzBR 0.1.0 ao 0.9.0) abrem sem mudança de resultado: a migração renomeia os parâmetros abaixo ao carregar, e o arquivo só é regravado quando você salva.
 - Parâmetros renomeados, para o mesmo nome valer na receita toda: `split_col` e `header_rows` usam `separator` (antes `delimiter` e `joiner`), como `merge_cols`; `clean_cpf` e `clean_cnpj` usam `add_valid_col` (antes `flag`); `parse_ibge_value` usa `add_status_col` (antes `status`). Opção que acrescenta coluna começa com `add_`; `*_col` é sempre o nome de uma coluna.
+- Importação de arquivo grande bem mais rápida, com o mesmo resultado: um CSV de 10 MB levava 37 s para importar e detectar e agora leva 5 s; um `.xlsx` de 10 MB, de 88 s para 4 s. A formatação do `.xlsx` (negrito, fórmulas, mesclagens) é lida só das linhas amostradas, sem percorrer a aba inteira, e a detecção de totais converte cada valor distinto uma vez, com atalho para número simples e para texto que não pode ser número.
+- Arquivo acima de 100 MB: a mensagem diz o tamanho do arquivo, o limite e o que fazer, a mesma na CLI e na API (antes a API dizia só "O limite de upload é 100 MB").
 
 ### Adicionado
 
 - API pública em Python definida: `wolfz.run`, `wolfz.load_recipe`, `wolfz.RecipeError`, `wolfz.StepError` e as funções de valor em `wolfz.br` (`wolfz.br.clean_cpf`, `wolfz.br.parse_brl`…), agora importáveis direto do pacote. O resto é interno.
+- `scripts/benchmark_carga.py`: gera CSV e `.xlsx` sintéticos de 10, 50 e 100 MB e mede, pela API, a importação com a detecção, a memória de pico e o preview depois de editar um passo, mais a recusa de um arquivo acima do limite. Resultado no README, seção "Limites".
 
 ## [0.9.0] - 2026-10-22
 

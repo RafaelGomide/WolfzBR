@@ -431,3 +431,15 @@ def test_run_receita_de_versao_mais_nova_pede_para_atualizar(entrada, tmp_path):
     assert f"o WolfzBR {wolfz.__version__} instalado lê até o formato {CURRENT_VERSION}" in result.output
     assert "pipx upgrade wolfzbr" in result.output
     assert not (tmp_path / "x.csv").exists()
+
+
+def test_run_arquivo_acima_do_limite(receita, tmp_path):
+    """FH.B4: recusado pelo tamanho, antes de ler; o arquivo é esparso, nada
+    é escrito no disco."""
+    grande = tmp_path / "grande.csv"
+    with grande.open("wb") as f:
+        f.truncate(101 * 1024 * 1024)
+    result = _run(receita, grande, "-o", tmp_path / "x.csv")
+    assert result.exit_code == 3
+    assert "Arquivo grande demais: grande.csv tem 101,0 MB; o limite é 100 MB." in result.output
+    assert not (tmp_path / "x.csv").exists()

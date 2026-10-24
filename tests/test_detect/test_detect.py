@@ -517,3 +517,18 @@ def test_uma_linha_vazia_nao_separa_tabelas():
 
     linhas = [["Item", "Valor"], ["a", "1"], [None], ["b", "2"], ["c", "3"]]
     assert len(detect_tables(grade(linhas))) == 1
+
+
+@pytest.mark.parametrize("ligado", [True, False])
+def test_deteccao_devolve_o_coletor_como_estava(ligado):
+    """A detecção pausa o coletor de ciclos (FH.B2) e o devolve como achou."""
+    import gc
+
+    grade = pl.DataFrame({"A": ["Nome", "Ana", "Bia"], "B": ["Valor", "1", "2"]})
+    antes = gc.isenabled()
+    (gc.enable if ligado else gc.disable)()
+    try:
+        assert detect_structure(grade) is not None
+        assert gc.isenabled() is ligado
+    finally:
+        (gc.enable if antes else gc.disable)()

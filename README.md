@@ -123,7 +123,19 @@ A lista de municípios vem da API de localidades do IBGE e fica dentro do pacote
 
 ## Limites
 
-- Arquivo de até 100 MB.
+- Arquivo de até 100 MB. Acima disso, o arquivo é recusado na hora, sem ser lido, com o tamanho dele e o limite na mensagem (código 3 no `wolfz run`, `413` na API).
+- Máquina mínima: 8 GB de memória. Medido num notebook de 8 GB (Windows 11, Intel Core i7 de 11ª geração, com navegador e editor abertos), com arquivos sintéticos de exportação de sistema (24 colunas: datas, CNPJ, CPF, município, `R$` e valores mensais):
+
+  | Arquivo | Linhas | Importação + detecção | Memória de pico | Preview depois de editar um passo (p50 · p95) |
+  |---|---:|---:|---:|---:|
+  | CSV de 10 MB | 41 mil | 5 s | 290 MB | 23 ms · 94 ms |
+  | `.xlsx` de 10 MB | 53 mil | 4 s | 280 MB | 25 ms · 95 ms |
+  | CSV de 50 MB | 204 mil | 16 s | 580 MB | 58 ms · 339 ms |
+  | `.xlsx` de 50 MB | 266 mil | 44 s | 680 MB | 37 ms · 594 ms |
+  | CSV de 100 MB | 407 mil | 34 s | 950 MB | 26 ms · 346 ms |
+  | `.xlsx` de 100 MB | 524 mil | 77 s | 1,2 GB | 79 ms · 706 ms |
+
+  O preview fica dentro da meta (p50 ≤ 300 ms, p95 ≤ 1 s) e a memória, dentro dos 2 GB, em todos os tamanhos. A importação passa de 1 minuto só no `.xlsx` perto do limite. Os tempos variam uns 30% entre rodadas, conforme o que mais está aberto na máquina. Para medir na sua: `uv run python scripts/benchmark_carga.py`.
 - Uma tabela por aba. Duas tabelas na mesma aba: marque a área de cada uma em projetos separados.
 - Cabeçalho em várias linhas é juntado num nome só, mas o cabeçalho mesclado na horizontal ainda não é preenchido. Isso chega na 0.6.
 

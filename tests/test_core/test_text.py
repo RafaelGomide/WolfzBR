@@ -1,6 +1,9 @@
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from wolfz.core.text import (
+    _FOOTNOTE,
     clean_text,
     fix_mojibake,
     is_null_token,
@@ -21,7 +24,7 @@ def test_remove_accents():
     [
         ("  a\xa0\xa0b  ", "a b"),
         ("a\tb\r\nc", "a b c"),
-        ("a​b﻿", "ab"),  # zero-width e BOM
+        ("a\u200bb﻿", "ab"),  # zero-width e BOM
         ("São", "São"),  # acento decomposto (macOS) vira NFC
     ],
 )
@@ -105,3 +108,8 @@ def test_fix_mojibake(text, expected):
 )
 def test_strip_footnote_marks(text, expected):
     assert strip_footnote_marks(text) == expected
+
+
+@given(st.text(alphabet=st.sampled_from(list("ab1 *()²³\t\n\u00a0")), max_size=8) | st.text(max_size=8))
+def test_strip_footnote_marks_atalho_igual_a_regex(texto):
+    assert strip_footnote_marks(texto) == _FOOTNOTE.sub("", texto)

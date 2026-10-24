@@ -33,6 +33,7 @@ from wolfz.core.engine import collect, run
 from wolfz.core.engine.preview import LIMITE_PAGINA, preview_project
 from wolfz.core.ingest import SheetStructure, import_file, list_sheets, open_file
 from wolfz.core.ingest.abas import padrao_de_aba
+from wolfz.core.ingest.limits import too_large_message
 from wolfz.core.profile import profile_table
 from wolfz.core.recipe import Recipe, dumps_recipe, load_recipe, recipe_from_dict, registered_ops, save_recipe
 from wolfz.core.recipe.migrate import CURRENT_VERSION
@@ -552,9 +553,7 @@ def _copia_com_limite(upload: UploadFile, destino: Path, limite: int) -> None:
         while bloco := upload.file.read(1 << 20):
             total += len(bloco)
             if total > limite:
-                raise Problem(
-                    413, f"O limite de upload é {limite // (1024 * 1024)} MB.", code="file_too_large"
-                )
+                raise Problem(413, too_large_message(limite), code="file_too_large")
             saida.write(bloco)
 
 

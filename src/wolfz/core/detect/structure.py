@@ -37,9 +37,12 @@
 
 from __future__ import annotations
 
+import gc
 import math
 import re
 from collections import Counter
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -295,11 +298,31 @@ def main_table(tabelas: list[Detection]) -> Detection | None:
     return max(tabelas, key=lambda t: (t.last_row - t.first_row, -tabelas.index(t)))
 
 
+@contextmanager
+def _sem_coleta_de_ciclos() -> Iterator[None]:
+    """Pausa o coletor de ciclos do Python. A detecção cria um objeto por
+    linha (``RowMetrics``) e nenhum ciclo; numa aba de 400 mil linhas, o
+    coletor varrendo esses objetos a cada geração deixava a detecção 50%
+    mais lenta (FH.B2). Quem já estava com ele desligado continua assim."""
+    ligado = gc.isenabled()
+    gc.disable()
+    try:
+        yield
+    finally:
+        if ligado:
+            gc.enable()
+
+
 def detect_tables(df: pl.DataFrame, structure: SheetStructure | None = None) -> list[Detection]:
     """Todas as tabelas da aba, na ordem de leitura (de cima para baixo, da
     esquerda para a direita)."""
     if df.width == 0 or df.height == 0:
         return []
+    with _sem_coleta_de_ciclos():
+        return _detect_tables(df, structure)
+
+
+def _detect_tables(df: pl.DataFrame, structure: SheetStructure | None) -> list[Detection]:
     kinds = classify(df, structure)
     tabelas = []
     for linhas, colunas in _zonas(kinds):
@@ -440,10 +463,13 @@ def _primeiro_texto(df: pl.DataFrame, r: int, det: Detection, offset: int) -> tu
 
 
 def _numeros(valores: list[Any]) -> list[float | None]:
-    """Valores de uma coluna como número (marca de nota tirada: '3.289.290(1)')."""
-    textos = [None if v is None else strip_footnote_marks(str(v).strip()) for v in valores]
-    decimal = decimal_provavel(textos)
-    return [None if t is None else parse_number_br(t, decimal=decimal) for t in textos]
+    """Valores de uma coluna como número (marca de nota tirada: '3.289.290(1)').
+    Cada valor distinto é convertido uma vez: coluna de UF, município ou CPF
+    repete muito, e é ela que pesa na tabela de 1 milhão de linhas."""
+    distintos = {v: strip_footnote_marks(str(v).strip()) for v in dict.fromkeys(valores) if v is not None}
+    decimal = decimal_provavel(list(distintos.values()))
+    numeros = {v: parse_number_br(t, decimal=decimal) for v, t in distintos.items()}
+    return [None if v is None else numeros[v] for v in valores]
 
 
 def _igual(a: float, b: float) -> bool:

@@ -41,8 +41,20 @@ class Limits:
 DEFAULT_LIMITS = Limits()
 
 
-def _fmt_mb(n: int) -> str:
-    return f"{n / MB:,.0f} MB".replace(",", ".")
+def _fmt_mb(n: int, casas: int = 0) -> str:
+    texto = f"{n / MB:,.{casas}f}".replace(",", "_").replace(".", ",").replace("_", ".")
+    return f"{texto} MB"
+
+
+def too_large_message(limit: int, size: int | None = None, name: str | None = None) -> str:
+    """Texto do 413 de arquivo grande demais, o mesmo na CLI e na API.
+    ``size`` é ``None`` quando o upload foi cortado no limite (o tamanho
+    real não chega a ser conhecido)."""
+    if size is None:
+        inicio = f"{name or 'O arquivo'} passa de {_fmt_mb(limit)}, o limite."
+    else:
+        inicio = f"{name or 'O arquivo'} tem {_fmt_mb(size, 1)}; o limite é {_fmt_mb(limit)}."
+    return f"{inicio} Divida o arquivo ou exporte só as colunas e linhas necessárias."
 
 
 def check_file_size(path: Path, limits: Limits = DEFAULT_LIMITS) -> int:
@@ -52,8 +64,7 @@ def check_file_size(path: Path, limits: Limits = DEFAULT_LIMITS) -> int:
         raise IngestError(
             "file_too_large",
             "Arquivo grande demais",
-            f"{path.name} tem {_fmt_mb(size)}; o limite é {_fmt_mb(limits.max_file_bytes)}. "
-            "Divida o arquivo ou exporte só as colunas e linhas necessárias.",
+            too_large_message(limits.max_file_bytes, size, path.name),
             413,
         )
     return size

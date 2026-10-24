@@ -3,7 +3,7 @@ validação de documentos gerados."""
 
 import string
 
-from hypothesis import given
+from hypothesis import example, given
 from hypothesis import strategies as st
 
 from wolfz.br.documentos import (
@@ -14,7 +14,17 @@ from wolfz.br.documentos import (
     format_cnpj,
     format_cpf,
 )
-from wolfz.br.numeros import format_brl, parse_brl
+from wolfz.br.numeros import _parse_completo, format_brl, parse_brl, parse_number_br
+
+# Texto com cara de número e texto qualquer: os atalhos de parse_number_br
+# (número simples, letra que número não tem) têm de dar o que o caminho
+# completo daria.
+quase_numero = st.one_of(
+    st.from_regex(r"(R\$ ?)?-?[0-9]{1,7}([.,][0-9]{1,4}){0,3}", fullmatch=True),
+    st.from_regex(r"[0-9]{1,5}[-/ ][0-9]{1,4}", fullmatch=True),
+    st.text(alphabet="0123456789.,-+ ()R$US€BRLEeDdCcxé%\u00a0\u200b", max_size=14),
+    st.text(max_size=10),
+)
 
 valores = st.floats(min_value=-1e12, max_value=1e12, allow_nan=False, allow_infinity=False)
 
@@ -81,3 +91,15 @@ def test_cnpj_com_dv_trocado_e_invalido(cnpj, pos, novo):
     alterado = cnpj[:pos] + novo + cnpj[pos + 1 :]
     if alterado != cnpj:
         assert not cnpj_is_valid(alterado)
+
+
+@given(quase_numero, st.sampled_from([",", "."]), st.booleans(), st.booleans())
+@example("00000000", ",", False, False)  # marcador de ausência, não zero
+@example("1.234,56 D", ",", False, True)
+@example("R$ 00000000", ",", False, False)
+@example("29000-123", ",", False, False)
+@example("\uff11\uff12", ",", False, False)  # dígito de largura total
+def test_parse_number_br_atalhos_iguais_ao_caminho_completo(texto, decimal, traco, debito):
+    rapido = parse_number_br(texto, decimal=decimal, dash_is_zero=traco, debit_negative=debito)
+    completo = _parse_completo(texto, decimal, traco, debito)
+    assert repr(rapido) == repr(completo)

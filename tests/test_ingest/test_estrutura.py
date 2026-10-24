@@ -1,7 +1,20 @@
+import importlib
+import io
+from pathlib import Path
+
 import pytest
 
 from wolfz.core.ingest import CellMatrix, CellType, SheetStructure, read_sheet
-from wolfz.core.ingest.structure import MergedRange, sample_windows
+from wolfz.core.ingest.excel import list_sheets, read_sheet_raw
+from wolfz.core.ingest.structure import (
+    TAIL_ROWS,
+    MergedRange,
+    _xml_das_janelas,
+    read_xlsx_structure,
+    sample_windows,
+)
+
+structure_mod = importlib.import_module("wolfz.core.ingest.structure")
 
 
 def test_estrutura_xlsx(relatorio_xlsx):
@@ -125,3 +138,59 @@ def test_cell_matrix_vazia():
 def test_cell_matrix_valida_tamanhos():
     with pytest.raises(ValueError):
         CellMatrix([[]], [])
+
+
+# XML da aba recortado nas janelas (FH.B2)
+
+XLSX_DO_CORPUS = sorted((Path(__file__).resolve().parents[1] / "corpus").glob("*/original.xlsx"))
+
+
+def _estrutura(caminho, monkeypatch=None, recortar=True, tail_rows=TAIL_ROWS):
+    if not recortar:
+        monkeypatch.setattr(structure_mod, "_xml_das_janelas", lambda xml, windows: None)
+    aba = list_sheets(caminho, "xlsx", dimensions=False)[0].name
+    altura = read_sheet_raw(caminho, aba).height
+    return read_xlsx_structure(caminho, aba, altura, tail_rows=tail_rows).to_dict()
+
+
+@pytest.mark.parametrize("caminho", XLSX_DO_CORPUS, ids=lambda p: p.parent.name)
+def test_xml_recortado_da_a_mesma_estrutura(caminho, monkeypatch):
+    rapido = _estrutura(caminho, tail_rows=3)
+    with monkeypatch.context() as m:
+        completo = _estrutura(caminho, m, recortar=False, tail_rows=3)
+    assert rapido == completo
+
+
+@pytest.mark.parametrize("caminho", XLSX_DO_CORPUS[:4], ids=lambda p: p.parent.name)
+def test_xml_recortado_com_blocos_pequenos(caminho, monkeypatch):
+    """Linha cortada entre dois blocos de leitura."""
+    esperado = _estrutura(caminho, tail_rows=3)
+    monkeypatch.setattr(structure_mod, "_BLOCO_XML", 7)
+    assert _estrutura(caminho, tail_rows=3) == esperado
+
+
+def test_xml_recortado_guarda_so_as_janelas():
+    xml = (
+        b'<worksheet><dimension ref="A1:A5"/><sheetData>'
+        + b"".join(b'<row r="%d"><c r="A%d"><v>%d</v></c></row>' % (n, n, n) for n in range(1, 6))
+        + b'<row r="6"/></sheetData><mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>'
+    )
+    recortado = _xml_das_janelas(io.BytesIO(xml), [(0, 0), (4, 5)])
+    assert recortado == (
+        b'<worksheet><dimension ref="A1:A5"/><sheetData>'
+        b'<row r="1"><c r="A1"><v>1</v></c></row><row r="5"><c r="A5"><v>5</v></c></row><row r="6"/>'
+        b'</sheetData><mergeCells count="1"><mergeCell ref="A1:B1"/></mergeCells></worksheet>'
+    )
+
+
+@pytest.mark.parametrize(
+    "xml",
+    [
+        b"<worksheet><sheetData><row><c><v>1</v></c></row></sheetData></worksheet>",  # linha sem r
+        b'<x:worksheet><x:sheetData><x:row r="1"/></x:sheetData></x:worksheet>',  # prefixo
+        b"<worksheet><sheetData/></worksheet>",
+        b'<worksheet><sheetData><row r="1">',  # cortado
+    ],
+)
+def test_xml_fora_do_padrao_volta_para_a_leitura_de_sempre(xml):
+    assert _xml_das_janelas(io.BytesIO(xml), [(0, 10)]) is None

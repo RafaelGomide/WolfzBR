@@ -27,7 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from wolfz.api.problems import problem_response
 from wolfz.core.ingest import Limits
-from wolfz.core.ingest.limits import DEFAULT_LIMITS
+from wolfz.core.ingest.limits import DEFAULT_LIMITS, too_large_message
 from wolfz.core.workspace import Workspace
 
 ORIGENS_VITE = ("http://localhost:5173", "http://127.0.0.1:5173")
@@ -80,12 +80,12 @@ def install(app: FastAPI, settings: Settings) -> None:
             tamanho = request.headers.get("content-length")
             limite = settings.limits.max_file_bytes + FOLGA_MULTIPART
             if request.method == "POST" and tamanho and tamanho.isdigit() and int(tamanho) > limite:
-                mb = settings.limits.max_file_bytes // (1024 * 1024)
                 return problem_response(
                     request,
                     413,
                     "Arquivo grande demais",
-                    f"O limite de upload é {mb} MB.",
+                    # O Content-Length inclui o envelope do multipart: o tamanho é aproximado.
+                    too_large_message(settings.limits.max_file_bytes, int(tamanho)),
                     code="file_too_large",
                 )
         return await call_next(request)

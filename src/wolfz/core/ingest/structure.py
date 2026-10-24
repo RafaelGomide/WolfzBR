@@ -17,12 +17,14 @@ mais cara da importação (``openpyxl`` cria um objeto Python por célula,
 
 from __future__ import annotations
 
+import io
+import re
 import zipfile
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 from xml.etree.ElementTree import iterparse
 
 import openpyxl
@@ -127,15 +129,63 @@ def sample_windows(
     return windows
 
 
-def _xlsx_merges(path: Path, worksheet_path: str) -> list[MergedRange]:
+def _xlsx_merges(xml: IO[bytes]) -> list[MergedRange]:
     """Lê só os ``<mergeCell>`` do XML da aba, em streaming."""
     merges: list[MergedRange] = []
-    with zipfile.ZipFile(path) as zf, zf.open(worksheet_path.lstrip("/")) as xml:
-        for _, elem in iterparse(xml, events=("end",)):
-            if elem.tag.endswith("}mergeCell") and (ref := elem.get("ref")):
-                merges.append(MergedRange.from_a1(ref))
-            elem.clear()
+    for _, elem in iterparse(xml, events=("end",)):
+        if elem.tag.endswith("}mergeCell") and (ref := elem.get("ref")):
+            merges.append(MergedRange.from_a1(ref))
+        elem.clear()
     return merges
+
+
+_BLOCO_XML = 4 << 20
+_R_DA_LINHA = re.compile(rb'\sr="(\d+)"')
+
+
+def _xml_das_janelas(xml: IO[bytes], windows: list[tuple[int, int]]) -> bytes | None:
+    """O XML da aba só com as linhas das janelas e o que vem depois de
+    ``<sheetData>`` (mesclagens). O ``openpyxl`` percorre a aba desde o
+    começo para chegar às últimas linhas e cria um objeto por célula; com
+    o XML recortado, uma aba de 1 milhão de linhas custa o mesmo que uma de
+    100. ``None`` quando o XML foge do que o Excel grava (linha sem ``r``,
+    prefixo de namespace): aí a leitura é a de sempre."""
+    manter = [(a + 1, b + 1) for a, b in windows]
+    buf = b""
+    while (i := buf.find(b"<sheetData")) < 0 or (gt := buf.find(b">", i)) < 0:
+        if not (bloco := xml.read(_BLOCO_XML)):
+            return None
+        buf += bloco
+    if buf[gt - 1 : gt] == b"/":  # <sheetData/>: aba vazia
+        return None
+    partes = [buf[: gt + 1]]
+    buf, pos, eof = buf[gt + 1 :], 0, False
+    while True:
+        i = buf.find(b"<", pos)
+        if i >= 0 and buf.startswith(b"</sheetData>", i):
+            partes.append(buf[i:])
+            partes.extend(iter(lambda: xml.read(_BLOCO_XML), b""))
+            return b"".join(partes)
+        final = -1
+        if i >= 0 and (gt := buf.find(b">", i)) >= 0:
+            if not buf.startswith(b"<row", i) or buf[i + 4 : i + 5] not in (b" ", b">", b"/"):
+                return None
+            if buf[gt - 1 : gt] == b"/":
+                final = gt + 1
+            elif (e := buf.find(b"</row>", gt)) >= 0:
+                final = e + len(b"</row>")
+        if final < 0:  # linha cortada entre dois blocos
+            if eof:
+                return None
+            bloco = xml.read(_BLOCO_XML)
+            eof = not bloco
+            buf, pos = buf[i if i >= 0 else len(buf) :] + bloco, 0
+            continue
+        if (r := _R_DA_LINHA.search(buf, i, gt)) is None:
+            return None
+        if any(a <= int(r[1]) <= b for a, b in manter):
+            partes.append(buf[i:final])
+        pos = final
 
 
 def read_xlsx_structure(
@@ -146,6 +196,10 @@ def read_xlsx_structure(
     wb = openpyxl.load_workbook(path, read_only=True, data_only=False)
     try:
         ws = wb[sheet]
+        with zipfile.ZipFile(path) as zf, zf.open(ws._worksheet_path.lstrip("/")) as xml:
+            recortado = _xml_das_janelas(xml, windows)
+        if recortado is not None:
+            ws._get_source = lambda: io.BytesIO(recortado)
         for first, last in windows:
             for row in ws.iter_rows(min_row=first + 1, max_row=last + 1):
                 for cell in row:
@@ -158,7 +212,8 @@ def read_xlsx_structure(
                         structure.types[pos] = kind
                     if cell.font is not None and cell.font.b:
                         structure.bold.append(pos)
-        structure.merged = _xlsx_merges(path, ws._worksheet_path)
+        with ws._get_source() as xml:
+            structure.merged = _xlsx_merges(xml)
     finally:
         wb.close()
     return structure

@@ -102,6 +102,7 @@ def fix_mojibake(text: str | None) -> str | None:
 
 
 _FOOTNOTE = re.compile(r"\s*(\*+|[¹²³⁴⁵⁶⁷⁸⁹⁰]+|\(\d{1,2}\))\s*$")
+_FIM_DE_NOTA = frozenset("*)¹²³⁴⁵⁶⁷⁸⁹⁰")
 
 
 def strip_footnote_marks(text: str | None) -> str | None:
@@ -112,4 +113,8 @@ def strip_footnote_marks(text: str | None) -> str | None:
     sem asterisco em anos diferentes e não agrupa."""
     if text is None:
         return None
+    # Atalho: a marca sempre termina em '*', ')' ou expoente. A detecção
+    # chama isto para cada valor das colunas de número (FH.B2).
+    if text.rstrip()[-1:] not in _FIM_DE_NOTA:
+        return text
     return _FOOTNOTE.sub("", text)

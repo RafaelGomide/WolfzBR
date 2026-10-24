@@ -154,7 +154,10 @@ def test_upload_acima_do_limite_pelo_content_length(tmp_path):
         grande = b"a;b\n" * 100_000
         r = c.post("/api/projects", files={"file": ("x.csv", grande, "text/csv")})
     assert r.status_code == 413
-    assert r.json()["code"] == "file_too_large"
+    corpo = r.json()
+    assert corpo["code"] == "file_too_large"
+    assert corpo["title"] == "Arquivo grande demais"
+    assert corpo["detail"].startswith("O arquivo tem 0,4 MB; o limite é 0 MB. Divida o arquivo")
     assert not (tmp_path / "projects").exists()  # nada foi criado
 
 
@@ -291,3 +294,33 @@ def test_outra_instancia_continua_dando_423(tmp_path):
         assert exc.value.status == 423
     finally:
         outra.release()
+
+
+def test_upload_sem_content_length_para_na_copia_sem_deixar_rastro(tmp_path):
+    """Cliente que não manda o tamanho (corpo em pedaços): a cópia corta no
+    limite, a pasta temporária some e nenhum projeto é criado."""
+    settings = Settings(
+        workspace=Workspace(tmp_path), port=PORTA, token=TOKEN, limits=Limits(max_file_bytes=1000)
+    )
+    cabecalho = (
+        b"--fronteira\r\n"
+        b'Content-Disposition: form-data; name="file"; filename="x.csv"\r\n'
+        b"Content-Type: text/csv\r\n\r\n"
+    )
+
+    def pedacos():
+        yield cabecalho
+        yield b"a;b\n" * 5000
+        yield b"\r\n--fronteira--\r\n"
+
+    with cliente(settings) as c:
+        r = c.post(
+            "/api/projects",
+            content=pedacos(),
+            headers={"Content-Type": "multipart/form-data; boundary=fronteira"},
+        )
+    assert r.status_code == 413
+    assert r.json()["code"] == "file_too_large"
+    assert "passa de" in r.json()["detail"]
+    assert not any((tmp_path / "uploads").iterdir())
+    assert not (tmp_path / "projects").exists() or not any((tmp_path / "projects").iterdir())
