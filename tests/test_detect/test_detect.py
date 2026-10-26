@@ -276,7 +276,13 @@ def test_passos_da_receita_inicial():
     assert passos == [
         {"op": "select_range", "start": "A1", "end_detect": "auto"},
         {"op": "header_rows", "n": 1},
-        {"op": "drop_rows_where", "col": "Região", "match": "in", "value": ["Total"]},
+        {
+            "op": "drop_rows_where",
+            "col": "Região",
+            "match": "starts_with",
+            "value": "Total",
+            "ignore_case": True,
+        },
         {"op": "fill_down", "cols": ["Região"]},
     ]
 
@@ -295,8 +301,15 @@ def test_passo_de_total_usa_a_celula_que_tem_a_palavra_chave():
     det = detect_structure(grade(linhas))
     assert det.totals == [2, 4, 5]
     assert det.label(0) == "A"  # coluna sem rótulo no cabeçalho usa a letra
+    # Pela palavra, sem diferença de caixa: vale para o 'Total' do mês seguinte.
     assert det.to_steps()[2:] == [
-        {"op": "drop_rows_where", "col": "Item", "match": "in", "value": ["Total parcial", "TOTAL GERAL"]}
+        {
+            "op": "drop_rows_where",
+            "col": "Item",
+            "match": "starts_with",
+            "value": "Total",
+            "ignore_case": True,
+        }
     ]
 
 
@@ -568,10 +581,119 @@ def test_mes_seguinte_com_mais_linhas_vem_inteiro():
     assert aplicar(grade(fevereiro))["Nome"].to_list() == ["Ana", "Bia", "Caio", "Davi", "Eva", "Fábio"]
 
 
-def test_rodape_colado_mantem_o_fim_fixo():
+def test_rodape_colado_sai_pelo_comeco_da_nota():
     """Sem linha vazia entre os dados e a nota, o automático levaria a nota
-    junto: a célula final fica fixa."""
+    junto: a área vai até o fim da grade e a nota sai pelo começo dela."""
     linhas = [["Nome", "Valor"], ["Ana", "1"], ["Bia", "2"], ["Fonte: IBGE, 2024. Elaboração própria."]]
     det = detect_structure(grade(linhas))
     assert det.last_row == 2
-    assert det.to_steps()[0] == {"op": "select_range", "start": "A1", "end": "B3"}
+    assert det.to_steps() == [
+        {"op": "select_range", "start": "A1"},
+        {"op": "header_rows", "n": 1},
+        {"op": "drop_rows_where", "col": "Nome", "match": "starts_with", "value": "Fonte:"},
+    ]
+
+
+def test_nota_que_comeca_como_um_dado_mantem_o_fim_fixo():
+    """A regra da nota ('Fonte') tiraria a linha 'Fonte Nova': a célula final
+    fica fixa."""
+    linhas = [["Nome", "Valor"], ["Fonte Nova", "1"], ["Bia", "2"], ["Fonte Nova é o estádio"]]
+    assert detect_structure(grade(linhas)).to_steps()[0] == {"op": "select_range", "start": "A1", "end": "B3"}
+
+
+def _vendas_do_mes(n: int, comeco: int = 0) -> list[list]:
+    """Exportação de sistema: título, cabeçalho, n vendas, TOTAL GERAL colado
+    nos dados (só duas células) e a fonte depois de uma linha vazia."""
+    vendas = [[f"Loja {i}", f"{i},00", "SP"] for i in range(comeco, comeco + n)]
+    return [
+        ["Vendas do mês"],
+        ["Loja", "Valor", "UF"],
+        *vendas,
+        ["TOTAL GERAL", f"{n},00"],
+        [None],
+        ["Fonte: ERP"],
+    ]
+
+
+def test_total_sai_por_regra_e_o_mes_seguinte_vem_inteiro():
+    """A receita de janeiro (3 vendas) aplicada a fevereiro, com mais linhas,
+    a março, com menos, e a abril, com uma coluna nova: nem corta, nem deixa
+    o total entrar, nem perde a coluna."""
+    passos, aplicar = _receita_inicial(grade(_vendas_do_mes(3)))
+    assert passos == [
+        {"op": "select_range", "start": "A2", "end_detect": "auto"},
+        {"op": "header_rows", "n": 1},
+        {
+            "op": "drop_rows_where",
+            "col": "Loja",
+            "match": "starts_with",
+            "value": "TOTAL",
+            "ignore_case": True,
+        },
+    ]
+    assert aplicar(grade(_vendas_do_mes(6))).height == 6
+    assert aplicar(grade(_vendas_do_mes(2)))["Loja"].to_list() == ["Loja 0", "Loja 1"]
+    abril = _vendas_do_mes(2)
+    abril[1] = [*abril[1], "Canal"]
+    abril[2], abril[3] = [*abril[2], "App"], [*abril[3], "Site"]
+    assert aplicar(grade(abril)).columns == ["Loja", "Valor", "UF", "Canal"]
+
+
+def test_total_que_comeca_como_um_dado_sai_pelo_rotulo():
+    """'Totalmente Nova Ltda' é um fornecedor: a palavra 'Total' tiraria a linha
+    dele, e o passo volta a usar o rótulo inteiro."""
+    linhas = [["Fornecedor", "Valor"], ["Totalmente Nova Ltda", "1"], ["Bia", "2"], ["Total", "3"]]
+    det = detect_structure(grade(linhas))
+    assert det.to_steps()[-1] == {
+        "op": "drop_rows_where",
+        "col": "Fornecedor",
+        "match": "in",
+        "value": ["Total"],
+    }
+
+
+def test_duas_linhas_vazias_no_meio_nao_partem_a_tabela():
+    """Um CSV de chamados com duas linhas vazias seguidas no meio: o bloco de
+    baixo, sem cabeçalho e com os mesmos tipos, continua a tabela."""
+    from wolfz.core.detect import detect_tables
+
+    chamados = [[str(100 + i), f"0{i % 9 + 1}/01/2026", "Aberto"] for i in range(8)]
+    linhas = [["Protocolo", "Abertura", "Status"], *chamados[:4], [None], [None], *chamados[4:]]
+    tabelas = detect_tables(grade(linhas))
+    assert len(tabelas) == 1
+    passos, aplicar = _receita_inicial(grade(linhas))
+    assert passos == [
+        {"op": "select_range", "start": "A1"},
+        {"op": "header_rows", "n": 1},
+        {"op": "drop_empty_rows"},
+    ]
+    assert aplicar(grade(linhas))["Protocolo"].to_list() == [str(100 + i) for i in range(8)]
+
+
+def test_soma_por_acaso_com_codigo_nao_e_total():
+    """Censo escolar: a matrícula de uma escola é a soma das duas de cima, mas
+    o rótulo é o código da escola e só uma coluna fecha. Não é total."""
+    linhas = [
+        ["CO_ENTIDADE", "QT_MAT", "QT_DOC"],
+        ["11000001", "10", "3"],
+        ["11000002", "X", "4"],
+        ["11000003", "12", "5"],
+        ["11000004", "30", "9"],
+        ["11000005", "42", "6"],
+        ["11000006", "X", "2"],
+    ]
+    assert detect_structure(grade(linhas)).totals == []
+
+
+def test_csv_com_total_colado_no_fim_vai_ate_o_fim_da_grade():
+    """CSV que termina no TOTAL GERAL, sem linha vazia: a área vai até o fim
+    da grade e o total sai pela palavra."""
+    linhas = [
+        ["Loja", "Valor", "UF"],
+        *([f"Loja {i}", f"{i},00", "SP"] for i in range(4)),
+        ["TOTAL GERAL", "6,00"],
+    ]
+    passos, aplicar = _receita_inicial(grade(linhas))
+    assert passos[0]["op"] == "select_range" and "end" not in passos[0]
+    mais = [*linhas[:-1], ["Loja 9", "9,00", "RJ"], linhas[-1]]
+    assert aplicar(grade(mais))["Loja"].to_list() == ["Loja 0", "Loja 1", "Loja 2", "Loja 3", "Loja 9"]

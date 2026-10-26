@@ -119,3 +119,12 @@ def test_sugestoes_e_busca():
 def test_tabela_e_somente_leitura_em_cache():
     assert tabela() is tabela()
     assert isinstance(tabela(), pl.DataFrame)
+
+
+@pytest.mark.parametrize(("valor", "uf"), [("A. Jequitibá", "MG"), ("G. Celso Ramos", "SC")])
+def test_abreviacao_desconhecida_vai_para_revisao(valor, uf):
+    """O parecido ignorava a palavra abreviada: 'A. Jequitibá' (Alto
+    Jequitibá) virava Jequitibá, outro município, com status fuzzy."""
+    r = casar_municipio(valor, uf)
+    assert r.status == "revisar"
+    assert r.municipio is None

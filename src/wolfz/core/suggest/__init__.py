@@ -74,6 +74,7 @@ class Contexto:
     total: pl.DataFrame  # a tabela inteira, para o que a amostra não vê (duplicadas)
     passos: list[dict[str, Any]] = field(default_factory=list)  # a receita atual
     _perfis: dict[str, ColumnProfile] = field(default_factory=dict)
+    cache: dict[str, Any] = field(default_factory=dict)  # o que várias regras calculam igual
 
     @property
     def texto(self) -> list[str]:
@@ -122,6 +123,10 @@ def suggest(
     df = data.collect() if isinstance(data, pl.LazyFrame) else data
     ctx = Contexto(sample_rows(df, sample), df, list(steps))
     recusadas = set(rejected)
+    # Uma tabela já despivotada não se despivota de novo: as colunas que
+    # sobraram estão repetidas em cada linha nova, e o segundo despivotar
+    # multiplicaria as linhas (meta do 1º trimestre com o realizado de todos).
+    despivotada = any(p.get("op") == "unpivot" and p.get("enabled", True) for p in ctx.passos)
     saida: list[Suggestion] = []
     for nome, regra in _REGRAS.items():
         try:
@@ -131,6 +136,8 @@ def suggest(
             continue
         for s in achadas:
             if s.confidence < CONFIANCA_MINIMA or (s.rule, None) in recusadas:
+                continue
+            if despivotada and any(p["op"] == "unpivot" for p in s.steps):
                 continue
             if s.cols and all((s.rule, c) in recusadas for c in s.cols):
                 continue

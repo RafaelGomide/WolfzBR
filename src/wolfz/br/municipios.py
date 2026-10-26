@@ -170,7 +170,11 @@ def casar_municipio(valor: object, uf: object = None, limiar: int = LIMIAR_PADRA
         return Resultado("sem_correspondencia")
     (melhor, nota), *resto = candidatos
     empate = bool(resto) and resto[0][1] == nota
-    if nota >= limiar and not empate:
+    # Abreviação que a lista não expande ('A. Jequitibá', 'G. Celso Ramos'):
+    # o parecido ignora a palavra abreviada e acha 'Jequitibá', que é outro
+    # município. Sem saber a palavra, fica para revisão.
+    abreviado = any(t.endswith(".") for t in re.findall(r"[^\s.]+\.?", normalize_key(texto)))
+    if nota >= limiar and not empate and not abreviado:
         return Resultado("fuzzy", melhor, nota, tuple(candidatos))
     return Resultado("revisar", nota=nota, candidatos=tuple(candidatos))
 

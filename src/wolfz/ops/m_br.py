@@ -135,10 +135,10 @@ PERCENTUAL = """
     in
         if Text.Contains(t, "%") then
             let n = WolfzNumeroBr(Text.Replace(t, "%", ""), false, false, "pt-BR")
-            in if n = null then null else n / 100
+            in if n = null then null else Number.Round(n / 100, 15)
         else
             let n = WolfzNumeroBr(t, false, false, "pt-BR")
-            in if n = null then null else if pontos then n / 100 else n
+            in if n = null then null else if pontos then Number.Round(n / 100, 15) else n
 """
 
 DATA_BR = f"""

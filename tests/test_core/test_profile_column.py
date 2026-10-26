@@ -148,3 +148,14 @@ def test_load_table_csv(tmp_path):
 def test_load_table_erro_de_leitura(tmp_path):
     with pytest.raises(IngestError):
         load_table(tmp_path / "nada.xlsx")
+
+
+def test_minimo_e_maximo_de_coluna_ja_convertida():
+    """Coluna Float relida como texto: '0.087' virava 87 (ponto de milhar), e
+    o painel mostrava o CTR máximo como 87%."""
+    p = profile_column(pl.Series("ctr", [0.087, 0.024, 0.09, None]))
+    assert (p.minimum, p.maximum) == (0.024, 0.09)
+    p = profile_column(pl.Series("peso", [1.234, 29.996]))
+    assert (p.minimum, p.maximum) == (1.234, 29.996)
+    p = profile_column(pl.Series("data", [date(2026, 1, 31), date(2025, 2, 1)]))
+    assert (p.minimum, p.maximum) == (date(2025, 2, 1), date(2026, 1, 31))

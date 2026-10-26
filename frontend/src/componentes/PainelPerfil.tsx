@@ -10,6 +10,14 @@ import { CaixaErro, Carregando } from "./Estado";
 const pct = (x: number) =>
   x.toLocaleString("pt-BR", { style: "percent", maximumFractionDigits: 1 });
 
+// Mínimo e máximo como no Brasil: 1.234,5 e 31/12/2024 (a API manda número
+// e data ISO).
+function valorBr(v: number | string): string {
+  if (typeof v === "number") return v.toLocaleString("pt-BR", { maximumFractionDigits: 6 });
+  const data = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  return data ? `${data[3]}/${data[2]}/${data[1]}` : v;
+}
+
 export function PainelPerfil({
   projeto,
   passo,
@@ -67,9 +75,9 @@ export function PainelPerfil({
           {c.minimum != null && (
             <>
               <dt>{T.perfil.minimo}</dt>
-              <dd>{String(c.minimum)}</dd>
+              <dd>{valorBr(c.minimum)}</dd>
               <dt>{T.perfil.maximo}</dt>
-              <dd>{String(c.maximum)}</dd>
+              <dd>{c.maximum != null && valorBr(c.maximum)}</dd>
             </>
           )}
           <dt>{T.perfil.formas}</dt>

@@ -16,7 +16,7 @@ import polars as pl
 
 from wolfz.br.constants import MESES, UFS
 from wolfz.br.datas import parse_date_br, parse_month_year
-from wolfz.br.documentos import clean_cep, clean_cnpj, clean_cpf, cnpj_is_valid, cpf_is_valid
+from wolfz.br.documentos import clean_cep, clean_cnpj, clean_cpf, clean_cpf_cnpj, cnpj_is_valid, cpf_is_valid
 from wolfz.br.numeros import decimal_provavel, parse_number_br
 from wolfz.core.suggest import CONVERSAO, DOCUMENTO, FORMA, LIMPEZA, VERIFICACAO, Contexto, Suggestion, rule
 from wolfz.core.text import (
@@ -49,8 +49,30 @@ def _uteis(ctx: Contexto, col: str) -> list[str]:
     return [v for v in ctx.valores(col) if not is_null_token(v)]
 
 
+_SINAIS_SO_DO_IBGE = SINAIS_IBGE - {"-"}
+
+
+def _tabela_do_ibge(ctx: Contexto) -> bool:
+    """Alguma coluna de número tem um sinal que só o IBGE (e o INEP, o
+    DataSUS) usa: '..', '...' ou 'X'. Sem isso, o '-' sozinho é o "sem
+    valor" de qualquer planilha, não o zero absoluto do IBGE."""
+    if "_ibge" not in ctx.cache:
+        ctx.cache["_ibge"] = any(
+            any(v in _SINAIS_SO_DO_IBGE for v in valores)
+            and any(parse_number_br(v) is not None for v in valores[:200])
+            for valores in (ctx.valores(c) for c in ctx.texto)
+        )
+    return ctx.cache["_ibge"]
+
+
 def _tem_sinais_ibge(ctx: Contexto, col: str) -> bool:
-    return any(v in SINAIS_IBGE for v in ctx.valores(col))
+    return _tabela_do_ibge(ctx) and any(v in SINAIS_IBGE for v in ctx.valores(col))
+
+
+def _quase_unica(s: pl.Series) -> bool:
+    """Coluna que é identificador da linha: 90% ou mais dos valores distintos."""
+    preenchidos = s.drop_nulls()
+    return preenchidos.len() >= 2 and preenchidos.n_unique() >= 0.9 * preenchidos.len()
 
 
 _NOME_DE_CODIGO = re.compile(r"\b(cod|codigo|cd|id|cep|cnpj|cpf|matricula|ibge|cnae|ncm|lote|conta)\b")
@@ -118,9 +140,39 @@ def _conversao(ctx: Contexto, regra: str, tipo: str, op: str, motivo: str, **par
 # ---------------------------------------------------------------------------
 
 
+_NOME_DE_DINHEIRO = re.compile(
+    r"\b(valor|valores|vlr|vl|preco|custo|receita|despesa|saldo|montante|r|reais|renda|salario|frete|"
+    r"faturamento|pagamento|pago|credito|debito|bruto|liquido|imposto|icms|ipi|iss|juros|multa|tarifa|"
+    r"orcado|realizado|limite|indenizado|indenizacao)\b"
+)
+
+
+def _e_dinheiro(ctx: Contexto, col: str) -> bool:
+    """Tem 'R$' em algum valor ou nome de dinheiro ('Valor', 'Salário',
+    'Frete'). '0,09' num 'Score' e '7,62' em 'Horas' têm a forma de reais,
+    mas não são: viram número, e não R$ no Power BI e no Tableau."""
+    return _NOME_DE_DINHEIRO.search(_nome(col)) is not None or any("R$" in v for v in ctx.valores(col))
+
+
 @rule
 def moeda(ctx: Contexto) -> Iterator[Suggestion]:
-    yield from _conversao(ctx, "moeda", "moeda", "parse_brl", "valor em reais escrito como texto")
+    achadas = [(c, t) for c, t in _do_tipo(ctx, "moeda") if _e_dinheiro(ctx, c)]
+    if not achadas:
+        return
+    cols = [c for c, _ in achadas]
+    motivo = "valor em reais escrito como texto"
+    passo: dict = {"op": "parse_brl", "cols": cols}
+    if _debito_credito(ctx, cols):
+        passo["debit_negative"] = True
+        motivo += ", com D (débito) negativo"
+    yield Suggestion(
+        "moeda",
+        (passo,),
+        min(t for _, t in achadas),
+        f"{_lista(cols)}: {motivo}{_exemplo(ctx, cols[0])}.",
+        tuple(cols),
+        order=CONVERSAO,
+    )
 
 
 _MES_ANO = re.compile(r"[a-z]{3,9}\.?\s*[/ -]\s*\d{2,4}|\d{1,2}\s*[/-]\s*(19|20)\d{2}")
@@ -197,7 +249,10 @@ def _decimal_da_tabela(ctx: Contexto, cols: list[str]) -> str:
 
 @rule
 def decimal_br(ctx: Contexto) -> Iterator[Suggestion]:
-    cols = [c for c, _ in _do_tipo(ctx, "numero") if not _so_inteiros(ctx, c)]
+    # Com a forma de reais mas sem 'R$' nem nome de dinheiro: é número.
+    sem_reais = [c for c, _ in _do_tipo(ctx, "moeda") if not _e_dinheiro(ctx, c)]
+    cols = [c for c in ctx.texto if c in sem_reais or c in {c for c, _ in _do_tipo(ctx, "numero")}]
+    cols = [c for c in cols if not _so_inteiros(ctx, c)]
     if not cols:
         return
     decimal = _decimal_da_tabela(ctx, cols)
@@ -263,6 +318,10 @@ def sentinela(ctx: Contexto) -> Iterator[Suggestion]:
         coluna = ctx.total[c].drop_nulls().str.strip_chars()
         # Filtro barato antes de converter a coluna inteira.
         if not coluna.str.contains(r"^-?9{3,5}([.,]0+)?$").any():
+            continue
+        # Coluna de identificador (0 a 99999, inteiros sem repetição): o
+        # 99999 é uma linha, não medição que falta.
+        if coluna.len() >= 20 and _quase_unica(coluna) and coluna.str.contains(r"^-?\d+$").all():
             continue
         distintos = [v for v in coluna.unique().to_list() if v]
         decimal = decimal_provavel(distintos)
@@ -404,6 +463,8 @@ def percentual(ctx: Contexto) -> Iterator[Suggestion]:
 def sinais_ibge(ctx: Contexto) -> Iterator[Suggestion]:
     """Coluna de valor com '-', '..', '...' ou 'X': o '-' é zero, os outros
     não podem virar zero nem sumir em silêncio."""
+    if not _tabela_do_ibge(ctx):
+        return
     cols, virgula = [], False
     for c in ctx.texto:
         valores = ctx.valores(c)
@@ -487,7 +548,9 @@ def mojibake(ctx: Contexto) -> Iterator[Suggestion]:
             0.9,
             f"{_lista(cols)}: acento estragado ('{errado}' é '{fix_mojibake(errado)}').",
             tuple(cols),
-            order=LIMPEZA,
+            # Antes de tirar espaços: 'í' estragado é 'Ã' + hífen suave, e o
+            # trim, tirando o invisível, deixaria o acento sem conserto.
+            order=LIMPEZA - 5,
         )
 
 
@@ -566,6 +629,9 @@ def documento(ctx: Contexto) -> Iterator[Suggestion]:
             if any(x != v for x, v in zip(cnpjs, valores, strict=True)):
                 yield _documento(ctx, c, "clean_cnpj", "CNPJ", taxa_cnpj)
         elif taxa_cpf + taxa_cnpj >= 0.8 and min(taxa_cpf, taxa_cnpj) >= 0.05:
+            # Já limpa (a sugestão aceita): não sugere de novo.
+            if all(clean_cpf_cnpj(v) == v for v in valores):
+                continue
             passo = {"op": "clean_cpf_cnpj", "col": c}
             if (tipo := _coluna_tipo_pessoa(ctx)) is not None and tipo != c:
                 passo["person_type_col"] = tipo
@@ -643,11 +709,12 @@ def codigo_zero_esquerda(ctx: Contexto) -> Iterator[Suggestion]:
         if _NOME_DE_CODIGO.search(nome) and len(tamanhos) > 1 and max(tamanhos) - min(tamanhos) <= 2:
             perdidos.append(c)
     if com_zero:
+        exemplo = next((f" (ex.: '{v}')" for v in _uteis(ctx, com_zero[0]) if v.startswith("0")), "")
         yield Suggestion(
             "codigo_zero_esquerda",
             (),
             0.9,
-            f"{_lista(com_zero)}: código com zero à esquerda{_exemplo(ctx, com_zero[0])}. Mantenha como "
+            f"{_lista(com_zero)}: código com zero à esquerda{exemplo}. Mantenha como "
             "texto: convertido para número, perde o zero e deixa de casar com outras tabelas.",
             tuple(com_zero),
             kind="aviso",
@@ -666,9 +733,52 @@ def codigo_zero_esquerda(ctx: Contexto) -> Iterator[Suggestion]:
         )
 
 
+_DIGITOS_DO_FLOAT = 2**53  # acima disto, o número do Excel já não guarda todos os dígitos
+
+
+def _veio_de_numero(v: str) -> bool:
+    """'81811799688286204678769286504932042579378176': mais de 15 dígitos e
+    exatamente um número de ponto flutuante. É o que sobra de uma chave de
+    44 dígitos que o Excel guardou como número; uma chave de verdade quase
+    nunca cai num valor exato do float."""
+    if not v.isdigit() or len(v) < 16:
+        return False
+    n = int(v)
+    return n > _DIGITOS_DO_FLOAT and int(float(n)) == n
+
+
+@rule
+def precisao_perdida(ctx: Contexto) -> Iterator[Suggestion]:
+    """Código longo (chave de NF-e, código de barras de boleto) que o Excel
+    guardou como número: os dígitos depois do 15º já não são os da fonte, e
+    nenhum passo os traz de volta."""
+    cols = []
+    for c in ctx.texto:
+        valores = _uteis(ctx, c)
+        if valores and any(_veio_de_numero(v) for v in valores):
+            cols.append(c)
+    if cols:
+        exemplo = next(v for v in _uteis(ctx, cols[0]) if _veio_de_numero(v))
+        yield Suggestion(
+            "precisao_perdida",
+            (),
+            0.9,
+            f"{_lista(cols)}: número com mais de 15 dígitos guardado como número no Excel "
+            f"(ex.: '{exemplo}'). O Excel só guarda 15 dígitos: os do fim não são os da fonte. "
+            "Na origem, salve a coluna como texto.",
+            tuple(cols),
+            kind="aviso",
+            order=LIMPEZA,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Forma da tabela
 # ---------------------------------------------------------------------------
+
+
+def _ja_despivotou(ctx: Contexto) -> bool:
+    return any(p.get("op") == "unpivot" and p.get("enabled", True) for p in ctx.passos)
 
 
 def _linhas_vazias(df: pl.DataFrame) -> pl.Series:
@@ -700,6 +810,10 @@ def linhas_vazias(ctx: Contexto) -> Iterator[Suggestion]:
 @rule
 def duplicadas(ctx: Contexto) -> Iterator[Suggestion]:
     if ctx.total.height < 2:
+        return
+    # Depois de despivotar, linhas iguais vêm da forma da tabela (centro de
+    # custo vazio, sem o preencher para baixo), não de duplicação.
+    if _ja_despivotou(ctx):
         return
     # Linha vazia repetida é assunto da regra linhas_vazias.
     cheias = ctx.total.filter(~_linhas_vazias(ctx.total))
@@ -780,6 +894,9 @@ def coluna_constante(ctx: Contexto) -> Iterator[Suggestion]:
         and ctx.total[c].n_unique() == 1
         and not _NOMES_DE_PERIODO.search(_nome(c))
         and ctx.total.schema[c] == pl.String
+        # Medida ('12:00' de saída para o almoço, '0'): constante neste
+        # arquivo, não no próximo. Só rótulo fixo ('BRL', 'Empresa X') sai.
+        and not re.search(r"\d", str(ctx.total[c][0]))
     ]
     if cols and len(cols) < ctx.total.width:
         yield Suggestion(
@@ -934,12 +1051,19 @@ def series_lado_a_lado(ctx: Contexto) -> Iterator[Suggestion]:
     if _periodos(ctx.total.columns):
         return
     grupos: dict[str, list[str]] = {}
+    numeros: dict[str, set[str]] = {}
     for c in ctx.total.columns:
         if (r := _radical(c)) and _numerica(ctx, c):
             grupos.setdefault(r[0], []).append(c)
-    for radical, cols in grupos.items():
-        if len(cols) < 3:
-            continue
+            numeros.setdefault(r[0], set()).add(r[1])
+    series = [g for g, cols in grupos.items() if len(cols) >= 3]
+    # Duas medidas na mesma numeração ('1º Trimestre_Meta' e '1º
+    # Trimestre_Realizado'): despivotar uma deixa a outra repetida em cada
+    # linha nova, e despivotar a segunda depois multiplica as linhas.
+    if any(numeros[a] & numeros[b] for i, a in enumerate(series) for b in series[i + 1 :]):
+        return
+    for radical in series:
+        cols = grupos[radical]
         totais = [c for c in ctx.total.columns if c not in cols and _e_total(c)]
         yield _despivotar(
             "series_lado_a_lado",
@@ -1064,6 +1188,10 @@ def verificar_preenchidas(ctx: Contexto) -> Iterator[Suggestion]:
         )
 
 
+_ATRIBUTO = re.compile(r"\b(cep|conta|lote|cnae|ncm)\b")
+_DOCUMENTO = re.compile(r"\b(cpf|cnpj)\b")
+
+
 @rule
 def verificar_unicos(ctx: Contexto) -> Iterator[Suggestion]:
     """Código ou documento sem repetição (CPF, CNPJ, código IBGE, ID) vira
@@ -1071,9 +1199,14 @@ def verificar_unicos(ctx: Contexto) -> Iterator[Suggestion]:
     if not ctx.passos or ctx.total.height < 2:
         return
     ja = _ja_verificadas(ctx, "unique")
-    for c in ctx.total.columns:
-        if c in ja or not _NOME_DE_CODIGO.search(_nome(c)):
-            continue
+    candidatas = [c for c in ctx.total.columns if c not in ja and _NOME_DE_CODIGO.search(_nome(c))]
+    # CEP, conta, lote, CNAE e NCM se repetem por natureza. CPF e CNPJ só
+    # identificam a linha num cadastro: com outro identificador na tabela
+    # (matrícula, ID), o documento é do cliente da venda e vai se repetir.
+    candidatas = [c for c in candidatas if not _ATRIBUTO.search(_nome(c))]
+    if any(not _DOCUMENTO.search(_nome(c)) for c in candidatas):
+        candidatas = [c for c in candidatas if not _DOCUMENTO.search(_nome(c))]
+    for c in candidatas:
         s = ctx.total[c]
         if s.null_count() == 0 and s.n_unique() == ctx.total.height:
             yield Suggestion(

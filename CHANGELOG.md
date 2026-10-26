@@ -18,8 +18,34 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 | [0.8.0](#080---2026-10-22) | 2026-10-22 | Tableau (`.hyper` + `.tds`) |
 | [0.9.0](#090---2026-10-22) | 2026-10-22 | Power BI (projeto `.pbip`) |
 | [1.0.0](#100---2026-10-24) | 2026-10-24 | Formato da receita e API em Python estáveis, desempenho, segurança, documentação e publicação automática |
+| [1.0.1](#101---2026-10-26) | 2026-10-26 | Correções do teste de fogo: receita inicial sem cortar o mês seguinte e sugestões que não estragam dado |
 
 ## [Não publicado]
+
+## [1.0.1] - 2026-10-26
+
+Correções do teste de fogo: uma squad simulada limpou 30 bases de empresa (cerca de 7,5 milhões de linhas: ERP, SAP, CRM, folha, ponto, cartão, Censo Escolar, SIDRA) e achou casos em que a receita inicial ou o "Aceitar todas" perdia, inventava ou multiplicava linhas sem avisar. Nenhuma operação nem parâmetro da receita muda, e as receitas já salvas rodam igual, com duas exceções que corrigem dado errado: `parse_percent` sem o resto do ponto flutuante e `normalize_municipio` mandando para revisão a abreviação desconhecida. As receitas novas saem com passos melhores.
+
+### Corrigido
+
+- **A receita reaplicada a um arquivo com mais linhas ainda cortava a tabela sem aviso quando havia total ou nota colados nos dados.** A 1.0.0 só deixava o fim livre quando a tabela terminava numa linha vazia; com `TOTAL GERAL` na última linha de um CSV, a área ficava fixa (`A1:H300001`), e o mês seguinte, com 330 mil linhas, saía com 300 mil e código 0. Com menos linhas, o total entrava nos dados e a soma dobrava; uma coluna nova era descartada. Agora a área vai até o fim da grade e o que sobra sai por regra: linhas vazias (`drop_empty_rows`), o total pela palavra (`começa com "TOTAL"`, sem diferença de caixa) e a nota de rodapé pelo começo do texto (`começa com "Fonte:"`). A célula final só fica fixa quando nenhuma regra tira o que está colado embaixo ou ao lado.
+- **Duas linhas vazias seguidas no meio de um CSV partiam a tabela, e a receita usava só o primeiro pedaço** (num arquivo de 400 mil chamados, sumiam 136 mil). O bloco de baixo, sem cabeçalho, nas mesmas colunas e com os mesmos tipos, agora continua a tabela de cima.
+- **A detecção de total pela soma apagava linhas de dado** numa tabela grande, quando um valor fechava por acaso com os de cima, e gravava o código delas na receita (`drop_rows_where CO_ENTIDADE in ["40647542", …]`). Pela soma, o rótulo agora precisa ter letra: o código de uma linha de dado não é subtotal.
+- Subtotais saíam por uma lista fixa de rótulos (`"Subtotal Sudeste"`, `"Subtotal Sul"`): uma região nova no mês seguinte passava. Agora saem pela palavra (`começa com "Subtotal"`), a não ser que ela também tire uma linha de dado (um fornecedor "Totalmente Nova Ltda"), quando o passo volta a usar os rótulos.
+- **"Aceitar todas" despivotava duas medidas da mesma numeração** (Meta e Realizado por trimestre) uma depois da outra, multiplicando as linhas por 4 e pareando a meta do 1º trimestre com o realizado de todos. Tabela com duas séries na mesma numeração não recebe mais a sugestão de despivotar, e nenhuma sugestão despivota uma tabela que a receita já despivotou.
+- **A sugestão de remover duplicadas apagava lançamentos legítimos** numa DRE despivotada sem o "preencher para baixo" (1.604 de 66 mil linhas). Depois de despivotar, linhas iguais vêm da forma da tabela, e a sugestão não aparece.
+- **O conserto de acento estragado não funcionava depois do "tirar espaços"**: 'í' estragado é 'Ã' mais um hífen invisível, que o `trim` tirava, e o `fix_mojibake` deixava o nome inteiro sem conserto ('ThaÃs AssunÃ§Ã£o'). A sugestão de acento agora vem antes da de espaços.
+- A sugestão de "valor que marca medição que falta" anulava o `99999` de uma coluna de identificadores (0 a 99999): coluna de inteiros sem repetição fica de fora.
+- A sugestão de CPF e CNPJ na mesma coluna voltava depois de aceita, e o "Aceitar todas" empilhava o mesmo passo várias vezes.
+- Qualquer número com duas casas decimais virava "valor em reais" (`parse_brl`), e um score de 0 a 1 ou horas trabalhadas saíam com formato R$ no Power BI e no Tableau. A sugestão de moeda agora exige `R$` no valor ou nome de dinheiro na coluna (valor, preço, salário, frete…); o resto é número (`parse_decimal_br`).
+- A sugestão dos sinais do IBGE aparecia em qualquer coluna com `-` (numa planilha de transferências, 4.895 valores `-` viravam R$ 0,00). Ela só vale quando a tabela tem um sinal que só o IBGE usa (`..`, `...`, `X`); fora disso, `-` é vazio.
+- O aviso de "código com zero à esquerda" mostrava um exemplo sem zero. E um número de mais de 15 dígitos que o Excel guardou como número (chave de NF-e) aparecia com 44 dígitos inventados sem aviso: agora há um aviso de que os dígitos do fim não são os da fonte.
+- A sugestão de verificar "não se repete" aparecia em CEP, conta, lote, CNAE e NCM, que se repetem por natureza, e em CPF ou CNPJ mesmo com matrícula ou ID na tabela (o documento do cliente de uma venda se repete). O arquivo do mês seguinte falhava na verificação.
+- A sugestão de tirar coluna constante tirava medidas que só eram constantes naquele arquivo (`12:00` de saída para o almoço); agora só rótulos fixos sem número (`BRL`).
+- O perfil da coluna mostrava mínimo e máximo errados numa coluna já convertida em número: `0.087` era relido como `87` (ponto de milhar), e o CTR máximo aparecia como 87%. Também mostra os valores no formato brasileiro (`1.234,5` e `31/12/2024`).
+- `parse_percent` gravava o resto do ponto flutuante (`4,22%` saía `0.042199999999999994` no CSV); agora `0.0422`, igual no WolfzBR, no M e no script Python.
+- Município com abreviação que a lista não conhece ('A. Jequitibá', 'G. Celso Ramos') era casado por semelhança com outro município (Jequitibá, Celso Ramos), com status `fuzzy`. Agora fica para revisão.
+- O aviso de várias tabelas dizia "Esta aba" também para CSV.
 
 ## [1.0.0] - 2026-10-24
 
@@ -287,7 +313,8 @@ Primeira versão: receita, três operações e `wolfz run`. Ainda não publicada
 
 - `clean_cnpj` descartava CNPJ alfanumérico válido que parecia notação científica (ex.: `00.000.000/000E-20`).
 
-[Não publicado]: https://github.com/RafaelGomide/WolfzBR/compare/v1.0.0...HEAD
+[Não publicado]: https://github.com/RafaelGomide/WolfzBR/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/RafaelGomide/WolfzBR/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.9.0...v1.0.0
 [0.9.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/RafaelGomide/WolfzBR/compare/v0.7.0...v0.8.0

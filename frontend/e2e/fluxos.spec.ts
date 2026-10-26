@@ -203,7 +203,7 @@ test("aba com duas tabelas: trocar a receita para a segunda", async ({ page }) =
   await importar(page, arquivo("anuario_tabelas_lado_a_lado"));
   await esperarProjeto(page, "anuario_tabelas_lado_a_lado.xlsx");
 
-  const tabelas = page.getByRole("group", { name: /Esta aba tem 2 tabelas/ });
+  const tabelas = page.getByRole("group", { name: /Foram encontradas 2 tabelas/ });
   await expect(tabelas.getByRole("button", { name: "Tabela 1 (A2:C10)" })).toHaveAttribute(
     "aria-pressed",
     "true",

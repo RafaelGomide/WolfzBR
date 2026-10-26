@@ -102,7 +102,15 @@ def profile_column(series: pl.Series) -> ColumnProfile:
     inferred, rate = infer_br_type(values, sample=len(values) or 1)
 
     minimum = maximum = None
-    if convert := _ORDENAVEIS.get(inferred):
+    if series.dtype.is_numeric() or series.dtype == pl.Date:
+        # Já convertida: o mínimo e o máximo são os da coluna. Relida como
+        # texto, '0.087' seria 87 (ponto de milhar).
+        preenchida = series.drop_nulls()
+        if series.dtype.is_numeric():
+            preenchida = preenchida.cast(pl.Float64).filter(preenchida.cast(pl.Float64).is_finite())
+        if preenchida.len():
+            minimum, maximum = preenchida.min(), preenchida.max()
+    elif convert := _ORDENAVEIS.get(inferred):
         converted = [c for v in filled if (s := clean_text(v)) is not None and (c := convert(s)) is not None]
         if converted:
             minimum, maximum = min(converted), max(converted)

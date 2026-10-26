@@ -20,7 +20,8 @@
    negrito é raro; ou linha cujo valor é a soma das linhas de baixo até o
    próximo subtotal (como o IBGE publica: 'Região Norte' antes dos estados)
    ou das de cima desde o subtotal anterior. O total geral é a soma dos
-   subtotais ('Brasil' = soma das regiões).
+   subtotais ('Brasil' = soma das regiões). Pela soma, o rótulo precisa ter
+   letra: código de linha ('40647542') não é subtotal.
 5. **Título e notas** (C5): linhas de uma célula só acima do cabeçalho e
    abaixo da região viram metadados.
 6. **Mesclagem vertical** (C6): coluna com células mescladas na vertical
@@ -28,11 +29,18 @@
 7. **Várias tabelas** (D3, ``detect_tables``): a aba é dividida em zonas
    separadas por duas ou mais linhas vazias, ou por uma coluna vazia quando
    os dois lados têm pelo menos duas colunas (tabelas lado a lado), e cada
-   zona é detectada à parte. ``detect_structure`` devolve a principal: a de
+   zona é detectada à parte. Zona sem cabeçalho, logo abaixo de outra, nas
+   mesmas colunas e com os mesmos tipos é continuação da de cima (linhas
+   vazias no meio de um CSV). ``detect_structure`` devolve a principal: a de
    mais linhas de dados, a primeira em caso de empate.
 8. **Passos** (C7): ``Detection.to_steps()`` devolve ``select_range``,
-   ``header_rows``, ``drop_rows_where`` e ``fill_down`` para a receita
-   inicial. A detecção não transforma nada.
+   ``header_rows``, ``drop_empty_rows``, ``drop_rows_where`` e
+   ``fill_down`` para a receita inicial. A área não fixa a célula final
+   quando dá para evitar: fim automático (até a primeira linha vazia) se ele
+   recorta a mesma tabela; senão, até o fim da grade, com as linhas vazias,
+   o total e a nota de rodapé tirados por regra (o total pela palavra, a
+   nota pelo começo do texto). Só quando nenhuma regra tira o que sobra a
+   célula final fica fixa. A detecção não transforma nada.
 """
 
 from __future__ import annotations
@@ -43,7 +51,7 @@ import re
 from collections import Counter
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import polars as pl
@@ -83,9 +91,17 @@ class Detection:
     notes: list[str] = field(default_factory=list)
     labels: dict[int, str] = field(default_factory=dict)  # coluna -> nome depois do header_rows
     total_cells: dict[int, tuple[int, str]] = field(default_factory=dict)  # linha -> (coluna, rótulo)
+    # Linha de total pela palavra-chave -> o começo do rótulo ('TOTAL',
+    # 'Subtotal') que o passo usa, quando nenhuma linha de dado começa igual.
+    total_prefixes: dict[int, str] = field(default_factory=dict)
     # O fim automático do select_range (até a primeira linha vazia) recorta
     # esta mesma área: a receita inicial não fixa a última linha.
     fim_automatico: bool = False
+    # Sem fim automático, a área ainda pode ir até o fim da grade quando o
+    # que sobra (linhas vazias, total, nota de rodapé) sai por regra: as
+    # linhas vazias e as regras das linhas de baixo (coluna, começo do texto,
+    # sem diferença de caixa). ``None``: não dá, e a célula final fica fixa.
+    ate_o_fim: tuple[bool, list[tuple[int, str, bool]]] | None = None
 
     @property
     def top_row(self) -> int:
@@ -117,26 +133,48 @@ class Detection:
 
     def to_steps(self) -> list[dict[str, Any]]:
         """Passos da receita inicial, sem ``id`` (quem monta a receita numera)."""
-        # Com fim automático, o arquivo do mês seguinte, com mais linhas, vem
-        # inteiro; com a célula final fixa, ele seria cortado sem aviso.
+        # Com fim automático ou até o fim da grade, o arquivo do mês seguinte,
+        # com mais linhas ou uma coluna nova, vem inteiro; com a célula final
+        # fixa, ele seria cortado sem aviso (e, com menos linhas, o total
+        # entraria nos dados).
         area: dict[str, Any] = {"op": "select_range", "start": to_a1(self.top_row, self.first_col)}
         if self.fim_automatico:
             area["end_detect"] = "auto"
-        else:
+        elif self.ate_o_fim is None:
             area["end"] = to_a1(self.last_row, self.last_col)
         steps: list[dict[str, Any]] = [area]
         if self.header_levels == 1:
             steps.append({"op": "header_rows", "n": 1})
         elif self.header_levels > 1:
             steps.append({"op": "header_rows", "n": self.header_levels, "separator": JUNTAR_NIVEIS})
+        vazias, notas = self.ate_o_fim if self.ate_o_fim is not None else (False, [])
+        if vazias:
+            steps.append({"op": "drop_empty_rows"})
+        # Total com a palavra-chave sai pela palavra ('Subtotal Norte' e o
+        # 'Subtotal Sul' do mês seguinte); o achado pela soma ou pelo negrito,
+        # pelo rótulo.
+        prefixos: dict[int, list[str]] = {}
         por_coluna: dict[int, list[str]] = {}
         for r in self.totals:
             col, valor = self.total_cells[r]
-            por_coluna.setdefault(col, [])
-            if valor not in por_coluna[col]:
+            if (prefixo := self.total_prefixes.get(r)) is not None:
+                if prefixo.casefold() not in (p.casefold() for p in prefixos.setdefault(col, [])):
+                    prefixos[col].append(prefixo)
+            elif valor not in por_coluna.setdefault(col, []):
                 por_coluna[col].append(valor)
+
+        def tirar(col: int, match: str, valor: Any, **extra: Any) -> dict[str, Any]:
+            return {"op": "drop_rows_where", "col": self.label(col), "match": match, "value": valor, **extra}
+
+        for col, valores in prefixos.items():
+            steps += [tirar(col, "starts_with", v, ignore_case=True) for v in valores]
         for col, valores in por_coluna.items():
-            steps.append({"op": "drop_rows_where", "col": self.label(col), "match": "in", "value": valores})
+            if valores:
+                steps.append(tirar(col, "in", valores))
+        for col, prefixo, sem_caixa in notas:
+            if sem_caixa and prefixo.casefold() in (p.casefold() for p in prefixos.get(col, [])):
+                continue  # o total de baixo já sai com o passo dos totais
+            steps.append(tirar(col, "starts_with", prefixo, **({"ignore_case": True} if sem_caixa else {})))
         if self.fill_down:
             steps.append({"op": "fill_down", "cols": [self.label(c) for c in self.fill_down]})
         return steps
@@ -333,13 +371,155 @@ def _detect_tables(df: pl.DataFrame, structure: SheetStructure | None) -> list[D
         zona = _recorte(df, linhas, colunas)
         det = _detecta(zona, structure)
         if det is not None and det.last_row >= det.first_row:
-            det.fim_automatico = _fim_automatico_equivale(df, det)
             tabelas.append(det)
+    tabelas = _continuacoes(sorted(tabelas, key=lambda t: (t.top_row, t.first_col)), kinds)
     if len(tabelas) > 1:
         # Zona que não tem dados de verdade (uma nota solta, um título) não
         # conta como tabela.
         tabelas = [t for t in tabelas if t.last_row - t.first_row >= 1] or tabelas
-    return sorted(tabelas, key=lambda t: (t.top_row, t.first_col))
+    for det in tabelas:
+        det.total_prefixes = _prefixos_de_total(df, det)
+        det.fim_automatico = _fim_automatico_equivale(df, det)
+        if not det.fim_automatico:
+            det.ate_o_fim = _ate_o_fim(df, det)
+    return tabelas
+
+
+def _assinatura(kinds: pl.DataFrame, det: Detection, amostra: int = 300) -> list[int]:
+    """O tipo mais comum de cada coluna nas primeiras linhas de dados (0 se a
+    coluna está vazia nelas)."""
+    trecho = kinds.slice(det.first_row, min(amostra, det.last_row - det.first_row + 1))
+    saida = []
+    for col in range(det.first_col, det.last_col + 1):
+        letra = column_letter(col)
+        contagem = Counter(v for v in trecho[letra].to_list() if v) if letra in trecho.columns else Counter()
+        saida.append(contagem.most_common(1)[0][0] if contagem else 0)
+    return saida
+
+
+def _continua(a: Detection, b: Detection, kinds: pl.DataFrame) -> bool:
+    """``b`` é a continuação de ``a``: veio logo abaixo, sem cabeçalho, nas
+    mesmas colunas e com os mesmos tipos. Duas linhas vazias no meio de um
+    CSV de chamados não fazem duas tabelas."""
+    if b.header_row is not None or a.notes or b.top_row <= a.last_row:
+        return False
+    if b.first_col < a.first_col or b.last_col > a.last_col:
+        return False
+    cima = _assinatura(kinds, a)
+    baixo = _assinatura(kinds, replace(b, first_col=a.first_col, last_col=a.last_col))
+    comparadas = [(x, y) for x, y in zip(cima, baixo, strict=True) if x and y]
+    return len(comparadas) * 2 >= len(cima) and all(x == y for x, y in comparadas)
+
+
+def _continuacoes(tabelas: list[Detection], kinds: pl.DataFrame) -> list[Detection]:
+    """Junta cada tabela às continuações dela (``_continua``)."""
+    saida: list[Detection] = []
+    for t in tabelas:
+        if saida and _continua(saida[-1], t, kinds):
+            a = saida[-1]
+            a.last_row = t.last_row
+            a.total_cells.update(t.total_cells)
+            a.totals = sorted(a.total_cells)
+            a.fill_down = sorted({*a.fill_down, *t.fill_down})
+            a.notes = t.notes
+            continue
+        saida.append(t)
+    return saida
+
+
+_PALAVRA_DE_TOTAL = re.compile(r"(?i)((?:sub-?\s*)?total|soma)(?=\W|$)")
+
+
+def _comecam_com(df: pl.DataFrame, det: Detection, col: int, prefixo: str) -> list[int]:
+    """Linhas de dados (absolutas) em que a coluna começa com ``prefixo``,
+    sem diferença de caixa: a regra do ``drop_rows_where`` com ``starts_with``
+    e ``ignore_case``."""
+    letra = column_letter(col)
+    if letra not in df.columns:
+        return []
+    trecho = df[letra].slice(det.first_row, det.last_row - det.first_row + 1).cast(pl.String)
+    casa = trecho.str.to_lowercase().str.starts_with(prefixo.lower()).fill_null(False)
+    return [det.first_row + i for i in casa.arg_true().to_list()]
+
+
+def _prefixos_de_total(df: pl.DataFrame, det: Detection) -> dict[int, str]:
+    """Para cada total achado pela palavra-chave no começo do rótulo, a
+    palavra ('TOTAL', 'Subtotal'), se ela tira só linhas de total: um
+    fornecedor chamado 'Total Distribuidora' faz o passo voltar a usar o
+    rótulo inteiro."""
+    saida: dict[int, str] = {}
+    for r, (col, _) in det.total_cells.items():
+        bruto = df[column_letter(col)][r]
+        m = _PALAVRA_DE_TOTAL.match(str(bruto)) if bruto is not None else None
+        if m is None:
+            continue
+        if set(_comecam_com(df, det, col, m.group(1))) <= set(det.totals):
+            saida[r] = m.group(1)
+    return saida
+
+
+def _prefixo_de_nota(valor: object) -> str | None:
+    """Começo estável de uma nota de rodapé: até os dois-pontos ('Fonte:',
+    'Notas:') ou a primeira palavra ('Elaboração')."""
+    texto = str(valor)
+    if not texto or texto[0].isspace():
+        return None
+    if m := re.match(r"[^:\n]{1,30}:", texto):
+        return m.group(0)
+    m = re.match(r"[^\s:]{3,}", texto)
+    return m.group(0) if m else None
+
+
+def _ate_o_fim(df: pl.DataFrame, det: Detection) -> tuple[bool, list[tuple[int, str, bool]]] | None:
+    """A área pode ir até o fim da grade, sem célula final fixa? Pode quando
+    vai até a última coluna e o que fica fora dos dados sai por regra:
+    linhas vazias (``drop_empty_rows``), totais e notas de uma célula só na
+    primeira coluna (``drop_rows_where`` pelo começo do texto). Devolve se
+    há linha vazia e os prefixos das notas; ``None`` se sobra outra coisa
+    (dado colado embaixo, nota em outra coluna)."""
+    if max(column_index(c) for c in df.columns) != det.last_col:
+        return None
+    colunas = [c for c in df.columns if column_index(c) >= det.first_col]
+    preenchida = [
+        (pl.col(c).is_not_null() & (pl.col(c).cast(pl.String).str.strip_chars() != "")).cast(pl.Int32)
+        for c in colunas
+    ]
+    cheias = df.select(pl.sum_horizontal(preenchida)).to_series()
+    vazias = bool((cheias.slice(det.first_row, det.last_row - det.first_row + 1) == 0).any())
+    primeira = column_letter(det.first_col)
+    notas: list[tuple[int, str, bool]] = []
+    for r in range(det.last_row + 1, df.height):
+        if cheias[r] == 0:
+            vazias = True
+            continue
+        if (total := _total_abaixo(df, det, r)) is not None:
+            regra = (*total, True)
+        else:
+            valor = df[primeira][r] if primeira in df.columns else None
+            if cheias[r] != 1 or valor is None or not str(valor).strip():
+                return None
+            if (prefixo := _prefixo_de_nota(valor)) is None or _comecam_com(df, det, det.first_col, prefixo):
+                return None
+            regra = (det.first_col, prefixo, False)
+        if regra not in notas:
+            notas.append(regra)
+    return vazias, notas
+
+
+def _total_abaixo(df: pl.DataFrame, det: Detection, r: int) -> tuple[int, str] | None:
+    """Linha abaixo dos dados que começa com 'Total' numa das três primeiras
+    colunas ('TOTAL GERAL;;;;R$ 1.234'): a coluna e a palavra, se a palavra
+    não tira nenhuma linha de dado."""
+    for col in range(det.first_col, min(det.first_col + 3, det.last_col + 1)):
+        letra = column_letter(col)
+        valor = df[letra][r] if letra in df.columns else None
+        if valor is None or not str(valor).strip():
+            continue
+        m = _PALAVRA_DE_TOTAL.match(str(valor))
+        if m is None or set(_comecam_com(df, det, col, m.group(1))) - set(det.totals):
+            return None
+        return col, m.group(1)
+    return None
 
 
 def _fim_automatico_equivale(df: pl.DataFrame, det: Detection) -> bool:
@@ -595,13 +775,19 @@ def _totais(
             if c in dados.columns and det.first_col <= column_index(c) <= det.last_col
         ]
         achadas = {det.first_row + i for c in colunas for i in _somas(_numeros(dados[c].to_list()))}
-        rotulos = {r: _primeiro_texto(df, r, det, offset) for r in range(det.first_row, det.last_row + 1)}
-        repetidos = Counter(c[1] for c in rotulos.values() if c is not None)
+        rotulos = {r: _primeiro_texto(df, r, det, offset) for r in achadas}
+        if achadas:
+            todos = (_primeiro_texto(df, r, det, offset) for r in range(det.first_row, det.last_row + 1))
+            repetidos = Counter(c[1] for c in todos if c is not None)
         for r in sorted(achadas):
             # Subtotal tem nome próprio ('Grande porte', 'Região Norte'). Rótulo
             # que se repete nas outras linhas ('Vitória' em janeiro, fevereiro e
             # março) é linha de dado, e a soma fechou por acaso ('3' = '1' + '2').
-            if (celula := rotulos[r]) is not None and repetidos[celula[1]] == 1 and r not in celulas:
+            # Rótulo sem letra ('40647542') é código de uma linha de dado.
+            celula = rotulos[r]
+            if celula is None or repetidos[celula[1]] != 1 or r in celulas:
+                continue
+            if any(ch.isalpha() for ch in celula[1]):
                 celulas[r] = celula
 
     det.totals = sorted(celulas)

@@ -203,13 +203,15 @@ def parse_percent_br(value: object, bare: str = "fraction") -> float | None:
     if value is None:
         return None
     s = normalize_spaces(str(value))
+    # n / 100 arredondado: 4,22% é 0.0422, não 0.042199999999999994 (que
+    # apareceria assim no CSV exportado).
     if "%" in s:
         n = parse_number_br(s.replace("%", ""))
-        return None if n is None else n / 100
+        return None if n is None else round(n / 100, 15)
     n = parse_number_br(s)
     if n is None:
         return None
-    return n / 100 if bare == "points" else n
+    return round(n / 100, 15) if bare == "points" else n
 
 
 def scale_from_unit(unit: str | None) -> int:

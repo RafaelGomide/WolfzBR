@@ -159,3 +159,11 @@ def test_parse_ibge_value(value, expected):
 )
 def test_decimal_provavel(valores, esperado):
     assert decimal_provavel(valores) == esperado
+
+
+@pytest.mark.parametrize(("value", "expected"), [("4,22%", 0.0422), ("2,05%", 0.0205), ("0,7%", 0.007)])
+def test_parse_percent_br_sem_resto_do_ponto_flutuante(value, expected):
+    """4,22 / 100 em ponto flutuante é 0.042199999999999994, que ia assim para
+    o CSV exportado."""
+    assert parse_percent_br(value) == expected
+    assert repr(parse_percent_br(value)) == repr(expected)
