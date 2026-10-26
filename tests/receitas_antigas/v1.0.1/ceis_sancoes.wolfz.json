@@ -1,0 +1,41 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "ceis sancoes",
+  "source": {
+    "type": "csv"
+  },
+  "steps": [
+    {
+      "id": "s1",
+      "mapping": {
+        "CADASTRO": "cadastro",
+        "CPF OU CNPJ DO SANCIONADO": "cpf_cnpj",
+        "CÓDIGO DA SANÇÃO": "codigo_sancao",
+        "DATA FINAL SANÇÃO": "data_final",
+        "DATA INÍCIO SANÇÃO": "data_inicio",
+        "NOME DO SANCIONADO": "nome",
+        "TIPO DE PESSOA": "tipo_pessoa",
+        "UF ÓRGÃO SANCIONADOR": "uf"
+      },
+      "op": "rename"
+    },
+    {
+      "col": "cpf_cnpj",
+      "id": "s2",
+      "op": "clean_cpf_cnpj",
+      "person_type_col": "tipo_pessoa"
+    },
+    {
+      "accept_excel_serial": true,
+      "century_pivot": 30,
+      "cols": [
+        "data_inicio",
+        "data_final"
+      ],
+      "eight_digits": "auto",
+      "id": "s3",
+      "op": "parse_date_br"
+    }
+  ],
+  "wolfz_version": "1.0"
+}

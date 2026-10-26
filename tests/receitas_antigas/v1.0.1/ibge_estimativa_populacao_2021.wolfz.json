@@ -1,0 +1,74 @@
+{
+  "created_at": "2026-10-16T00:00:00Z",
+  "name": "ibge estimativa populacao 2021",
+  "source": {
+    "sheet": "BRASIL E UFs",
+    "type": "excel"
+  },
+  "steps": [
+    {
+      "end_detect": "auto",
+      "id": "s1",
+      "op": "select_range",
+      "start": "A2"
+    },
+    {
+      "id": "s2",
+      "n": 1,
+      "op": "header_rows",
+      "separator": " "
+    },
+    {
+      "id": "s3",
+      "op": "drop_empty_cols"
+    },
+    {
+      "id": "s4",
+      "mapping": {
+        "BRASIL E UNIDADES DA FEDERAÇÃO": "uf",
+        "POPULAÇÃO ESTIMADA": "populacao"
+      },
+      "op": "rename"
+    },
+    {
+      "col": "uf",
+      "id": "s5",
+      "ignore_case": false,
+      "match": "in",
+      "op": "drop_rows_where",
+      "value": [
+        "Brasil",
+        "Região Norte",
+        "Região Nordeste",
+        "Região Sudeste",
+        "Região Sul",
+        "Região Centro-Oeste"
+      ]
+    },
+    {
+      "cols": [
+        "populacao"
+      ],
+      "id": "s6",
+      "op": "strip_footnotes"
+    },
+    {
+      "cols": [
+        "populacao"
+      ],
+      "dash_is_zero": false,
+      "debit_negative": false,
+      "decimal": ",",
+      "id": "s7",
+      "op": "parse_decimal_br"
+    },
+    {
+      "id": "s8",
+      "op": "cast",
+      "types": {
+        "populacao": "int"
+      }
+    }
+  ],
+  "wolfz_version": "1.0"
+}

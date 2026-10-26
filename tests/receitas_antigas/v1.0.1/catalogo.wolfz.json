@@ -1,0 +1,744 @@
+{
+  "created_at": "2026-01-01T00:00:00Z",
+  "name": "catálogo",
+  "source": {
+    "type": "csv"
+  },
+  "steps": [
+    {
+      "check": "not_null",
+      "cols": [
+        "cpf"
+      ],
+      "id": "s1",
+      "op": "assert"
+    },
+    {
+      "check": "unique",
+      "cols": [
+        "uf",
+        "ano"
+      ],
+      "id": "s2",
+      "op": "assert"
+    },
+    {
+      "check": "in_range",
+      "cols": [
+        "v"
+      ],
+      "id": "s3",
+      "max": 100.0,
+      "min": 0.0,
+      "op": "assert"
+    },
+    {
+      "check": "matches",
+      "cols": [
+        "cep"
+      ],
+      "id": "s4",
+      "op": "assert",
+      "pattern": "\\d{8}"
+    },
+    {
+      "check": "row_count_min",
+      "cols": [],
+      "id": "s5",
+      "min_rows": 2,
+      "op": "assert"
+    },
+    {
+      "cols": [
+        "a"
+      ],
+      "id": "s6",
+      "mode": "upper",
+      "op": "case"
+    },
+    {
+      "cols": [
+        "a"
+      ],
+      "id": "s7",
+      "mode": "lower",
+      "op": "case"
+    },
+    {
+      "cols": [
+        "a"
+      ],
+      "id": "s8",
+      "mode": "title",
+      "op": "case"
+    },
+    {
+      "id": "s9",
+      "op": "cast",
+      "types": {
+        "b": "bool",
+        "d": "date",
+        "q": "int",
+        "t": "text",
+        "v": "float"
+      }
+    },
+    {
+      "cols": [
+        "cep"
+      ],
+      "id": "s10",
+      "op": "clean_cep"
+    },
+    {
+      "add_valid_col": true,
+      "cols": [
+        "c"
+      ],
+      "id": "s11",
+      "op": "clean_cnpj",
+      "pad_zeros": true
+    },
+    {
+      "add_valid_col": false,
+      "cols": [
+        "c"
+      ],
+      "id": "s12",
+      "op": "clean_cnpj",
+      "pad_zeros": false
+    },
+    {
+      "add_valid_col": true,
+      "cols": [
+        "cpf"
+      ],
+      "id": "s13",
+      "op": "clean_cpf",
+      "pad_zeros": true
+    },
+    {
+      "add_valid_col": false,
+      "cols": [
+        "cpf"
+      ],
+      "id": "s14",
+      "op": "clean_cpf",
+      "pad_zeros": false
+    },
+    {
+      "col": "doc",
+      "id": "s15",
+      "op": "clean_cpf_cnpj"
+    },
+    {
+      "col": "doc",
+      "id": "s16",
+      "op": "clean_cpf_cnpj",
+      "person_type_col": "tipo"
+    },
+    {
+      "add_ninth_digit": true,
+      "cols": [
+        "tel"
+      ],
+      "id": "s17",
+      "op": "clean_phone"
+    },
+    {
+      "add_ninth_digit": false,
+      "cols": [
+        "tel"
+      ],
+      "default_ddd": "27",
+      "id": "s18",
+      "op": "clean_phone"
+    },
+    {
+      "id": "s19",
+      "op": "dedupe"
+    },
+    {
+      "cols": [
+        "a"
+      ],
+      "id": "s20",
+      "op": "dedupe"
+    },
+    {
+      "cols": [
+        "obs",
+        "id"
+      ],
+      "id": "s21",
+      "op": "drop_cols"
+    },
+    {
+      "id": "s22",
+      "op": "drop_empty_cols"
+    },
+    {
+      "id": "s23",
+      "op": "drop_empty_rows"
+    },
+    {
+      "col": "regiao",
+      "id": "s24",
+      "ignore_case": false,
+      "match": "starts_with",
+      "op": "drop_rows_where",
+      "value": "Total"
+    },
+    {
+      "col": "regiao",
+      "id": "s25",
+      "ignore_case": true,
+      "match": "contains",
+      "op": "drop_rows_where",
+      "value": "total"
+    },
+    {
+      "col": "uf",
+      "id": "s26",
+      "ignore_case": false,
+      "match": "equals",
+      "op": "drop_rows_where",
+      "value": "-"
+    },
+    {
+      "col": "uf",
+      "id": "s27",
+      "ignore_case": true,
+      "match": "in",
+      "op": "drop_rows_where",
+      "value": [
+        "xx",
+        "Br"
+      ]
+    },
+    {
+      "cols": [
+        "regiao"
+      ],
+      "id": "s28",
+      "op": "fill_down"
+    },
+    {
+      "cols": [
+        "obs"
+      ],
+      "id": "s29",
+      "op": "fill_null",
+      "value": "sem observação"
+    },
+    {
+      "cols": [
+        "q"
+      ],
+      "id": "s30",
+      "op": "fill_null",
+      "value": 0
+    },
+    {
+      "col": "mes",
+      "id": "s31",
+      "ignore_case": false,
+      "match": "in",
+      "op": "filter",
+      "value": [
+        "JAN",
+        "FEV"
+      ]
+    },
+    {
+      "col": "v",
+      "id": "s32",
+      "ignore_case": false,
+      "match": "ge",
+      "op": "filter",
+      "value": 2
+    },
+    {
+      "col": "d",
+      "id": "s33",
+      "ignore_case": false,
+      "match": "lt",
+      "op": "filter",
+      "value": "2024-06-01"
+    },
+    {
+      "col": "nome",
+      "id": "s34",
+      "ignore_case": true,
+      "match": "contains",
+      "op": "filter",
+      "value": "silva"
+    },
+    {
+      "col": "obs",
+      "id": "s35",
+      "ignore_case": false,
+      "match": "is_null",
+      "op": "filter"
+    },
+    {
+      "col": "uf",
+      "id": "s36",
+      "ignore_case": false,
+      "match": "equals",
+      "op": "filter",
+      "value": "ES"
+    },
+    {
+      "col": "uf",
+      "id": "s37",
+      "ignore_case": true,
+      "match": "not_equals",
+      "op": "filter",
+      "value": "es"
+    },
+    {
+      "col": "v",
+      "id": "s38",
+      "ignore_case": false,
+      "match": "gt",
+      "op": "filter",
+      "value": 2.5
+    },
+    {
+      "col": "v",
+      "id": "s39",
+      "ignore_case": false,
+      "match": "le",
+      "op": "filter",
+      "value": 2
+    },
+    {
+      "col": "mes",
+      "id": "s40",
+      "ignore_case": false,
+      "match": "not_in",
+      "op": "filter",
+      "value": [
+        "TOTAL",
+        "ANO"
+      ]
+    },
+    {
+      "col": "obs",
+      "id": "s41",
+      "ignore_case": false,
+      "match": "not_null",
+      "op": "filter"
+    },
+    {
+      "col": "conta",
+      "id": "s42",
+      "ignore_case": false,
+      "match": "starts_with",
+      "op": "filter",
+      "value": "1.1"
+    },
+    {
+      "cols": [
+        "t"
+      ],
+      "id": "s43",
+      "op": "fix_mojibake"
+    },
+    {
+      "id": "s44",
+      "n": 1,
+      "op": "header_rows",
+      "separator": " "
+    },
+    {
+      "id": "s45",
+      "n": 2,
+      "op": "header_rows",
+      "separator": " "
+    },
+    {
+      "id": "s46",
+      "n": 0,
+      "names": [
+        "cnpj",
+        "nome"
+      ],
+      "op": "header_rows",
+      "separator": " "
+    },
+    {
+      "cols": [
+        "mes",
+        "ano"
+      ],
+      "id": "s47",
+      "into": "competencia",
+      "keep": false,
+      "op": "merge_cols",
+      "separator": "/"
+    },
+    {
+      "cols": [
+        "a",
+        "b"
+      ],
+      "id": "s48",
+      "into": "ab",
+      "keep": true,
+      "op": "merge_cols",
+      "separator": "-"
+    },
+    {
+      "col": "m",
+      "id": "s49",
+      "manual": {},
+      "op": "normalize_municipio",
+      "threshold": 90,
+      "uf_col": "uf"
+    },
+    {
+      "col": "m",
+      "id": "s50",
+      "manual": {
+        "Bom Jesus": "2201903",
+        "Cidade X": null
+      },
+      "op": "normalize_municipio",
+      "threshold": 98
+    },
+    {
+      "cols": [
+        "uf"
+      ],
+      "id": "s51",
+      "op": "normalize_uf"
+    },
+    {
+      "cols": [
+        "b"
+      ],
+      "empty_is_false": false,
+      "id": "s52",
+      "op": "parse_bool_br"
+    },
+    {
+      "cols": [
+        "b"
+      ],
+      "empty_is_false": true,
+      "id": "s53",
+      "op": "parse_bool_br"
+    },
+    {
+      "cols": [
+        "valor"
+      ],
+      "debit_negative": false,
+      "id": "s54",
+      "op": "parse_brl"
+    },
+    {
+      "cols": [
+        "debito",
+        "credito"
+      ],
+      "debit_negative": true,
+      "id": "s55",
+      "op": "parse_brl"
+    },
+    {
+      "accept_excel_serial": true,
+      "century_pivot": 30,
+      "cols": [
+        "d"
+      ],
+      "eight_digits": "auto",
+      "id": "s56",
+      "op": "parse_date_br"
+    },
+    {
+      "accept_excel_serial": false,
+      "century_pivot": 30,
+      "cols": [
+        "d"
+      ],
+      "eight_digits": "dmy",
+      "id": "s57",
+      "op": "parse_date_br"
+    },
+    {
+      "accept_excel_serial": true,
+      "century_pivot": 50,
+      "cols": [
+        "d"
+      ],
+      "eight_digits": "ymd",
+      "id": "s58",
+      "op": "parse_date_br"
+    },
+    {
+      "cols": [
+        "v"
+      ],
+      "dash_is_zero": false,
+      "debit_negative": false,
+      "decimal": ",",
+      "id": "s59",
+      "op": "parse_decimal_br"
+    },
+    {
+      "cols": [
+        "v"
+      ],
+      "dash_is_zero": true,
+      "debit_negative": false,
+      "decimal": ".",
+      "id": "s60",
+      "op": "parse_decimal_br"
+    },
+    {
+      "cols": [
+        "v",
+        "w"
+      ],
+      "dash_is_zero": false,
+      "debit_negative": false,
+      "decimal": "auto",
+      "id": "s61",
+      "op": "parse_decimal_br"
+    },
+    {
+      "cols": [
+        "v"
+      ],
+      "dash_is_zero": false,
+      "debit_negative": true,
+      "decimal": ",",
+      "id": "s62",
+      "op": "parse_decimal_br"
+    },
+    {
+      "add_status_col": true,
+      "cols": [
+        "v"
+      ],
+      "decimal": ".",
+      "id": "s63",
+      "op": "parse_ibge_value"
+    },
+    {
+      "add_status_col": false,
+      "cols": [
+        "v"
+      ],
+      "decimal": ",",
+      "id": "s64",
+      "op": "parse_ibge_value"
+    },
+    {
+      "century_pivot": 30,
+      "cols": [
+        "m"
+      ],
+      "id": "s65",
+      "op": "parse_month_year"
+    },
+    {
+      "century_pivot": 50,
+      "cols": [
+        "m"
+      ],
+      "id": "s66",
+      "op": "parse_month_year"
+    },
+    {
+      "bare": "fraction",
+      "cols": [
+        "p"
+      ],
+      "id": "s67",
+      "op": "parse_percent"
+    },
+    {
+      "bare": "points",
+      "cols": [
+        "p"
+      ],
+      "id": "s68",
+      "op": "parse_percent"
+    },
+    {
+      "cols": [
+        "m"
+      ],
+      "id": "s69",
+      "op": "remove_accents"
+    },
+    {
+      "id": "s70",
+      "mapping": {
+        "Nº \"Pedido\"": "pedido",
+        "Vlr Venda": "valor"
+      },
+      "op": "rename"
+    },
+    {
+      "cols": [
+        "valor",
+        "data"
+      ],
+      "id": "s71",
+      "keep_rest": true,
+      "op": "reorder"
+    },
+    {
+      "cols": [
+        "valor",
+        "data"
+      ],
+      "id": "s72",
+      "keep_rest": false,
+      "op": "reorder"
+    },
+    {
+      "cols": [
+        "v"
+      ],
+      "id": "s73",
+      "new": "",
+      "old": " ",
+      "op": "replace",
+      "whole": false
+    },
+    {
+      "cols": [
+        "d"
+      ],
+      "id": "s74",
+      "old": "31.12.9999",
+      "op": "replace",
+      "whole": false
+    },
+    {
+      "cols": [
+        "s"
+      ],
+      "id": "s75",
+      "new": "não informado",
+      "old": "N/I",
+      "op": "replace",
+      "whole": true
+    },
+    {
+      "cols": [
+        "v"
+      ],
+      "id": "s76",
+      "op": "scale_by_unit",
+      "unit": "Mil Reais"
+    },
+    {
+      "cols": [
+        "v",
+        "w"
+      ],
+      "id": "s77",
+      "op": "scale_by_unit",
+      "unit_col": "u"
+    },
+    {
+      "end": "C3",
+      "id": "s78",
+      "op": "select_range",
+      "start": "B2"
+    },
+    {
+      "end_detect": "auto",
+      "id": "s79",
+      "op": "select_range",
+      "start": "A2"
+    },
+    {
+      "id": "s80",
+      "op": "select_range",
+      "start": "B1"
+    },
+    {
+      "by": [
+        "uf",
+        "v"
+      ],
+      "descending": [
+        false,
+        true
+      ],
+      "id": "s81",
+      "op": "sort"
+    },
+    {
+      "by": [
+        "v"
+      ],
+      "descending": true,
+      "id": "s82",
+      "op": "sort"
+    },
+    {
+      "col": "mun_uf",
+      "id": "s83",
+      "into": [
+        "municipio",
+        "uf"
+      ],
+      "op": "split_col",
+      "separator": " - "
+    },
+    {
+      "col": "m",
+      "id": "s84",
+      "op": "split_municipio_uf",
+      "uf_col": "uf"
+    },
+    {
+      "col": "local",
+      "id": "s85",
+      "op": "split_municipio_uf",
+      "uf_col": "sigla"
+    },
+    {
+      "cols": [
+        "t"
+      ],
+      "id": "s86",
+      "op": "strip_footnotes"
+    },
+    {
+      "collapse_spaces": false,
+      "cols": [
+        "nome"
+      ],
+      "id": "s87",
+      "op": "trim"
+    },
+    {
+      "collapse_spaces": true,
+      "cols": [
+        "nome"
+      ],
+      "id": "s88",
+      "op": "trim"
+    },
+    {
+      "id": "s89",
+      "index": [
+        "uf"
+      ],
+      "op": "unpivot",
+      "value_name": "valor",
+      "variable_name": "mes"
+    }
+  ],
+  "wolfz_version": "1.0"
+}
