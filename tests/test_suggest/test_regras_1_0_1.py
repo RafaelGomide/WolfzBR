@@ -147,3 +147,11 @@ def test_coluna_constante_com_hora_ou_numero_fica():
     df = _df(saida_almoco=["12:00"] * 10, moeda=["BRL"] * 10, v=[str(i) for i in range(10)])
     (s,) = _regra(df, "coluna_constante")
     assert s.steps == ({"op": "drop_cols", "cols": ["moeda"]},)
+
+
+def test_cpf_nao_vira_verificacao_de_unico_depois_da_do_id():
+    """Na 1.0.1, aceitar a verificação do ID fazia a do CPF aparecer na rodada
+    seguinte: o ID já verificado deixava de contar como identificador."""
+    df = _df(id_servidor=["1", "2", "3"], cpf=["52998224725", "11144477735", "12345678909"])
+    passos = [{"op": "assert", "check": "unique", "cols": ["id_servidor"]}]
+    assert not _regra(df, "verificar_unicos", steps=passos)

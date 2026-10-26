@@ -22,6 +22,10 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 
 ## [Não publicado]
 
+### Corrigido
+
+- A sugestão de verificar que o CPF ou o CNPJ não se repete ainda aparecia numa rodada seguinte do "Aceitar todas", depois de aceita a verificação do ID ou da matrícula: o identificador já verificado deixava de contar. Achado no smoke test da 1.0.1.
+
 ## [1.0.1] - 2026-10-26
 
 Correções do teste de fogo: uma squad simulada limpou 30 bases de empresa (cerca de 7,5 milhões de linhas: ERP, SAP, CRM, folha, ponto, cartão, Censo Escolar, SIDRA) e achou casos em que a receita inicial ou o "Aceitar todas" perdia, inventava ou multiplicava linhas sem avisar. Nenhuma operação nem parâmetro da receita muda, e as receitas já salvas rodam igual, com duas exceções que corrigem dado errado: `parse_percent` sem o resto do ponto flutuante e `normalize_municipio` mandando para revisão a abreviação desconhecida. As receitas novas saem com passos melhores.

@@ -1199,12 +1199,15 @@ def verificar_unicos(ctx: Contexto) -> Iterator[Suggestion]:
     if not ctx.passos or ctx.total.height < 2:
         return
     ja = _ja_verificadas(ctx, "unique")
-    candidatas = [c for c in ctx.total.columns if c not in ja and _NOME_DE_CODIGO.search(_nome(c))]
     # CEP, conta, lote, CNAE e NCM se repetem por natureza. CPF e CNPJ só
     # identificam a linha num cadastro: com outro identificador na tabela
-    # (matrícula, ID), o documento é do cliente da venda e vai se repetir.
-    candidatas = [c for c in candidatas if not _ATRIBUTO.search(_nome(c))]
-    if any(not _DOCUMENTO.search(_nome(c)) for c in candidatas):
+    # (matrícula, ID), já verificado ou não, o documento é do cliente da
+    # venda e vai se repetir.
+    codigos = [
+        c for c in ctx.total.columns if _NOME_DE_CODIGO.search(_nome(c)) and not _ATRIBUTO.search(_nome(c))
+    ]
+    candidatas = [c for c in codigos if c not in ja]
+    if any(not _DOCUMENTO.search(_nome(c)) for c in codigos):
         candidatas = [c for c in candidatas if not _DOCUMENTO.search(_nome(c))]
     for c in candidatas:
         s = ctx.total[c]
