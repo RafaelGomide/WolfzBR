@@ -52,6 +52,12 @@ class Op(_Model, ABC):
     # tabela inteira depois dele como checkpoint, e os passos seguintes
     # partem dali (§8.4 do design).
     full_checkpoint: ClassVar[bool] = False
+    # O que o passo faz com o número de linhas (ADR-10): ``remove`` (tira
+    # linhas de dado), ``estrutura`` (recorta a grade, promove o cabeçalho),
+    # ``multiplica`` (despivota) ou ``mantem``. A reconciliação só conta as
+    # linhas depois dos passos que não são ``mantem``; um teste confere que
+    # nenhum exemplo de uma op ``mantem`` muda o número de linhas.
+    efeito_linhas: ClassVar[Literal["mantem", "remove", "estrutura", "multiplica"]] = "mantem"
     python_helpers: ClassVar[tuple[Callable[..., Any], ...]] = ()
     # Funções M auxiliares, declaradas uma vez no início da consulta: nome -> definição.
     m_helpers: ClassVar[dict[str, str]] = {}

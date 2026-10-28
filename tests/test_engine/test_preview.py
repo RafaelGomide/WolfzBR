@@ -287,4 +287,4 @@ def test_benchmark_roda_pequeno(tmp_path):
     r = bench.medir(2_000, 3, tmp_path)
     assert r["linhas"] == 2_000 and r["cache"] is True
     assert r["edicao_ultimo_passo"]["p50_ms"] > 0
-    assert set(r) >= {"abertura_ms", "rolagem", "dentro_do_slo"}
+    assert set(r) >= {"abertura_ms", "rolagem", "dentro_do_slo", "contagem_abertura_ms", "contagem_dentro"}

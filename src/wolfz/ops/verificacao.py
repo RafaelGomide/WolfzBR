@@ -36,6 +36,33 @@ def _nomes(cols: list[str]) -> str:
     return ", ".join(f"'{c}'" for c in cols)
 
 
+def _linhas_br(linhas: list[int], total: int) -> str:
+    """[809, 1204] -> '809 e 1.204'; mais de 5: '1, 2, 3, 4, 5 e mais 7'."""
+    nums = [f"{n:,}".replace(",", ".") for n in linhas[:5]]
+    if total > len(nums):
+        resto = f"{total - len(nums):,}".replace(",", ".")
+        return f"{', '.join(nums)} e mais {resto}"
+    return nums[0] if len(nums) == 1 else f"{', '.join(nums[:-1])} e {nums[-1]}"
+
+
+def _reprovada(
+    mensagem: str, check: str, cols: list[str], quantidade: int, linhas: list[int], valores: list[str]
+) -> AssertionError:
+    """O erro da verificação. A mensagem diz coluna, quantidade e linhas,
+    nunca o valor (S2): ela vai para o terminal, o ``--report`` e o log.
+    Os campos estruturados e os valores de exemplo vão à parte; os valores
+    só aparecem no terminal com ``--show-values``."""
+    erro = AssertionError(mensagem)
+    erro.verificacao = {  # type: ignore[attr-defined]
+        "verificacao": check,
+        "coluna": ", ".join(cols) if cols else None,
+        "quantidade": quantidade,
+        "linhas": linhas[:5],
+    }
+    erro.valores = valores  # type: ignore[attr-defined]
+    return erro
+
+
 def verificar_lf(
     lf: pl.LazyFrame,
     check: str,
@@ -46,21 +73,29 @@ def verificar_lf(
     min_linhas: int | None = None,
 ) -> pl.LazyFrame:
     """Confere a tabela e a devolve sem mudança. Reprovada, levanta
-    ``AssertionError`` com o que falhou e a primeira linha (1 = primeira
-    linha de dados) que mostra o problema."""
+    ``AssertionError`` com o que falhou, quantas linhas e as primeiras
+    (1 = primeira linha de dados), sem o valor das células."""
     df = lf.collect()
     if check == "row_count_min":
         if min_linhas is not None and df.height < min_linhas:
-            raise AssertionError(f"a tabela tem {df.height} linhas; o mínimo é {min_linhas}")
+            raise _reprovada(
+                f"a tabela tem {df.height} linhas; o mínimo é {min_linhas}", check, [], df.height, [], []
+            )
         return df.lazy()
     if check == "unique":
         repetidas = df.select(cols).is_duplicated()
         if repetidas.any():
-            linha = repetidas.arg_true()[0]
-            exemplo = ", ".join(str(v) for v in df.select(cols).row(linha))
-            raise AssertionError(
-                f"{_nomes(cols)} se repete em {repetidas.sum()} linhas "
-                f"(a primeira é a linha {linha + 1}: {exemplo})"
+            indices = repetidas.arg_true()
+            total = int(repetidas.sum())
+            linhas = [int(i) + 1 for i in indices[:5]]
+            valores = [", ".join(str(v) for v in df.select(cols).row(int(i))) for i in indices[:5]]
+            raise _reprovada(
+                f"{_nomes(cols)} se repete em {total} linhas: {_linhas_br(linhas, total)}",
+                check,
+                cols,
+                total,
+                linhas,
+                valores,
             )
         return df.lazy()
     for c in cols:
@@ -84,9 +119,19 @@ def verificar_lf(
             falhas = (texto.is_not_null() & ~texto.str.contains(f"^(?:{padrao})$")).fill_null(False)
             motivo = "fora do padrão"
         if falhas.any():
-            linha = falhas.arg_true()[0]
-            raise AssertionError(
-                f"'{c}' tem {falhas.sum()} linhas {motivo} (a primeira é a linha {linha + 1}: {s[linha]!r})"
+            indices = falhas.arg_true()
+            total = int(falhas.sum())
+            linhas = [int(i) + 1 for i in indices[:5]]
+            if motivo == "vazia":
+                motivo = "vazia" if total == 1 else "vazias"
+            quantas = f"{total} {'linha' if total == 1 else 'linhas'}"
+            raise _reprovada(
+                f"'{c}' tem {quantas} {motivo}: {_linhas_br(linhas, total)}",
+                check,
+                [c],
+                total,
+                linhas,
+                [repr(s[int(i)]) for i in indices[:5]],
             )
     return df.lazy()
 

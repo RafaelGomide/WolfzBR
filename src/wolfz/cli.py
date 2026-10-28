@@ -10,23 +10,27 @@ from __future__ import annotations
 
 import glob
 import json
+import re
 from datetime import date
 from enum import IntEnum, StrEnum
 from pathlib import Path
-from typing import Annotated, NoReturn
+from typing import Annotated, Any, NoReturn
 
 import polars as pl
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from wolfz import __version__
-from wolfz.core.engine import StepError, collect, read_input
+from wolfz.core.engine import RunReport, StepCount, StepError, read_input, reconciliar
+from wolfz.core.engine.reconcilia import OutsideColumn
 from wolfz.core.ingest import IngestError
 from wolfz.core.profile import ColumnProfile, LoadedTable, TableProfile, load_table, profile_table
 from wolfz.core.profile.column import SAMPLE_SIZE
 from wolfz.core.recipe import Recipe, RecipeError, RecipeTooNewError, load_recipe, recipe_json_schema
 from wolfz.export.dados import ExportError, OpcoesCsv, celulas_formula, escritor, gravar_juntos
+from wolfz.ops.verificacao import _linhas_br
 
 
 class ExitCode(IntEnum):
@@ -101,12 +105,15 @@ _EPILOG = (
 
 
 class _Falha(Exception):
-    """Falha de um arquivo: o código de saída e as linhas da mensagem."""
+    """Falha de um arquivo: o código de saída, as linhas da mensagem do
+    terminal e o que vai para o ``--report``. ``relatorio`` nunca leva texto
+    de exceção nem valor de célula (S2, D9)."""
 
-    def __init__(self, code: ExitCode, *lines: str):
+    def __init__(self, code: ExitCode, *lines: str, relatorio: dict[str, Any] | None = None):
         super().__init__(lines[0] if lines else "")
         self.code = code
         self.lines = lines
+        self.relatorio = relatorio if relatorio is not None else {"erro": " ".join(lines)}
 
 
 def _carregar_receita(receita: Path) -> Recipe:
@@ -126,6 +133,240 @@ def _carregar_receita(receita: Path) -> Recipe:
         _fail(ExitCode.INVALID_RECIPE, f"Não foi possível ler a receita {receita}: {_first_line(exc)}")
 
 
+# ---------------------------------------------------------------------------
+# Texto vindo da planilha no terminal (R9) e números em pt-BR
+# ---------------------------------------------------------------------------
+
+_CONTROLE = re.compile("[\x00-\x1f\x7f-\x9f​-‏‪-‮⁦-⁩]")
+
+
+def _literal(texto: str, limite: int | None = None) -> str:
+    """Texto de dado (cabeçalho, nome de arquivo) para o terminal: sem
+    caractere de controle nem sequência ANSI, cortado em ``limite``. A
+    marcação do Rich é escapada onde o Rich imprime (``escape``)."""
+    texto = _CONTROLE.sub("", texto)
+    if limite is not None and len(texto) > limite:
+        texto = texto[: limite - 1] + "…"
+    return texto
+
+
+def _pct_br(parte: int, todo: int) -> str:
+    return _pct(parte / todo) if todo else "0%"
+
+
+def _limite_br(fracao: float) -> str:
+    texto = f"{fracao * 100:.2f}".rstrip("0").rstrip(".").replace(".", ",")
+    return f"{texto}%"
+
+
+def _lista_br(itens: list[str]) -> str:
+    return itens[0] if len(itens) == 1 else f"{', '.join(itens[:-1])} e {itens[-1]}"
+
+
+# Nomes das operações que mudam o número de linhas, como na interface
+# (frontend/src/textos.ts). Op sem nome aqui aparece com o nome técnico.
+_NOMES_OPS = {
+    "select_range": "Recortar a área",
+    "header_rows": "Definir o cabeçalho",
+    "drop_empty_rows": "Remover linhas vazias",
+    "drop_rows_where": "Remover linhas",
+    "filter": "Filtrar linhas",
+    "dedupe": "Remover duplicadas",
+    "unpivot": "Despivotar colunas",
+}
+
+
+def _passo(s: StepCount) -> str:
+    return f"{s.id} {_NOMES_OPS.get(s.op, s.op)}"
+
+
+def _max_drop(valor: str | None) -> float | None:
+    """'1%', '1', '0.5%', '0,5%' e '0' -> fração (0.01, 0.01, 0.005, 0.0)."""
+    if valor is None:
+        return None
+    texto = valor.strip().removesuffix("%").strip().replace(",", ".")
+    try:
+        pct = float(texto)
+    except ValueError:
+        raise typer.BadParameter(f"{valor!r} não é um percentual (ex.: 1%, 0.5%, 0)") from None
+    if not 0 <= pct <= 100:
+        raise typer.BadParameter(f"{valor!r} precisa estar entre 0% e 100%")
+    return pct / 100
+
+
+# ---------------------------------------------------------------------------
+# Mensagens de falha
+# ---------------------------------------------------------------------------
+
+_MOTIVO_VERIFICACAO = {"not_null": "vazias", "in_range": "fora da faixa", "matches": "fora do padrão"}
+
+
+def _texto_verificacao(passo: str, v: dict[str, Any]) -> str:
+    """O ``erro`` do ``--report`` para uma verificação reprovada, montado só
+    dos campos estruturados (D9), nunca do texto de uma exceção."""
+    q = v["quantidade"]
+    if v["verificacao"] == "row_count_min":
+        return f"Verificação reprovada no passo {passo}: a tabela tem {_int_br(q)} linhas, abaixo do mínimo."
+    linhas = _linhas_br(v["linhas"], q)
+    if v["verificacao"] == "unique":
+        detalhe = f"{v['coluna']} se repete em {_int_br(q)} linhas: {linhas}"
+    else:
+        detalhe = f"{v['coluna']} tem {_int_br(q)} linhas {_MOTIVO_VERIFICACAO[v['verificacao']]}: {linhas}"
+    return f"Verificação reprovada no passo {passo}: {detalhe}."
+
+
+def _falha_de_passo(exc: StepError, mostrar_valores: bool) -> _Falha:
+    columns = ", ".join(exc.available_columns) or "(nenhuma)"
+    if exc.detalhe_seguro or mostrar_valores:
+        principal = [f"{exc.title}: {exc.message}"]
+    else:
+        principal = [
+            f"{exc.title}: O passo {exc.step_id} ({exc.op}) falhou.",
+            "Rode com --show-values para ver o detalhe do erro (pode mostrar valores da planilha).",
+        ]
+    if mostrar_valores and exc.valores:
+        principal.append(f"Valores: {_literal('; '.join(exc.valores), 300)}")
+    relatorio: dict[str, Any] = {"passo": exc.step_id}
+    if exc.verificacao is not None:
+        relatorio["erro"] = _texto_verificacao(exc.step_id, exc.verificacao)
+        relatorio.update(exc.verificacao)
+    elif exc.title == "Coluna não encontrada":
+        relatorio["erro"] = f"{exc.title}: {exc.message}"
+    else:
+        relatorio["erro"] = f"{exc.title}: o passo {exc.step_id} ({exc.op}) falhou."
+    if exc.contagem_parcial is not None:
+        lidas, feitos = exc.contagem_parcial
+        relatorio["linhas_lidas"] = lidas
+        relatorio["passos"] = [s.to_dict() for s in feitos]
+    return _Falha(
+        ExitCode.STEP_ERROR,
+        *principal,
+        f"Colunas disponíveis antes do passo {exc.step_id}: {columns}",
+        "Nada foi gravado.",
+        relatorio=relatorio,
+    )
+
+
+def _parado(r: RunReport, limite: float) -> _Falha:
+    """``--max-drop`` estourado: a mensagem do terminal e do relatório."""
+    culpados = [s for s in r.steps if s.lost]
+    pct = _pct_br(r.lost, r.rows_read)
+    if len(culpados) == 1:
+        quem = f"o passo {_passo(culpados[0])} tirou {pct} das linhas"
+    else:
+        quem = f"a receita tirou {pct} das linhas (passos {_lista_br([s.id for s in culpados])})"
+    principal = f"Parado: {quem}, acima do limite de {_limite_br(limite)} (--max-drop)."
+    contas = f"Lidas {_int_br(r.rows_read)} · sairiam {_int_br(r.rows_written)}."
+    return _Falha(
+        ExitCode.STEP_ERROR,
+        principal,
+        contas,
+        "Nada foi gravado.",
+        relatorio={"erro": f"{principal} {contas}", **r.to_dict()},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Resumo da reconciliação (stderr, D12)
+# ---------------------------------------------------------------------------
+
+_MAX_PASSOS = 3
+# Só ASCII nos sinais: o console do Windows em cp850/cp1252 não tem o menos
+# e o vezes tipográficos do painel (ux.md §1.1), e mostraria "\u2212".
+_MENOS, _VEZES = "-", "x"
+
+
+def _linha_do_passo(s: StepCount, r: RunReport) -> str:
+    if s.reason == "multiplicacao":
+        if s.factor is not None:
+            fator = f"{s.factor:.1f}".rstrip("0").rstrip(".").replace(".", ",")
+            total = _int_br(s.rows_out)
+            return f"  {_passo(s)}: {_VEZES} {fator} -> {total} linhas, numa tabela já despivotada."
+        return f"  {_passo(s)}: +{_int_br(s.rows_out - s.rows_in)} linhas."
+    if s.reason == "fora_da_area":
+        pct = _pct_br(s.outside_area, r.rows_read)
+        texto = f"  {_passo(s)}: {_MENOS}{_int_br(s.outside_area)} linhas ({pct})."
+        fim_area, fim_grade = r.area_ends.get(s.id, (None, None))
+        if fim_area and fim_grade:
+            texto += f" A área termina na linha {fim_area}; o arquivo vai até a linha {fim_grade}."
+        return texto
+    return f"  {_passo(s)}: {_MENOS}{_int_br(s.lost)} linhas ({_pct_br(s.lost, r.rows_read)})."
+
+
+def _resumo(r: RunReport, prefixo: str = "") -> list[tuple[str, bool]]:
+    """Linhas do resumo: (texto, é aviso). Sem alerta, uma linha só."""
+    alertas = [s for s in r.steps if s.alert]
+    partes = [f"lidas {_int_br(r.rows_read)}", f"gravadas {_int_br(r.rows_written)}"]
+    for s in alertas:
+        if s.reason == "fora_da_area" and s.outside_area:
+            pct = _pct_br(s.outside_area, r.rows_read)
+            partes.append(f"{_int_br(s.outside_area)} fora da área recortada ({pct})")
+        elif s.reason == "perda":
+            partes.append(
+                f"{_int_br(s.lost)} removidas pelo passo {_passo(s)} ({_pct_br(s.lost, r.rows_read)})"
+            )
+        elif s.reason == "multiplicacao":
+            partes.append(f"{_int_br(s.rows_out)} linhas depois do passo {_passo(s)}")
+    sem_alerta = sum(s.lost for s in r.steps if not s.alert)
+    if sem_alerta:
+        partes.append(f"{_int_br(sem_alerta)} removidas pela receita")
+    vazias = sum(s.empty_removed for s in r.steps)
+    if vazias:
+        partes.append(
+            f"{_int_br(vazias)} {'linha vazia removida' if vazias == 1 else 'linhas vazias removidas'}"
+        )
+    linha = " · ".join(partes)
+    if not r.alert:
+        return [(prefixo + linha[0].upper() + linha[1:], False)]
+    saida = [(f"{prefixo}Atenção: {linha}", True)]
+    com_linha = [s for s in alertas if s.reason != "fora_da_area" or s.outside_area]
+    com_linha.sort(key=lambda s: max(s.lost, s.rows_out - s.rows_in), reverse=True)
+    saida += [(_linha_do_passo(s, r), True) for s in com_linha[:_MAX_PASSOS]]
+    if len(com_linha) > _MAX_PASSOS:
+        resto = len(com_linha) - _MAX_PASSOS
+        saida.append((f"  e mais {resto} {'passo' if resto == 1 else 'passos'} (veja --report)", True))
+    if not alertas:  # vários passos pequenos, somados, passaram do limite
+        saida.append((f"  A receita tirou {_pct_br(r.lost, r.rows_read)} das linhas lidas.", True))
+    return saida
+
+
+def _avisos_fora_da_area(r: RunReport, prefixo: str = "") -> list[str]:
+    """Colunas preenchidas fora da área (resto da C1, D3). O cabeçalho é
+    nome de coluna, não valor de dado: aparece aqui, sem caractere de
+    controle e cortado em 60 caracteres, e nunca no ``--report``."""
+    por_passo: dict[str, list[OutsideColumn]] = {}
+    for c in r.outside_columns:
+        por_passo.setdefault(c.step, []).append(c)
+    avisos = []
+    for passo, cols in por_passo.items():
+        total = sum(c.cells for c in cols)
+        celulas = f"{_int_br(total)} {'célula preenchida' if total == 1 else 'células preenchidas'}"
+        nomes = [f"{c.letter} ({_literal(c.header, 60) if c.header else 'sem cabeçalho'})" for c in cols]
+        if len(cols) == 1:
+            quem = f"a coluna {nomes[0]} tem {celulas}"
+        elif len(cols) <= _MAX_PASSOS:
+            quem = f"as colunas {_lista_br(nomes)} têm {celulas}"
+        else:
+            quem = f"as colunas {cols[0].letter} a {cols[-1].letter} ({len(cols)} colunas) têm {celulas}"
+        onde = f"fora da área {cols[0].area} do passo {passo}"
+        avisos.append(f"{prefixo}Atenção: {quem} {onde}. Elas não entram na saída.")
+    if avisos:
+        avisos.append("Para incluir, ajuste a área na receita (interface: Original -> marcar a área).")
+    return avisos
+
+
+def _imprimir_resumo(r: RunReport, prefixo: str = "") -> None:
+    for texto, aviso in _resumo(r, prefixo):
+        typer.secho(texto, err=True, fg="yellow" if aviso else None)
+    for texto in _avisos_fora_da_area(r, prefixo):
+        typer.secho(texto, err=True, fg="yellow")
+
+
+# ---------------------------------------------------------------------------
+# Processar um arquivo
+# ---------------------------------------------------------------------------
+
+
 def _processar(
     recipe: Recipe,
     arquivo: Path,
@@ -134,8 +375,11 @@ def _processar(
     opcoes: OpcoesCsv,
     neutralizar: bool,
     overwrite: bool,
-) -> pl.DataFrame:
-    """Aplica a receita a um arquivo e grava. Nada é gravado se algo falhar."""
+    max_drop: float | None = None,
+    mostrar_valores: bool = False,
+) -> RunReport:
+    """Aplica a receita a um arquivo, contando as linhas, e grava. Nada é
+    gravado se algo falhar ou se a perda passar do ``--max-drop``."""
     if destino.exists() and not overwrite:
         raise _Falha(
             ExitCode.INVALID_RECIPE, f"A saída já existe: {destino}", "Use --overwrite para substituir."
@@ -151,20 +395,16 @@ def _processar(
             ExitCode.UNREADABLE_INPUT, f"Não foi possível ler {arquivo}: {_first_line(exc)}"
         ) from None
     try:
-        result = collect(recipe, df.lazy())
+        report = reconciliar(recipe, df)
     except StepError as exc:
-        columns = ", ".join(exc.available_columns) or "(nenhuma)"
-        raise _Falha(
-            ExitCode.STEP_ERROR,
-            f"{exc.title}: {exc.message}",
-            f"Colunas disponíveis antes do passo {exc.step_id}: {columns}",
-            "Nada foi gravado.",
-        ) from None
+        raise _falha_de_passo(exc, mostrar_valores) from None
+    if max_drop is not None and report.lost > max_drop * report.rows_read:
+        raise _parado(report, max_drop)
     try:
-        gravar_juntos({destino: escritor(formato.value, result, opcoes, neutralizar, aba=recipe.name)})
+        gravar_juntos({destino: escritor(formato.value, report.table, opcoes, neutralizar, aba=recipe.name)})
     except ExportError as exc:
         raise _Falha(ExitCode.INVALID_RECIPE, str(exc), "Nada foi gravado.") from None
-    return result
+    return report
 
 
 def _expandir(arquivos: list[str]) -> list[Path]:
@@ -180,6 +420,56 @@ def _expandir(arquivos: list[str]) -> list[Path]:
         else:
             saida.append(Path(a))
     return list(dict.fromkeys(saida))
+
+
+def _mesmo_arquivo(a: Path, b: Path) -> bool:
+    try:
+        return a.resolve() == b.resolve()
+    except OSError:
+        return False
+
+
+def _conferir_relatorio(relatorio: Path, receita: Path, entradas: list[Path], overwrite: bool) -> None:
+    """O ``--report`` nunca destrói nada (R2): não sobrescreve sem
+    ``--overwrite`` e nunca cai em cima da receita ou de uma entrada, nem
+    com ``--overwrite``. Conferido antes de processar o primeiro arquivo."""
+    if _mesmo_arquivo(relatorio, receita) or any(_mesmo_arquivo(relatorio, e) for e in entradas):
+        _fail(
+            ExitCode.INVALID_RECIPE,
+            f"O relatório não pode ser gravado em {relatorio}: é a receita ou um dos arquivos de entrada.",
+            "Escolha outro nome para --report. Nada foi gravado.",
+        )
+    if relatorio.is_dir():
+        _fail(ExitCode.INVALID_RECIPE, f"--report precisa ser um arquivo, não uma pasta: {relatorio}")
+    if relatorio.exists() and not overwrite:
+        _fail(
+            ExitCode.INVALID_RECIPE,
+            f"O relatório já existe: {relatorio}",
+            "Use --overwrite para substituir. Nada foi gravado.",
+        )
+
+
+def _gravar_relatorio(relatorio: Path, recipe: Recipe, itens: list[dict[str, Any]]) -> None:
+    """Grava o relatório por um temporário renomeado no fim (R2)."""
+    corpo = json.dumps({"receita": recipe.name, "arquivos": itens}, ensure_ascii=False, indent=2) + "\n"
+    gravar_juntos({relatorio: lambda tmp: tmp.write_text(corpo, encoding="utf-8")})
+
+
+def _item_ok(arquivo: Path, destino: Path, r: RunReport) -> dict[str, Any]:
+    # ``arquivo`` é o caminho como foi digitado (ou como o padrão o casou),
+    # nunca resolvido para absoluto (R2). ``linhas`` = ``linhas_gravadas``.
+    return {
+        "arquivo": str(arquivo),
+        "ok": True,
+        "saida": str(destino),
+        "linhas": r.rows_written,
+        "colunas": r.table.width,
+        **r.to_dict(),
+    }
+
+
+def _item_falha(arquivo: Path, falha: _Falha) -> dict[str, Any]:
+    return {"arquivo": str(arquivo), "ok": False, "codigo": int(falha.code), **falha.relatorio}
 
 
 @app.command(epilog=_EPILOG)
@@ -200,7 +490,7 @@ def run(
     ],
     formato: Annotated[Formato, typer.Option("--format", "-f", help="Formato da saída.")] = Formato.csv,
     overwrite: Annotated[
-        bool, typer.Option("--overwrite", help="Sobrescreve a saída se ela já existir.")
+        bool, typer.Option("--overwrite", help="Sobrescreve a saída (e o --report) se já existir.")
     ] = False,
     sep: Annotated[
         Sep, typer.Option("--sep", help="Separador do CSV (';' abre direto no Excel em português).")
@@ -217,29 +507,65 @@ def run(
     ] = False,
     relatorio: Annotated[
         Path | None,
-        typer.Option("--report", help="Em lote: grava o relatório por arquivo em JSON.", show_default=False),
+        typer.Option(
+            "--report",
+            help="Grava um relatório em JSON: linhas lidas e gravadas, por arquivo e por passo, "
+            "sem valor de célula.",
+            show_default=False,
+        ),
     ] = None,
+    max_drop: Annotated[
+        str | None,
+        typer.Option(
+            "--max-drop",
+            help="Para sem gravar (código 1) se a receita tirar mais que este percentual das linhas lidas "
+            "(ex.: 1%, 0.5%, 0). Linhas vazias, título e cabeçalho não contam. Em lote, vale por arquivo.",
+            show_default=False,
+        ),
+    ] = None,
+    mostrar_valores: Annotated[
+        bool,
+        typer.Option(
+            "--show-values",
+            help="Mostra no terminal os valores das células de uma verificação reprovada ou de um erro. "
+            "Eles nunca vão para o --report.",
+        ),
+    ] = False,
 ) -> None:
     """Aplica uma receita a uma ou mais planilhas e grava a tabela limpa.
 
     Nada é gravado para um arquivo se algum passo falhar nele.
     """
+    limite = _max_drop(max_drop)
     recipe = _carregar_receita(receita)
     entradas = _expandir(arquivos)
+    if relatorio is not None:
+        _conferir_relatorio(relatorio, receita, entradas, overwrite)
     opcoes = OpcoesCsv(separator="\t" if sep is Sep.tab else sep.value, decimal_comma=decimal_comma)
 
-    if len(entradas) == 1 and relatorio is None:
+    if len(entradas) == 1:
         arquivo = entradas[0]
         destino = _output_path(saida, arquivo, formato)
+        if relatorio is not None and _mesmo_arquivo(relatorio, destino):
+            _fail(ExitCode.INVALID_RECIPE, f"--report e -o apontam para o mesmo arquivo: {relatorio}")
         try:
-            result = _processar(recipe, arquivo, destino, formato, opcoes, neutralizar, overwrite)
+            r = _processar(
+                recipe, arquivo, destino, formato, opcoes, neutralizar, overwrite, limite, mostrar_valores
+            )
         except _Falha as falha:
+            if relatorio is not None:
+                _gravar_relatorio(relatorio, recipe, [_item_falha(arquivo, falha)])
             _fail(falha.code, *falha.lines)
-        typer.echo(f"{result.height} linhas, {result.width} colunas -> {destino}")
-        _avisar_formulas(result, formato, neutralizar)
+        typer.echo(f"{r.rows_written} linhas, {r.table.width} colunas -> {destino}")
+        _imprimir_resumo(r)
+        _avisar_formulas(r.table, formato, neutralizar)
+        if relatorio is not None:
+            _gravar_relatorio(relatorio, recipe, [_item_ok(arquivo, destino, r)])
         return
 
-    _lote(recipe, entradas, saida, formato, opcoes, neutralizar, overwrite, relatorio)
+    _lote(
+        recipe, entradas, saida, formato, opcoes, neutralizar, overwrite, relatorio, limite, mostrar_valores
+    )
 
 
 def _avisar_formulas(result: pl.DataFrame, formato: Formato, neutralizar: bool) -> None:
@@ -261,9 +587,12 @@ def _lote(
     neutralizar: bool,
     overwrite: bool,
     relatorio: Path | None,
+    max_drop: float | None = None,
+    mostrar_valores: bool = False,
 ) -> None:
     """Vários arquivos (F2.F3): cada um à parte; uma falha não para os
-    outros. No fim, a tabela do que deu certo e do que falhou."""
+    outros. No fim, a tabela do que deu certo e do que falhou, e o resumo
+    das linhas dos arquivos que alertaram."""
     pasta = Path(saida)
     if pasta.exists() and not pasta.is_dir():
         _fail(ExitCode.INVALID_RECIPE, f"Com vários arquivos, -o precisa ser uma pasta: {saida}")
@@ -273,51 +602,48 @@ def _lote(
         _fail(
             ExitCode.INVALID_RECIPE, f"Arquivos com o mesmo nome dariam a mesma saída: {', '.join(repetidos)}"
         )
+    destinos = [pasta / f"{a.stem}.{formato.value}" for a in entradas]
+    if relatorio is not None and any(_mesmo_arquivo(relatorio, d) for d in destinos):
+        _fail(ExitCode.INVALID_RECIPE, f"--report cairia em cima de uma das saídas: {relatorio}")
     pasta.mkdir(parents=True, exist_ok=True)
 
-    linhas: list[dict] = []
+    itens: list[dict[str, Any]] = []
+    linhas_terminal: list[str] = []
+    reports: dict[int, RunReport] = {}
     pior = ExitCode.OK
-    for arquivo in entradas:
-        destino = pasta / f"{arquivo.stem}.{formato.value}"
+    for i, (arquivo, destino) in enumerate(zip(entradas, destinos, strict=True)):
         try:
-            result = _processar(recipe, arquivo, destino, formato, opcoes, neutralizar, overwrite)
+            r = _processar(
+                recipe, arquivo, destino, formato, opcoes, neutralizar, overwrite, max_drop, mostrar_valores
+            )
         except _Falha as falha:
             pior = max(pior, falha.code)
-            linhas.append(
-                {
-                    "arquivo": str(arquivo),
-                    "ok": False,
-                    "codigo": int(falha.code),
-                    "erro": " ".join(falha.lines),
-                }
-            )
+            itens.append(_item_falha(arquivo, falha))
+            linhas_terminal.append(" ".join(falha.lines))
             continue
-        linhas.append(
-            {
-                "arquivo": str(arquivo),
-                "ok": True,
-                "saida": str(destino),
-                "linhas": result.height,
-                "colunas": result.width,
-            }
-        )
+        reports[i] = r
+        itens.append(_item_ok(arquivo, destino, r))
+        linhas_terminal.append("")
 
-    tabela = Table(title=f"{recipe.name}: {sum(r['ok'] for r in linhas)} de {len(linhas)} arquivos")
+    tabela = Table(title=escape(f"{recipe.name}: {sum(r['ok'] for r in itens)} de {len(itens)} arquivos"))
     tabela.add_column("Arquivo")
     tabela.add_column("Resultado")
-    for r in linhas:
-        if r["ok"]:
-            tabela.add_row(
-                Path(r["arquivo"]).name, f"[green]ok[/green] {r['linhas']} linhas -> {Path(r['saida']).name}"
-            )
+    for i, item in enumerate(itens):
+        nome = escape(_literal(Path(item["arquivo"]).name, 60))
+        if item["ok"]:
+            r = reports[i]
+            cor, rotulo = ("yellow", "atenção") if r.alert else ("green", "ok")
+            contas = f"lidas {_int_br(r.rows_read)} · gravadas {_int_br(r.rows_written)}"
+            saida_nome = escape(_literal(Path(item["saida"]).name))
+            tabela.add_row(nome, f"[{cor}]{rotulo}[/{cor}] {contas} -> {saida_nome}")
         else:
-            tabela.add_row(Path(r["arquivo"]).name, f"[red]falhou[/red] {r['erro']}")
+            tabela.add_row(nome, f"[red]falhou[/red] {escape(_literal(linhas_terminal[i]))}")
     Console(width=max(120, Console().width)).print(tabela)
+    for i, r in reports.items():
+        if r.alert or r.outside_columns:
+            _imprimir_resumo(r, prefixo=f"{_literal(entradas[i].name, 60)}: ")
     if relatorio is not None:
-        relatorio.write_text(
-            json.dumps({"receita": recipe.name, "arquivos": linhas}, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        _gravar_relatorio(relatorio, recipe, itens)
     if pior is not ExitCode.OK:
         raise typer.Exit(int(pior))
 

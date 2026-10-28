@@ -352,7 +352,7 @@ def test_verificacao_reprovada_sai_com_1_e_nao_grava(receita_com_verificacao, tm
     result = _run(receita_com_verificacao, entrada, "-o", saida)
     assert result.exit_code == 1
     assert "Verificação reprovada" in result.stderr
-    assert "'valor' tem 1 linhas vazia" in result.stderr
+    assert "'valor' tem 1 linha vazia: 2" in result.stderr
     assert not saida.exists()
 
 

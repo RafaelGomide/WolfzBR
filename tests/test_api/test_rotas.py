@@ -232,6 +232,34 @@ def test_preview_do_raw_e_de_um_passo(client, projeto):
     assert s1["total_rows"] == 13  # cabeçalho + 12 linhas
 
 
+def test_reconciliacao_da_receita_inicial(client, projeto):
+    """F1: as contagens por passo, no formato do --report, com a etag da
+    receita para a interface descartar a resposta velha."""
+    r = client.get(_url(projeto, "reconciliation"))
+    assert r.status_code == 200, r.text
+    corpo = r.json()
+    assert corpo["etag"] == projeto["etag"]
+    assert corpo["linhas_gravadas"] == 12 and corpo["passo_com_erro"] is None
+    ids = [s["id"] for s in projeto["recipe"]["steps"] if s.get("enabled", True)]
+    assert [p["id"] for p in corpo["passos"]] == ids
+    assert corpo["passos"][-1]["saida"] == 12
+    assert corpo["linhas_lidas"] >= corpo["linhas_gravadas"]
+    # A segunda vez sai do cache, com o mesmo resultado.
+    assert client.get(_url(projeto, "reconciliation")).json() == corpo
+
+
+def test_reconciliacao_com_passo_que_falha(client, projeto):
+    receita = projeto["recipe"]
+    passos = [*receita["steps"], {"id": "s99", "op": "trim", "cols": ["nao_existe"]}]
+    r = client.put(
+        _url(projeto, "recipe"), json={**receita, "steps": passos}, headers={"If-Match": projeto["etag"]}
+    )
+    assert r.status_code == 200, r.text
+    corpo = client.get(_url(projeto, "reconciliation")).json()
+    assert corpo["passo_com_erro"] == "s99" and corpo["linhas_gravadas"] is None
+    assert [p["id"] for p in corpo["passos"]] == [s["id"] for s in receita["steps"] if s.get("enabled", True)]
+
+
 def test_preview_colunas_escolhidas(client, projeto):
     corpo = client.get(_url(projeto, "preview"), params={"columns": "Código", "limit": 2}).json()
     assert [c["name"] for c in corpo["columns"]] == ["Código"]

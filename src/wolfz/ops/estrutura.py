@@ -15,6 +15,7 @@ código.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from typing import Literal
 
 import polars as pl
@@ -63,6 +64,16 @@ def select_range_lf(
         vazia = pl.all_horizontal(celula_vazia(c) for c in colunas)
         lf = lf.filter(vazia.cast(pl.Int32).cum_sum() == 0)
     return lf.drop("__linha__")
+
+
+def linhas_nao_vazias(lf: pl.LazyFrame) -> int:
+    """Linhas com pelo menos uma célula preenchida: as "linhas lidas" da
+    reconciliação (ADR-10). Mesma regra de vazio de ``drop_empty_rows``."""
+    nomes = lf.collect_schema().names()
+    if not nomes:
+        return 0
+    cheia = ~pl.all_horizontal(celula_vazia(c) for c in nomes)
+    return int(lf.select(cheia.sum()).collect().item())
 
 
 def nomes_unicos(nomes: list[str]) -> list[str]:
@@ -215,6 +226,44 @@ _M_CABECALHO = """
 # ---------------------------------------------------------------------------
 
 
+def coluna_letra(indice: int) -> str:
+    """0 -> 'A', 26 -> 'AA'. O inverso de ``coluna_indice``."""
+    letra = ""
+    indice += 1
+    while indice:
+        indice, resto = divmod(indice - 1, 26)
+        letra = chr(65 + resto) + letra
+    return letra
+
+
+@dataclass(frozen=True)
+class ColunaFora:
+    """Coluna da grade fora da área, com célula preenchida nas linhas da
+    área. ``cabecalho`` é o texto da primeira linha da área nessa coluna: só
+    o terminal e a interface mostram; o ``--report`` não grava (D3)."""
+
+    letra: str
+    celulas: int
+    cabecalho: str | None
+
+
+@dataclass(frozen=True)
+class ContagemArea:
+    """Para onde foram as linhas da grade no ``select_range`` (ADR-10).
+    ``acima + na_area + vazias_abaixo + preenchidas_abaixo`` é a altura da
+    grade. As linhas são as do Excel (1 = primeira linha)."""
+
+    acima: int
+    na_area: int
+    vazias_abaixo: int
+    preenchidas_abaixo: int
+    nao_vazias: int  # linhas da grade inteira com alguma célula preenchida
+    colunas_fora: tuple[ColunaFora, ...]
+    area: str  # "A:H"
+    ultima_linha_area: int | None
+    ultima_linha_preenchida: int | None
+
+
 def _a1(ref: str) -> tuple[int, int]:
     m = _A1.fullmatch(ref.strip())
     if not m:
@@ -232,6 +281,7 @@ class SelectRange(Op):
     inteiramente vazia e até a última coluna."""
 
     op: Literal["select_range"]
+    efeito_linhas = "estrutura"
     m_label = "Área recortada"
     start: str
     end: str | None = None
@@ -290,6 +340,57 @@ class SelectRange(Op):
     def to_polars(self, lf: pl.LazyFrame) -> pl.LazyFrame:
         return select_range_lf(lf, *self._args())
 
+    def contagem_da_area(self, grade: pl.LazyFrame) -> ContagemArea:
+        """Separa as linhas da grade em acima da área (título), na área,
+        vazias abaixo e preenchidas abaixo (dado que o recorte deixa de
+        fora), e conta as células preenchidas nas colunas fora da área. Uma
+        passada só pela grade, com a mesma regra de ``select_range_lf``."""
+        linha0, col0, linha1, col1, auto = self._args()
+        nomes = grade.collect_schema().names()
+        dentro = [c for c in nomes if col0 <= coluna_indice(c) and (col1 is None or coluna_indice(c) <= col1)]
+        fora = [c for c in nomes if c not in dentro]
+        idx = pl.int_range(pl.len(), dtype=pl.Int64)
+        depois = idx >= linha0
+        if linha1 is not None:
+            na_area = depois & (idx <= linha1)
+        elif auto and dentro:
+            vazia_area = pl.all_horizontal(celula_vazia(c) for c in dentro)
+            na_area = depois & (pl.when(depois).then(vazia_area.cast(pl.Int32)).otherwise(0).cum_sum() == 0)
+        else:
+            na_area = depois
+        vazia = pl.all_horizontal(celula_vazia(c) for c in nomes) if nomes else pl.lit(True)
+        abaixo = depois & ~na_area
+        exprs = [
+            (~depois).sum().alias("acima"),
+            na_area.sum().alias("na_area"),
+            (abaixo & vazia).sum().alias("vazias_abaixo"),
+            (abaixo & ~vazia).sum().alias("preenchidas_abaixo"),
+            (~vazia).sum().alias("nao_vazias"),
+            (idx.filter(na_area).max() + 1).alias("ultima_area"),
+            (idx.filter(~vazia).max() + 1).alias("ultima_preenchida"),
+            *((na_area & ~celula_vazia(c)).sum().alias(f"fora:{c}") for c in fora),
+            *(pl.col(c).cast(pl.String).get(linha0, null_on_oob=True).alias(f"cab:{c}") for c in fora),
+        ]
+        r = grade.select(exprs).collect().row(0, named=True)
+        colunas = tuple(
+            ColunaFora(c, int(r[f"fora:{c}"]), (r[f"cab:{c}"] or "").strip() or None)
+            for c in sorted(fora, key=coluna_indice)
+            if r[f"fora:{c}"]
+        )
+        indices = [coluna_indice(c) for c in dentro]
+        area = f"{coluna_letra(min(indices))}:{coluna_letra(max(indices))}" if indices else ""
+        return ContagemArea(
+            acima=int(r["acima"]),
+            na_area=int(r["na_area"]),
+            vazias_abaixo=int(r["vazias_abaixo"]),
+            preenchidas_abaixo=int(r["preenchidas_abaixo"]),
+            nao_vazias=int(r["nao_vazias"]),
+            colunas_fora=colunas,
+            area=area,
+            ultima_linha_area=r["ultima_area"],
+            ultima_linha_preenchida=r["ultima_preenchida"],
+        )
+
     def to_python(self) -> str:
         return f"lf = select_range_lf(lf, {', '.join(map(repr, self._args()))})"
 
@@ -320,6 +421,7 @@ class HeaderRows(Op):
     colunas recebem esses nomes, na ordem (arquivo sem cabeçalho: ``n=0``)."""
 
     op: Literal["header_rows"]
+    efeito_linhas = "estrutura"
     m_label = "Cabeçalhos promovidos"
     n: int = Field(default=1, ge=0, le=10)
     separator: str = " "
@@ -383,6 +485,7 @@ class DropEmptyRows(Op):
     com espaços)."""
 
     op: Literal["drop_empty_rows"]
+    efeito_linhas = "remove"
     m_label = "Linhas vazias removidas"
 
     python_helpers = (celula_vazia,)
@@ -487,6 +590,7 @@ class Unpivot(Op):
     valores nulos, como o ``Table.UnpivotOtherColumns`` do Power Query."""
 
     op: Literal["unpivot"]
+    efeito_linhas = "multiplica"
     m_label = "Colunas não dinâmicas"
     full_checkpoint = True  # junta a tabela inteira e reordena
     index: list[str] = Field(min_length=1)

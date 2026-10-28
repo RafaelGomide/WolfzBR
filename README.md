@@ -70,13 +70,14 @@ Outros comandos: `wolfz inspect planilha.xlsx` (perfil das colunas), `wolfz sche
 import wolfz
 
 df = wolfz.run("vendas.wolfz.json", "vendas_fevereiro.xlsx")  # polars.DataFrame
+r = wolfz.run_report("vendas.wolfz.json", "vendas_fevereiro.xlsx")  # a tabela e as linhas de cada passo
 
 receita = wolfz.load_recipe("vendas.wolfz.json")  # valida; erro vira wolfz.RecipeError
 wolfz.br.parse_brl("R$ 1.234,56")                  # 1234.56
 wolfz.br.clean_cpf("529.982.247-25")               # '52998224725'
 ```
 
-A API pública é `wolfz.run`, `wolfz.load_recipe`, `wolfz.RecipeError`, `wolfz.StepError` e as funções de `wolfz.br` (números, datas, documentos, UF). O resto do pacote é interno e pode mudar em qualquer versão.
+A API pública é `wolfz.run`, `wolfz.run_report` (com `wolfz.RunReport` e `wolfz.StepCount`), `wolfz.load_recipe`, `wolfz.RecipeError`, `wolfz.StepError` e as funções de `wolfz.br` (números, datas, documentos, UF). O resto do pacote é interno e pode mudar em qualquer versão.
 
 ## Formatos de exportação
 

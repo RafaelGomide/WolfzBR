@@ -31,6 +31,7 @@ class DropRowsWhere(Op):
     (nula) nunca casa, então a linha fica."""
 
     op: Literal["drop_rows_where"]
+    efeito_linhas = "remove"
     m_label = "Linhas removidas"
     col: str = Field(min_length=1)
     match: Literal["equals", "starts_with", "contains", "in"]
@@ -194,6 +195,7 @@ class Filter(Op):
     ``is_null``."""
 
     op: Literal["filter"]
+    efeito_linhas = "remove"
     m_label = "Linhas filtradas"
     col: str = Field(min_length=1)
     match: Literal[
@@ -332,6 +334,7 @@ class Dedupe(Op):
     só essas colunas; sem, a linha inteira."""
 
     op: Literal["dedupe"]
+    efeito_linhas = "remove"
     m_label = "Duplicatas removidas"
     full_checkpoint = True  # compara a tabela inteira
     cols: list[str] | None = None

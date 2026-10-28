@@ -37,6 +37,34 @@ wolfz run vendas.wolfz.json "entrada/*.xlsx" -o saida/ --report relatorio.json
 
 Cada arquivo é processado à parte: um que falha não para os outros. No fim aparece a tabela do que deu certo e do que falhou; `--report` grava o mesmo em JSON, para automatizar.
 
+### Quantas linhas cada passo tirou
+
+Depois de gravar, o `wolfz run` diz quantas linhas leu e quantas gravou:
+
+```
+Lidas 300.120 · gravadas 300.000 · 120 linhas vazias removidas
+```
+
+Quando um passo tira muitas linhas (mais de 1% e pelo menos 10), ou quando a área recortada deixa dado de fora, a linha começa com `Atenção:` e diz qual passo foi:
+
+```
+Atenção: lidas 330.000 · gravadas 300.000 · 30.000 fora da área recortada (9,1%)
+  s1 Recortar a área: -30.000 linhas (9,1%). A área termina na linha 300001; o arquivo vai até a linha 330001.
+Atenção: a coluna I (Canal) tem 12.034 células preenchidas fora da área A:H do passo s1. Elas não entram na saída.
+```
+
+O caso típico é a receita feita num mês com menos linhas, ou com uma coluna a menos: ajuste a área na interface (Original → marcar a área). Linhas vazias, título e cabeçalho nunca dão alerta.
+
+Para o `run` **parar sem gravar** quando perder linhas demais, use `--max-drop` com o limite em percentual das linhas lidas (`1%`, `0.5%`, ou `0` para não aceitar nenhuma perda). O código de saída é 1 e a mensagem começa com `Parado:`. Em lote, o limite vale para cada arquivo.
+
+```bash
+wolfz run vendas.wolfz.json vendas_marco.xlsx -o saida/ --max-drop 1%
+```
+
+O `--report` (um arquivo ou vários) traz, por arquivo, `linhas_lidas`, `linhas_gravadas`, `alerta` e a conta de cada passo (`entrada`, `saida`, `vazias_removidas`, `estrutura_removidas`, `fora_da_area`, `fator`, `alerta`, `motivo`). Ele **não leva nenhum valor de célula**: uma verificação reprovada aparece como coluna, quantidade e números de linha (`CPF se repete em 2 linhas: 809 e 1.204`), e o relatório pode ir para uma issue ou para o cliente sem expor CPF. O `--report` nunca sobrescreve um arquivo existente sem `--overwrite`, e nunca grava em cima da receita ou de uma entrada.
+
+Para ver os valores no terminal enquanto investiga, rode com `--show-values`. Eles aparecem só na tela, nunca no `--report`.
+
 Formatos de saída do `run`: `--format csv` (padrão), `xlsx` ou `parquet`. Para o CSV abrir direto no Excel em português, use `--sep ";" --decimal-comma`.
 
 Pelo Python, num notebook ou script:
@@ -45,7 +73,15 @@ Pelo Python, num notebook ou script:
 import wolfz
 
 df = wolfz.run("vendas.wolfz.json", "vendas_fevereiro.xlsx")  # polars.DataFrame
+
+r = wolfz.run_report("vendas.wolfz.json", "vendas_fevereiro.xlsx")
+r.table                      # a mesma tabela do wolfz.run
+r.rows_read, r.rows_written  # linhas lidas e gravadas
+r.alert                      # algum passo tirou linhas demais?
+r.to_dict()                  # o mesmo JSON do --report
 ```
+
+O `wolfz.run_report` roda a receita em trechos para contar as linhas, por isso é um pouco mais lento que o `wolfz.run`.
 
 Se você usa o **Power BI**, nem precisa rodar o WolfzBR: troque o parâmetro `CaminhoArquivo` e atualize (veja [Usando o M exportado no Power BI](power-bi.md#mês-seguinte)). No **Tableau**, rode e exporte o `.hyper` de novo ([Usando o .hyper no Tableau](tableau.md#mês-seguinte)).
 
@@ -56,7 +92,7 @@ O `wolfz run` sai com um código que diz o que aconteceu:
 | Código | Significado | O que fazer |
 |---|---|---|
 | 0 | Deu certo. | — |
-| 1 | Um passo não se aplicou ou uma verificação reprovou. Nada foi gravado. | Leia a mensagem: ela diz o passo e, se for coluna, quais colunas existem naquele ponto. |
+| 1 | Um passo não se aplicou, uma verificação reprovou ou a perda passou do `--max-drop`. Nada foi gravado. | Leia a mensagem: ela diz o passo e, se for coluna, quais colunas existem naquele ponto. |
 | 2 | Receita inválida, ou uso errado do comando. | A mensagem diz o passo e o campo. |
 | 3 | O arquivo de entrada não pôde ser lido (não existe, corrompido, protegido por senha, acima de 100 MB). | Confira o arquivo. |
 

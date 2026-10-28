@@ -31,6 +31,19 @@ class StepError(Exception):
         self.message = message
         self.available_columns = available_columns
         self.title = title
+        # Verificação reprovada (passo assert): os campos estruturados, sem
+        # valor de célula (S2) — verificacao, coluna, quantidade, linhas.
+        self.verificacao: dict[str, Any] | None = None
+        # Valores de exemplo da verificação: só para o terminal com
+        # --show-values, nunca para o relatório ou o log (R1).
+        self.valores: list[str] = []
+        # A mensagem foi montada pelo WolfzBR (coluna que falta, verificação,
+        # parâmetro errado). Falso quando ela traz o texto de um erro do
+        # Polars, que pode citar o valor da célula: a CLI só mostra com
+        # --show-values (R1).
+        self.detalhe_seguro = True
+        # Na reconciliação: (linhas lidas, contagens dos passos que deram certo).
+        self.contagem_parcial: tuple[int, tuple[Any, ...]] | None = None
         super().__init__(message)
 
     def to_problem(self, status: int = 422, instance: str | None = None) -> dict[str, Any]:

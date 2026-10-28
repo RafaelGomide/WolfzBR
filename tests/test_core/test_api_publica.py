@@ -9,7 +9,17 @@ import inspect
 import wolfz
 import wolfz.br
 
-PUBLICA = {"RecipeError", "StepError", "__version__", "br", "load_recipe", "run"}
+PUBLICA = {
+    "RecipeError",
+    "RunReport",
+    "StepCount",
+    "StepError",
+    "__version__",
+    "br",
+    "load_recipe",
+    "run",
+    "run_report",
+}
 
 PUBLICA_BR = {
     "MESES",

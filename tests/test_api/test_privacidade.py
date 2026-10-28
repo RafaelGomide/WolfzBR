@@ -16,6 +16,7 @@ interface não carrega fonte nem script de fora.
 
 import ast
 import ipaddress
+import json
 import re
 import socket
 from pathlib import Path
@@ -222,6 +223,90 @@ def _imports(caminho: Path) -> set[str]:
         elif isinstance(no, ast.ImportFrom) and no.module and no.level == 0:
             nomes.add(no.module.split(".")[0])
     return nomes
+
+
+# ---------------------------------------------------------------------------
+# Verificações reprovadas no wolfz run (S2, R1)
+# ---------------------------------------------------------------------------
+
+_VERIFICACOES = [
+    {"op": "parse_decimal_br", "cols": ["Valor"]},
+    {"op": "assert", "check": "unique", "cols": ["CPF"]},
+    {"op": "assert", "check": "not_null", "cols": ["Município"]},
+    {"op": "assert", "check": "in_range", "cols": ["Valor"], "max": 1000},
+    {"op": "assert", "check": "matches", "cols": ["Nome"], "pattern": "[A-Za-z ]+"},
+]
+
+
+def _lote_que_reprova(tmp_path, csv_marcado):
+    """Quatro arquivos, cada um reprova numa verificação diferente."""
+    from wolfz.core.recipe import recipe_from_dict, save_recipe
+
+    receita = tmp_path / "verificacoes.wolfz.json"
+    save_recipe(
+        recipe_from_dict(
+            {
+                "wolfz_version": "1.0",
+                "name": "verificacoes",
+                "created_at": "2026-01-01T00:00:00Z",
+                "source": {"type": "csv"},
+                "steps": _numerados(_VERIFICACOES, 1),
+            }
+        ),
+        receita,
+    )
+    entrada = tmp_path / "entrada"
+    entrada.mkdir()
+    cabecalho = csv_marcado.read_bytes().decode("cp1252").splitlines()[0]
+    sem_total = [linha for linha in LINHAS if not linha[0].startswith("Total")]
+    casos = {
+        "a_unique": [*LINHAS[:1], (LINHAS[1][0], CPF, *LINHAS[1][2:])],  # CPF repetido
+        "b_not_null": LINHAS,  # a linha de total não tem município
+        "c_in_range": sem_total,  # 1.234,56 passa de 1000
+        "d_matches": [(n, c, m, u, "1,00", d, o) for n, c, m, u, _, d, o in sem_total],  # nome com dígito
+    }
+    for nome, linhas in casos.items():
+        corpo = "".join(";".join(linha) + "\n" for linha in linhas)
+        (entrada / f"{nome}.csv").write_bytes((cabecalho + "\n" + corpo).encode("cp1252"))
+    return receita
+
+
+@pytest.mark.parametrize("mostrar_valores", [False, True])
+def test_verificacao_reprovada_sem_valor_no_terminal_no_relatorio_e_no_log(
+    tmp_path, csv_marcado, caplog, monkeypatch, mostrar_valores
+):
+    receita = _lote_que_reprova(tmp_path, csv_marcado)
+    relatorio = tmp_path / "relatorio.json"
+    caplog.set_level("DEBUG")
+    monkeypatch.chdir(tmp_path)
+    argumentos = ["run", str(receita), "entrada/*.csv", "-o", "saida", "--report", "relatorio.json"]
+    resultado = CliRunner().invoke(cli, argumentos + (["--show-values"] if mostrar_valores else []))
+    assert resultado.exit_code == 1, resultado.output
+    texto_relatorio = relatorio.read_text(encoding="utf-8")
+    dados = json.loads(texto_relatorio)
+    itens = {Path(i["arquivo"]).stem: i for i in dados["arquivos"]}
+    assert {k: (i["ok"], i.get("verificacao")) for k, i in itens.items()} == {
+        "a_unique": (False, "unique"),
+        "b_not_null": (False, "not_null"),
+        "c_in_range": (False, "in_range"),
+        "d_matches": (False, "matches"),
+    }
+    unico = itens["a_unique"]
+    assert (unico["coluna"], unico["quantidade"], unico["linhas"], unico["passo"]) == ("CPF", 2, [1, 2], "s2")
+    assert unico["erro"] == "Verificação reprovada no passo s2: CPF se repete em 2 linhas: 1 e 2."
+    # O relatório nunca leva valor, nem com --show-values, nem caminho resolvido.
+    for proibido in (MARCA, CPF, str(tmp_path)):
+        assert proibido not in texto_relatorio
+    assert all(not Path(i["arquivo"]).is_absolute() for i in dados["arquivos"])
+    assert MARCA not in caplog.text and CPF not in caplog.text
+    if mostrar_valores:
+        terminal = resultado.stdout + resultado.stderr
+        assert CPF in terminal and MARCA in terminal
+    else:
+        for proibido in (MARCA, CPF):
+            assert proibido not in resultado.stdout
+            assert proibido not in resultado.stderr
+        assert "1 e 2" in resultado.stdout + resultado.stderr
 
 
 def test_pacote_nao_importa_cliente_de_rede():

@@ -8,7 +8,7 @@ Schema da receita (``wolfz schema``), e os parâmetros de cada passo vêm de
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -136,6 +136,48 @@ class Pagina(_Resposta):
     rows: list[list[Any]]
     total_rows: int
     offset: int
+
+
+class ContagemPasso(_Resposta):
+    """Linhas de um passo ativo (F1). ``entrada - saida`` é o que ele tirou;
+    ``vazias_removidas``, ``estrutura_removidas`` (título, cabeçalho) e
+    ``fora_da_area`` dizem quanto disso era o quê. ``alerta`` e ``motivo``
+    vêm prontos: a interface não recalcula a regra."""
+
+    id: str
+    op: str
+    entrada: int
+    saida: int
+    vazias_removidas: int
+    estrutura_removidas: int
+    fora_da_area: int
+    fator: float | None = Field(description="Só no unpivot: saida / entrada.")
+    alerta: bool
+    motivo: Literal["perda", "fora_da_area", "multiplicacao"] | None
+
+
+class ColunaForaDaArea(_Resposta):
+    letra: str
+    celulas: int = Field(description="Células preenchidas da coluna nas linhas da área.")
+    cabecalho: str | None = Field(
+        description="Texto da 1ª linha da área na coluna (só na interface; o --report não grava)."
+    )
+    passo: str = Field(description="O select_range que deixou a coluna de fora.")
+    area: str = Field(description='Colunas da área, ex.: "A:H".')
+
+
+class Reconciliacao(_Resposta):
+    """Reconciliação de linhas da receita da versão ``etag`` (F1). Com um
+    passo que falha, ``passo_com_erro`` diz qual e ``passos`` para antes
+    dele; ``linhas_gravadas`` fica nulo."""
+
+    etag: str
+    linhas_lidas: int
+    linhas_gravadas: int | None
+    alerta: bool
+    passos: list[ContagemPasso]
+    colunas_fora_da_area: list[ColunaForaDaArea]
+    passo_com_erro: str | None = None
 
 
 class ReceitaSalva(_Resposta):

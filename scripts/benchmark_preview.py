@@ -6,7 +6,10 @@ Gera uma grade sintética (500 mil linhas por padrão) no formato do
 - **abertura**: o primeiro preview, que grava os checkpoints completos;
 - **edição do último passo**: troca o filtro do fim da receita e pede a
   primeira página (o caso do SLO, §12.4: p50 ≤ 300 ms, p95 ≤ 1 s);
-- **rolagem**: páginas em posições aleatórias da mesma receita.
+- **rolagem**: páginas em posições aleatórias da mesma receita;
+- **contagem** (F1 da 1.1): a reconciliação de linhas que a interface pede
+  depois do preview (``GET /reconciliation``), na abertura e depois de
+  editar o último passo. Critério: no máximo 2 s a mais na abertura.
 
 Uso::
 
@@ -31,10 +34,11 @@ import polars as pl
 
 import wolfz.ops  # noqa: F401  (registra o catálogo)
 from wolfz.core.engine.cache import Checkpoints
-from wolfz.core.engine.preview import preview
+from wolfz.core.engine.preview import contagens, preview
 from wolfz.core.recipe import recipe_from_dict
 
 SLO_P50, SLO_P95 = 0.300, 1.0
+LIMITE_CONTAGEM = 2.0  # s a mais na abertura (critério do ADR-10)
 UFS = ["ES", "SP", "RJ", "MG", "BA", "PR", "SC", "RS", "GO", "PE"]
 MUNICIPIOS = ["Vitória", "Serra", "Vila Velha", "Cariacica", "Linhares", "Colatina", "Guarapari", "Aracruz"]
 
@@ -108,12 +112,14 @@ def medir(linhas: int, repeticoes: int, pasta: Path, usar_cache: bool = True) ->
     cache = Checkpoints(pasta / "checkpoints") if usar_cache else None
 
     abertura = _cronometra(lambda: preview(raw, "bench", receita(_filtro(0)), None, 0, 200, cache))
+    contagem_abertura = _cronometra(lambda: contagens(raw, "bench", receita(_filtro(0)), cache))
 
-    edicoes = []
+    edicoes, contagens_edicao = [], []
     for i in range(1, repeticoes + 1):
         edicoes.append(
             _cronometra(lambda i=i: preview(raw, "bench", receita(_filtro(i)), None, 0, 200, cache))
         )
+        contagens_edicao.append(_cronometra(lambda i=i: contagens(raw, "bench", receita(_filtro(i)), cache)))
 
     rng = random.Random(1)
     fixa = receita(_filtro(1))
@@ -136,9 +142,12 @@ def medir(linhas: int, repeticoes: int, pasta: Path, usar_cache: bool = True) ->
         "abertura_ms": round(abertura * 1000, 1),
         "edicao_ultimo_passo": resumo(edicoes),
         "rolagem": resumo(rolagem),
+        "contagem_abertura_ms": round(contagem_abertura * 1000, 1),
+        "contagem_edicao_ultimo_passo": resumo(contagens_edicao),
     }
     edicao = resultado["edicao_ultimo_passo"]
     resultado["dentro_do_slo"] = edicao["p50_ms"] <= SLO_P50 * 1000 and edicao["p95_ms"] <= SLO_P95 * 1000
+    resultado["contagem_dentro"] = contagem_abertura <= LIMITE_CONTAGEM
     return resultado
 
 
@@ -157,15 +166,18 @@ def main(argv: list[str] | None = None) -> int:
         linhas = f"{r['linhas']:,}".replace(",", ".")
         print(f"{linhas} linhas, {r['repeticoes']} repetições" + ("" if r["cache"] else ", sem cache"))
         print(f"abertura: {r['abertura_ms']:.0f} ms")
+        print(f"contagem na abertura: {r['contagem_abertura_ms']:.0f} ms")
         for rotulo, chave in [
             ("editar o último passo", "edicao_ultimo_passo"),
             ("rolagem (página nova)", "rolagem"),
+            ("contagem depois de editar", "contagem_edicao_ultimo_passo"),
         ]:
             m = r[chave]
             print(f"{rotulo}: p50 {m['p50_ms']:.0f} ms · p95 {m['p95_ms']:.0f} ms · máx {m['max_ms']:.0f} ms")
         veredito = "dentro" if r["dentro_do_slo"] else "FORA"
         print(f"SLO (p50 ≤ 300 ms, p95 ≤ 1 s): {veredito}")
-    return 0 if r["dentro_do_slo"] else 1
+        print(f"contagem (≤ 2 s a mais na abertura): {'dentro' if r['contagem_dentro'] else 'FORA'}")
+    return 0 if r["dentro_do_slo"] and r["contagem_dentro"] else 1
 
 
 if __name__ == "__main__":

@@ -782,14 +782,13 @@ def _ja_despivotou(ctx: Contexto) -> bool:
 
 
 def _linhas_vazias(df: pl.DataFrame) -> pl.Series:
-    """Máscara das linhas em que toda célula é nula ou só espaço."""
+    """Máscara das linhas em que toda célula é nula ou só espaço: a mesma
+    regra do ``drop_empty_rows`` e da reconciliação (ADR-10)."""
+    from wolfz.ops.estrutura import celula_vazia  # wolfz.ops importa wolfz.core
+
     if df.width == 0:
         return pl.Series([], dtype=pl.Boolean)
-    return df.select(
-        pl.all_horizontal(
-            pl.col(c).is_null() | (pl.col(c).cast(pl.String).str.strip_chars() == "") for c in df.columns
-        )
-    ).to_series()
+    return df.select(pl.all_horizontal(celula_vazia(c) for c in df.columns)).to_series()
 
 
 @rule

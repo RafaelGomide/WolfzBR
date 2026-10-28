@@ -29,8 +29,9 @@ from wolfz.api.projetos import Projetos
 from wolfz.api.security import Settings
 from wolfz.br.municipios import buscar
 from wolfz.core.detect import Detection, detect_tables, main_table
-from wolfz.core.engine import collect, run
-from wolfz.core.engine.preview import LIMITE_PAGINA, preview_project
+from wolfz.core.engine import StepError, collect, run
+from wolfz.core.engine.preview import LIMITE_PAGINA, contagens_project, preview_project
+from wolfz.core.engine.reconcilia import Reconciliation, StepCount
 from wolfz.core.ingest import SheetStructure, import_file, list_sheets, open_file
 from wolfz.core.ingest.abas import padrao_de_aba
 from wolfz.core.ingest.limits import too_large_message
@@ -101,6 +102,15 @@ def _etag(recipe: Recipe) -> str:
 
 def _receita_json(recipe: Recipe) -> dict[str, Any]:
     return json.loads(dumps_recipe(recipe))
+
+
+def _reconciliacao_json(r: Reconciliation, etag: str) -> dict[str, Any]:
+    # O cabeçalho da coluna fora da área vai para a interface, que já mostra
+    # a grade (D3); o --report (``to_dict``) não o grava.
+    fora = [
+        {**c.to_dict(), "cabecalho": c.header, "passo": c.step, "area": c.area} for c in r.outside_columns
+    ]
+    return {"etag": etag, **r.to_dict(), "colunas_fora_da_area": fora, "passo_com_erro": None}
 
 
 def _nome_seguro(nome: str, padrao: str = "tabela") -> str:
@@ -309,6 +319,31 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
                 raise Problem(422, f"Colunas inexistentes neste passo: {', '.join(faltam)}.")
             pagina.frame = pagina.frame.select(pedidas)
         return pagina.to_dict()
+
+    @api.get("/projects/{project_id}/reconciliation", response_model=m.Reconciliacao)
+    def reconciliacao(project_id: str) -> dict[str, Any]:
+        """Quantas linhas cada passo ativo tirou ou acrescentou, com o
+        alerta (F1). Fica fora do ``GET /preview`` para a grade não esperar:
+        a interface pede depois e descarta a resposta de um ``etag`` velho.
+        A contagem fica no cache do preview; depois de editar o passo N, só
+        os passos de N em diante voltam a ser contados."""
+        pasta = projetos.abrir(project_id)
+        atual = receita(pasta)
+        etag = _etag(atual)
+        with projetos.lock_preview(project_id):
+            try:
+                r = contagens_project(pasta, atual)
+            except StepError as exc:
+                if exc.contagem_parcial is None:
+                    raise
+                lidas, feitos = exc.contagem_parcial
+                parcial = Reconciliation(lidas, 0, tuple(c for c in feitos if isinstance(c, StepCount)))
+                return {
+                    **_reconciliacao_json(parcial, etag),
+                    "linhas_gravadas": None,
+                    "passo_com_erro": exc.step_id,
+                }
+        return _reconciliacao_json(r, etag)
 
     # -----------------------------------------------------------------------
     # Sugestões (F2.E)

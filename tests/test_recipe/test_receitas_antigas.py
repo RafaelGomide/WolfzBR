@@ -24,8 +24,8 @@ import pytest
 from polars.testing import assert_frame_equal
 
 import wolfz
-from wolfz.core.engine import run_file
-from wolfz.core.recipe import CURRENT_VERSION, load_recipe, migrate
+from wolfz.core.engine import run_file, run_report
+from wolfz.core.recipe import CURRENT_VERSION, dumps_recipe, load_recipe, migrate
 
 TESTES = Path(__file__).resolve().parents[1]
 ANTIGAS = TESTES / "receitas_antigas"
@@ -95,3 +95,31 @@ def test_receita_antiga_da_a_mesma_tabela(tag, nome, entrada):
     caminho = RAIZ / entrada if entrada.startswith("tests/") else ANTIGAS / entrada
     esperado = pl.read_parquet(ANTIGAS / tag / f"{nome}.parquet")
     assert_frame_equal(run_file(receita, caminho), esperado)
+
+
+@pytest.mark.parametrize(("tag", "nome", "entrada"), RECEITAS)
+def test_run_report_da_a_mesma_tabela(tag, nome, entrada):
+    """A reconciliação roda a receita em trechos (ADR-10): a tabela tem de
+    ser a mesma do plano único, e o arquivo gravado pelo ``wolfz run``, o
+    mesmo da versão anterior."""
+    receita = load_recipe(ANTIGAS / tag / f"{nome}.wolfz.json")
+    caminho = RAIZ / entrada if entrada.startswith("tests/") else ANTIGAS / entrada
+    r = run_report(receita, caminho)
+    assert_frame_equal(r.table, pl.read_parquet(ANTIGAS / tag / f"{nome}.parquet"))
+    assert r.rows_written == r.table.height
+    assert [s.id for s in r.steps] == [s.id for s in receita.active_steps]
+
+
+RECEITAS_1_0 = [
+    pytest.param(p, id=f"{p.parent.name}-{p.name}")
+    for tag in TAGS
+    if tag.startswith("v1.")
+    for p in sorted((ANTIGAS / tag).glob("*.wolfz.json"))
+]
+
+
+@pytest.mark.parametrize("caminho", RECEITAS_1_0)
+def test_receita_1_0_salva_de_novo_com_os_mesmos_bytes(caminho):
+    """Abrir e salvar uma receita do formato 1.0 não muda nenhum byte: o
+    diff no Git fica limpo e a chave dos checkpoints não muda (ADR-9)."""
+    assert dumps_recipe(load_recipe(caminho)) == caminho.read_text(encoding="utf-8")

@@ -93,6 +93,51 @@
         "title": "Body_listar_abas_api_sheets_post",
         "type": "object"
       },
+      "ColunaForaDaArea": {
+        "additionalProperties": true,
+        "properties": {
+          "area": {
+            "description": "Colunas da área, ex.: \"A:H\".",
+            "title": "Area",
+            "type": "string"
+          },
+          "cabecalho": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Texto da 1ª linha da área na coluna (só na interface; o --report não grava).",
+            "title": "Cabecalho"
+          },
+          "celulas": {
+            "description": "Células preenchidas da coluna nas linhas da área.",
+            "title": "Celulas",
+            "type": "integer"
+          },
+          "letra": {
+            "title": "Letra",
+            "type": "string"
+          },
+          "passo": {
+            "description": "O select_range que deixou a coluna de fora.",
+            "title": "Passo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "letra",
+          "celulas",
+          "cabecalho",
+          "passo",
+          "area"
+        ],
+        "title": "ColunaForaDaArea",
+        "type": "object"
+      },
       "ColunaPreview": {
         "additionalProperties": true,
         "properties": {
@@ -110,6 +155,86 @@
           "dtype"
         ],
         "title": "ColunaPreview",
+        "type": "object"
+      },
+      "ContagemPasso": {
+        "additionalProperties": true,
+        "description": "Linhas de um passo ativo (F1). ``entrada - saida`` é o que ele tirou;\n``vazias_removidas``, ``estrutura_removidas`` (título, cabeçalho) e\n``fora_da_area`` dizem quanto disso era o quê. ``alerta`` e ``motivo``\nvêm prontos: a interface não recalcula a regra.",
+        "properties": {
+          "alerta": {
+            "title": "Alerta",
+            "type": "boolean"
+          },
+          "entrada": {
+            "title": "Entrada",
+            "type": "integer"
+          },
+          "estrutura_removidas": {
+            "title": "Estrutura Removidas",
+            "type": "integer"
+          },
+          "fator": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Só no unpivot: saida / entrada.",
+            "title": "Fator"
+          },
+          "fora_da_area": {
+            "title": "Fora Da Area",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "motivo": {
+            "anyOf": [
+              {
+                "enum": [
+                  "perda",
+                  "fora_da_area",
+                  "multiplicacao"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motivo"
+          },
+          "op": {
+            "title": "Op",
+            "type": "string"
+          },
+          "saida": {
+            "title": "Saida",
+            "type": "integer"
+          },
+          "vazias_removidas": {
+            "title": "Vazias Removidas",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "op",
+          "entrada",
+          "saida",
+          "vazias_removidas",
+          "estrutura_removidas",
+          "fora_da_area",
+          "fator",
+          "alerta",
+          "motivo"
+        ],
+        "title": "ContagemPasso",
         "type": "object"
       },
       "Deteccao": {
@@ -1046,6 +1171,70 @@
         "title": "ReceitaSalva",
         "type": "object"
       },
+      "Reconciliacao": {
+        "additionalProperties": true,
+        "description": "Reconciliação de linhas da receita da versão ``etag`` (F1). Com um\npasso que falha, ``passo_com_erro`` diz qual e ``passos`` para antes\ndele; ``linhas_gravadas`` fica nulo.",
+        "properties": {
+          "alerta": {
+            "title": "Alerta",
+            "type": "boolean"
+          },
+          "colunas_fora_da_area": {
+            "items": {
+              "$ref": "#/components/schemas/ColunaForaDaArea"
+            },
+            "title": "Colunas Fora Da Area",
+            "type": "array"
+          },
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "linhas_gravadas": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linhas Gravadas"
+          },
+          "linhas_lidas": {
+            "title": "Linhas Lidas",
+            "type": "integer"
+          },
+          "passo_com_erro": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Passo Com Erro"
+          },
+          "passos": {
+            "items": {
+              "$ref": "#/components/schemas/ContagemPasso"
+            },
+            "title": "Passos",
+            "type": "array"
+          }
+        },
+        "required": [
+          "etag",
+          "linhas_lidas",
+          "linhas_gravadas",
+          "alerta",
+          "passos",
+          "colunas_fora_da_area"
+        ],
+        "title": "Reconciliacao",
+        "type": "object"
+      },
       "Sugestao": {
         "additionalProperties": true,
         "description": "Passos propostos por uma regra (F2.E). ``kind=\"aviso\"`` não tem passo.",
@@ -1772,6 +1961,46 @@
           }
         },
         "summary": "Salvar Receita"
+      }
+    },
+    "/api/projects/{project_id}/reconciliation": {
+      "get": {
+        "description": "Quantas linhas cada passo ativo tirou ou acrescentou, com o\nalerta (F1). Fica fora do ``GET /preview`` para a grade não esperar:\na interface pede depois e descarta a resposta de um ``etag`` velho.\nA contagem fica no cache do preview; depois de editar o passo N, só\nos passos de N em diante voltam a ser contados.",
+        "operationId": "reconciliacao_api_projects__project_id__reconciliation_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Reconciliacao"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reconciliacao"
       }
     },
     "/api/projects/{project_id}/steps/{step_id}/municipios": {
