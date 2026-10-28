@@ -12,7 +12,7 @@ IBGE embutido) são internos e podem mudar em qualquer versão.
 
 from wolfz.br.booleanos import parse_bool_br
 from wolfz.br.constants import MESES, UFS
-from wolfz.br.datas import excel_serial_to_date, parse_date_br, parse_month_year
+from wolfz.br.datas import excel_serial_to_date, parse_date_br, parse_datetime_br, parse_month_year
 from wolfz.br.documentos import (
     clean_cep,
     clean_cnpj,
@@ -53,6 +53,7 @@ __all__ = [
     "parse_bool_br",
     "parse_brl",
     "parse_date_br",
+    "parse_datetime_br",
     "parse_ibge_value",
     "parse_month_year",
     "parse_number_br",

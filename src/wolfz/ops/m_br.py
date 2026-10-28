@@ -193,6 +193,65 @@ DATA_BR = f"""
         resultado
 """
 
+# parse_datetime_br: a data sai do WolfzDataBr (mesmas regras), a hora
+# 'h:mm[:ss[.fff]]' depois do último espaço ou 'T', com o fuso no fim ignorado
+# (R12). Serial do Excel com fração: arredondado ao milissegundo, com o
+# mesmo arredondamento do Python (RoundingMode.ToEven, o padrão do M).
+DATA_HORA_BR = """
+(v as any, oito as text, pivo as number, serial as logical) as nullable datetime =>
+    if v = null then null
+    else if v is datetime then v
+    else if v is datetimezone then DateTimeZone.RemoveZone(v)
+    else if v is date then DateTime.From(v)
+    else if WolfzNulo(v) then null
+    else
+    let
+        tn = WolfzEspacos(Text.From(v, "en-US")),
+        digitos = (s as text) as logical => Text.Length(s) > 0 and Text.Select(s, {"0".."9"}) = s,
+        pos = Text.PositionOfAny(tn, {" ", "T"}, Occurrence.Last),
+        cauda = if pos > 0 then Text.Range(tn, pos + 1) else "",
+        temHora = Text.Contains(cauda, ":"),
+        // Fuso no fim: 'Z', '+hh:mm', '-hhmm'... A hora nunca tem + nem -.
+        posFuso = Text.PositionOfAny(cauda, {"+", "-"}),
+        fuso = if Text.EndsWith(cauda, "Z") then "" else if posFuso >= 0 then Text.Range(cauda, posFuso + 1) else "",
+        fusoOk = fuso = "" or (digitos(Text.Remove(fuso, ":")) and Text.Length(Text.Remove(fuso, ":")) = 4
+            and (Text.Length(fuso) = 4 or (Text.Length(fuso) = 5 and Text.Middle(fuso, 2, 1) = ":"))),
+        relogio = if Text.EndsWith(cauda, "Z") then Text.Start(cauda, Text.Length(cauda) - 1)
+            else if posFuso >= 0 then Text.Start(cauda, posFuso) else cauda,
+        partes = Text.Split(relogio, ":"),
+        segFrac = if List.Count(partes) = 3 then Text.Split(partes{2}, ".") else {"0"},
+        frac = if List.Count(segFrac) = 2 then segFrac{1} else "",
+        horaOk = (List.Count(partes) = 2 or List.Count(partes) = 3)
+            and digitos(partes{0}) and Text.Length(partes{0}) <= 2
+            and digitos(partes{1}) and Text.Length(partes{1}) = 2
+            and (List.Count(partes) = 2 or (digitos(segFrac{0}) and Text.Length(segFrac{0}) = 2
+                and List.Count(segFrac) <= 2 and (List.Count(segFrac) = 1 or digitos(frac)))),
+        h = if horaOk then Number.From(partes{0}) else 0,
+        mi = if horaOk then Number.From(partes{1}) else 0,
+        s = if horaOk and List.Count(partes) = 3 then Number.From(segFrac{0}) else 0,
+        micro = if frac = "" then 0 else Number.From(Text.PadEnd(Text.Start(frac, 6), 6, "0")),
+        comHora =
+            if not (horaOk and fusoOk) or h > 23 or mi > 59 or s > 59 then null
+            else let d = WolfzDataBr(Text.Start(tn, pos), oito, pivo, serial)
+            in if d = null then null
+            else DateTime.From(d) + #duration(0, h, mi, s) + #duration(0, 0, 0, micro / 1000000),
+        k = WolfzChave(v),
+        ponto = Text.Replace(k, ",", "."),
+        partesSerial = Text.Split(ponto, "."),
+        ehSerial = serial and List.Count(partesSerial) = 2 and Text.Length(partesSerial{0}) = 5
+            and digitos(partesSerial{0}) and digitos(partesSerial{1}),
+        n = if ehSerial then Number.From(ponto, "en-US") else 0,
+        dias = Number.RoundDown(n),
+        ms = Number.Round((n - dias) * 86400000),
+        semHora =
+            if ehSerial then
+                if n < 20000 or n > 80000 then null
+                else #datetime(1899, 12, 30, 0, 0, 0) + #duration(dias, 0, 0, ms / 1000)
+            else let d = WolfzDataBr(v, oito, pivo, serial) in if d = null then null else DateTime.From(d)
+    in
+        if temHora then comHora else semHora
+"""
+
 MES_ANO = f"""
 (v as any, pivo as number) as nullable date =>
     if v = null then null

@@ -2,7 +2,7 @@
 
 <!-- Gerado por scripts/gerar_operacoes.py a partir do catálogo. Não edite à mão. -->
 
-As 40 operações que um passo de receita pode usar, no formato `wolfz_version: "1.0"`. O formato da receita está em [`receita.md`](receita.md). Cada operação tem a mesma regra no motor (Polars), na consulta Power Query M e no script Python exportados, com teste de equivalência.
+As 41 operações que um passo de receita pode usar, no formato `wolfz_version: "1.0"`. O formato da receita está em [`receita.md`](receita.md). Cada operação tem a mesma regra no motor (Polars), na consulta Power Query M e no script Python exportados, com teste de equivalência.
 
 Todo passo tem também `id` (`s1`, `s2`, …), `op` (o nome da operação) e, opcional, `enabled` (`false` deixa o passo na receita sem rodar). Os exemplos abaixo são calculados pelo motor a cada geração deste arquivo.
 
@@ -36,6 +36,7 @@ Todo passo tem também `id` (`s1`, `s2`, …), `op` (o nome da operação) e, op
   - [`parse_decimal_br`](#parse_decimal_br): Número brasileiro (1.234,56)
   - [`parse_percent`](#parse_percent): Percentual
   - [`parse_date_br`](#parse_date_br): Data (dd/mm/aaaa)
+  - [`parse_datetime_br`](#parse_datetime_br): Data e hora (dd/mm/aaaa hh:mm)
   - [`parse_month_year`](#parse_month_year): Mês/ano
   - [`parse_bool_br`](#parse_bool_br): Sim/não
   - [`clean_cpf`](#clean_cpf): Limpar CPF
@@ -1923,6 +1924,116 @@ Passo = Table.TransformColumns(Origem, {{"d", each WolfzDataBr(_, "auto", 30, tr
 ```
 
 Usa as funções auxiliares `WolfzChave`, `WolfzDataBr`, `WolfzEspacos`, `WolfzNulo`, `WolfzSemAcento`, declaradas no início da consulta exportada.
+
+<a id="parse_datetime_br"></a>
+
+### `parse_datetime_br`: Data e hora (dd/mm/aaaa hh:mm)
+
+Data e hora: '31/01/2026 14:35:22', '31/01/2026 14:35',
+'2026-01-31T14:35:22', com milissegundos, serial do Excel com fração.
+Lê a data como ``parse_date_br`` (mesmos parâmetros) e mantém a hora;
+data sem hora fica com 00:00:00. O fuso no fim ('Z', '-03:00') é
+ignorado: fica a hora do relógio, e o arquivo não grava fuso. Hora
+impossível ('25:61') vira nulo.
+
+| Parâmetro | Tipo | Padrão | Descrição |
+|---|---|---|---|
+| `cols` | lista de colunas | obrigatório | Colunas |
+| `eight_digits` | um de: `"auto"`, `"ymd"`, `"dmy"` | `"auto"` | Oito dígitos |
+| `century_pivot` | inteiro (mín. 0, máx. 99) | `30` | Virada do século (ano com 2 dígitos) |
+| `accept_excel_serial` | sim/não | `true` | Aceitar número de série do Excel |
+
+**Exemplo 1**
+
+```json
+{"op": "parse_datetime_br", "cols": ["d"]}
+```
+
+Antes:
+
+| d |
+|---|
+| `31/01/2026 14:35:22` |
+| `31/01/2026 14:35` |
+| `2026-01-31T14:35:22` |
+| `2026-01-31 14:35:22.123` |
+| `2026-01-31T14:35:22Z` |
+| `2026-01-31T14:35:22-03:00` |
+| `46053.6079` |
+| `31/01/2026` |
+
+*… mais 7 linhas.*
+
+Depois:
+
+| d |
+|---|
+| 2026-01-31T14:35:22 |
+| 2026-01-31T14:35:00 |
+| 2026-01-31T14:35:22 |
+| 2026-01-31T14:35:22.123000 |
+| 2026-01-31T14:35:22 |
+| 2026-01-31T14:35:22 |
+| 2026-01-31T14:35:22.560000 |
+| 2026-01-31T00:00:00 |
+
+*… mais 7 linhas.*
+
+**Exemplo 2**
+
+```json
+{"op": "parse_datetime_br", "cols": ["d"], "eight_digits": "ymd", "accept_excel_serial": false}
+```
+
+Antes:
+
+| d |
+|---|
+| `20240201 08:01:02` |
+| `01022024 08:01` |
+| `46053.6079` |
+| `45657` |
+
+Depois:
+
+| d |
+|---|
+| 2024-02-01T08:01:02 |
+| *nulo* |
+| *nulo* |
+| *nulo* |
+
+**Exemplo 3**
+
+```json
+{"op": "parse_datetime_br", "cols": ["d"], "eight_digits": "dmy", "century_pivot": 50}
+```
+
+Antes:
+
+| d |
+|---|
+| `01022024 08:01` |
+| `15/03/49 23:59:59` |
+| `31.12.9999 10:00` |
+| `31 de janeiro de 2026 8:05` |
+
+Depois:
+
+| d |
+|---|
+| 2024-02-01T08:01:00 |
+| 2049-03-15T23:59:59 |
+| *nulo* |
+| 2026-01-31T08:05:00 |
+
+Em Power Query M (passo do primeiro exemplo):
+
+```m
+Passo = Table.TransformColumns(Origem, {{"d", each WolfzDataHoraBr(_, "auto", 30, true), type nullable datetime}})
+```
+
+Usa as funções auxiliares `WolfzChave`, `WolfzDataBr`, `WolfzDataHoraBr`, `WolfzEspacos`, `WolfzNulo`, `WolfzSemAcento`, declaradas no início da consulta exportada.
 
 <a id="parse_month_year"></a>
 

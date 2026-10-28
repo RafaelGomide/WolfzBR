@@ -2,8 +2,8 @@
 
 Para cada coluna: tipo brasileiro inferido, nulos, marcadores de nulo
 ('-', 'N/D', '#N/D'…), distintos, formas mais comuns (``value_shape``),
-exemplos e, quando o tipo é número, moeda, percentual ou data, mínimo e
-máximo já convertidos.
+exemplos e, quando o tipo é número, moeda, percentual, data ou data e hora,
+mínimo e máximo já convertidos.
 
 Tabelas grandes são perfiladas numa amostra (10 mil linhas por padrão). A
 amostra é aleatória mas determinística (semente fixa) e mantém a ordem
@@ -21,7 +21,7 @@ from typing import Any
 
 import polars as pl
 
-from wolfz.br.datas import parse_date_br, parse_month_year
+from wolfz.br.datas import parse_date_br, parse_datetime_br, parse_month_year
 from wolfz.br.numeros import parse_brl, parse_number_br, parse_percent_br
 from wolfz.core.profile.infer import infer_br_type
 from wolfz.core.profile.quick import value_shape
@@ -38,6 +38,7 @@ _ORDENAVEIS: dict[str, Callable[[str], float | date | None]] = {
     "moeda": parse_brl,
     "percentual": parse_percent_br,
     "data": lambda v: parse_date_br(v, accept_excel_serial=False),
+    "data_hora": lambda v: parse_datetime_br(v, accept_excel_serial=False),
     "mes_ano": parse_month_year,
 }
 
@@ -102,7 +103,7 @@ def profile_column(series: pl.Series) -> ColumnProfile:
     inferred, rate = infer_br_type(values, sample=len(values) or 1)
 
     minimum = maximum = None
-    if series.dtype.is_numeric() or series.dtype == pl.Date:
+    if series.dtype.is_numeric() or series.dtype == pl.Date or isinstance(series.dtype, pl.Datetime):
         # Já convertida: o mínimo e o máximo são os da coluna. Relida como
         # texto, '0.087' seria 87 (ponto de milhar).
         preenchida = series.drop_nulls()

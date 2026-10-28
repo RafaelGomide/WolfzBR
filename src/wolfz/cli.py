@@ -11,7 +11,7 @@ from __future__ import annotations
 import glob
 import json
 import re
-from datetime import date
+from datetime import date, datetime
 from enum import IntEnum, StrEnum
 from pathlib import Path
 from typing import Annotated, Any, NoReturn
@@ -706,6 +706,8 @@ def _pct(x: float) -> str:
 def _valor(v: float | date | None) -> str:
     if v is None:
         return ""
+    if isinstance(v, datetime):  # data e hora: sem segundos no perfil (ux.md §3.3)
+        return v.strftime("%d/%m/%Y %H:%M")
     if isinstance(v, date):
         return v.strftime("%d/%m/%Y")
     if float(v).is_integer():

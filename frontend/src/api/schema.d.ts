@@ -184,6 +184,30 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/projects/{project_id}/reconciliation": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Reconciliacao
+     * @description Quantas linhas cada passo ativo tirou ou acrescentou, com o
+     *     alerta (F1). Fica fora do ``GET /preview`` para a grade não esperar:
+     *     a interface pede depois e descarta a resposta de um ``etag`` velho.
+     *     A contagem fica no cache do preview; depois de editar o passo N, só
+     *     os passos de N em diante voltam a ser contados.
+     */
+    get: operations["reconciliacao_api_projects__project_id__reconciliation_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/projects/{project_id}/steps/{step_id}/municipios": {
     parameters: {
       query?: never;
@@ -326,12 +350,73 @@ export interface components {
        */
       file: string;
     };
+    /** ColunaForaDaArea */
+    ColunaForaDaArea: {
+      /**
+       * Area
+       * @description Colunas da área, ex.: "A:H".
+       */
+      area: string;
+      /**
+       * Cabecalho
+       * @description Texto da 1ª linha da área na coluna (só na interface; o --report não grava).
+       */
+      cabecalho: string | null;
+      /**
+       * Celulas
+       * @description Células preenchidas da coluna nas linhas da área.
+       */
+      celulas: number;
+      /** Letra */
+      letra: string;
+      /**
+       * Passo
+       * @description O select_range que deixou a coluna de fora.
+       */
+      passo: string;
+    } & {
+      [key: string]: unknown;
+    };
     /** ColunaPreview */
     ColunaPreview: {
       /** Dtype */
       dtype: string;
       /** Name */
       name: string;
+    } & {
+      [key: string]: unknown;
+    };
+    /**
+     * ContagemPasso
+     * @description Linhas de um passo ativo (F1). ``entrada - saida`` é o que ele tirou;
+     *     ``vazias_removidas``, ``estrutura_removidas`` (título, cabeçalho) e
+     *     ``fora_da_area`` dizem quanto disso era o quê. ``alerta`` e ``motivo``
+     *     vêm prontos: a interface não recalcula a regra.
+     */
+    ContagemPasso: {
+      /** Alerta */
+      alerta: boolean;
+      /** Entrada */
+      entrada: number;
+      /** Estrutura Removidas */
+      estrutura_removidas: number;
+      /**
+       * Fator
+       * @description Só no unpivot: saida / entrada.
+       */
+      fator: number | null;
+      /** Fora Da Area */
+      fora_da_area: number;
+      /** Id */
+      id: string;
+      /** Motivo */
+      motivo: ("perda" | "fora_da_area" | "multiplicacao") | null;
+      /** Op */
+      op: string;
+      /** Saida */
+      saida: number;
+      /** Vazias Removidas */
+      vazias_removidas: number;
     } & {
       [key: string]: unknown;
     };
@@ -713,6 +798,30 @@ export interface components {
       recipe: {
         [key: string]: unknown;
       };
+    } & {
+      [key: string]: unknown;
+    };
+    /**
+     * Reconciliacao
+     * @description Reconciliação de linhas da receita da versão ``etag`` (F1). Com um
+     *     passo que falha, ``passo_com_erro`` diz qual e ``passos`` para antes
+     *     dele; ``linhas_gravadas`` fica nulo.
+     */
+    Reconciliacao: {
+      /** Alerta */
+      alerta: boolean;
+      /** Colunas Fora Da Area */
+      colunas_fora_da_area: components["schemas"]["ColunaForaDaArea"][];
+      /** Etag */
+      etag: string;
+      /** Linhas Gravadas */
+      linhas_gravadas: number | null;
+      /** Linhas Lidas */
+      linhas_lidas: number;
+      /** Passo Com Erro */
+      passo_com_erro?: string | null;
+      /** Passos */
+      passos: components["schemas"]["ContagemPasso"][];
     } & {
       [key: string]: unknown;
     };
@@ -1137,6 +1246,37 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ReceitaSalva"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  reconciliacao_api_projects__project_id__reconciliation_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        project_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Reconciliacao"];
         };
       };
       /** @description Validation Error */

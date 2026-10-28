@@ -14,6 +14,9 @@ export type Perfil = components["schemas"]["Perfil"];
 export type PerfilColuna = components["schemas"]["PerfilColuna"];
 export type Operacao = components["schemas"]["Operacao"];
 export type Exportacao = components["schemas"]["Exportacao"];
+export type Reconciliacao = components["schemas"]["Reconciliacao"];
+export type ContagemPasso = components["schemas"]["ContagemPasso"];
+export type ColunaForaDaArea = components["schemas"]["ColunaForaDaArea"];
 
 // A receita é validada no servidor (JSON Schema da receita); aqui só o que a
 // interface usa.

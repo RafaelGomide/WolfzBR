@@ -54,7 +54,7 @@ def main() -> None:
     if saida.lower().endswith(".parquet"):
         df.write_parquet(saida)
     else:
-        df.write_csv(saida)
+        df.write_csv(saida, datetime_format="%Y-%m-%d %H:%M:%S%.f")  # como o CSV da WolfzBR
 
 
 if __name__ == "__main__":

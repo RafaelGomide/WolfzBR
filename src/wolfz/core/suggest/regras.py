@@ -184,7 +184,7 @@ def mes_ano(ctx: Contexto) -> Iterator[Suggestion]:
     viram data, o dia 1 do mês."""
     cols = []
     for c in ctx.texto:
-        if ctx.perfil(c).inferred_type in ("data", "numero", "moeda"):
+        if ctx.perfil(c).inferred_type in ("data", "data_hora", "numero", "moeda"):
             continue
         valores = _uteis(ctx, c)
         casam = [v for v in valores if _MES_ANO.fullmatch(normalize_key(v)) and parse_month_year(v)]
@@ -425,11 +425,45 @@ def codigo_e_rotulo(ctx: Contexto) -> Iterator[Suggestion]:
         )
 
 
+def _celulas_br(n: int) -> str:
+    return f"{n:,}".replace(",", ".") + (" célula" if n == 1 else " células")
+
+
+def _data_hora(ctx: Contexto) -> Iterator[Suggestion]:
+    """Coluna de data em que mais da metade dos valores tem hora (F4,
+    critério 3): ``parse_datetime_br`` mantém a hora. O exemplo é de
+    formato, nunca um valor da planilha (ux.md §3.3)."""
+    from wolfz.ops.br import parse_datetime_serie  # wolfz.ops importa wolfz.core
+
+    for c, taxa in _do_tipo(ctx, "data_hora"):
+        texto = ctx.total[c].cast(pl.String)
+        preenchidas = texto.is_not_null() & (texto.str.strip_chars() != "")
+        vazias = int((preenchidas & parse_datetime_serie(texto, accept_excel_serial=False).is_null()).sum())
+        muda = _celulas_br(int(preenchidas.sum()))
+        fim = (
+            "nenhuma fica vazia"
+            if not vazias
+            else f"{vazias:,}".replace(",", ".")
+            + (" vira vazio porque não é data" if vazias == 1 else " viram vazio porque não são data")
+        )
+        yield Suggestion(
+            "data",
+            ({"op": "parse_datetime_br", "cols": [c]},),
+            taxa,
+            f"A coluna {c} tem data e hora (31/01/2026 14:35:22). Converter mantém a hora, para calcular "
+            f"prazo e SLA. Muda {muda}; {fim}.",
+            (c,),
+            order=CONVERSAO,
+        )
+
+
 @rule
 def data(ctx: Contexto) -> Iterator[Suggestion]:
     """Datas; com 8 dígitos, a ordem (AAAAMMDD ou DDMMAAAA) que serve para
-    todos os valores da coluna."""
+    todos os valores da coluna. Data e hora sai na mesma regra, com
+    ``parse_datetime_br``."""
     por_ordem: dict[str, list[tuple[str, float]]] = {}
+    yield from _data_hora(ctx)
     for c, taxa in _do_tipo(ctx, "data"):
         oito = [v for v in _uteis(ctx, c) if re.fullmatch(r"\d{8}", v)]
         ordem = "auto"

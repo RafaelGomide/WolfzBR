@@ -580,6 +580,101 @@ pre {
   font-family: ui-monospace, Consolas, monospace;
   color: var(--texto-suave);
 }
+/* Contagem de linhas por passo (F1 da 1.1, ux.md §1 e §4). O alerta tem
+   quatro sinais: "Atenção:", ⚠, borda esquerda grossa e cor de aviso (a de
+   erro fica para o passo que falhou). */
+.passos .origem {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.passos .origem .passo-origem {
+  flex: 1;
+}
+.contador {
+  flex: none;
+  padding: 0.3rem 0.25rem;
+  font-size: 0.85em;
+  color: var(--texto-suave);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.contador.alerta {
+  color: var(--aviso);
+  font-weight: 600;
+}
+.contagem-falhou {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85em;
+  color: var(--texto-suave);
+}
+.contagem-falhou button {
+  padding: 0.1rem 0.45rem;
+}
+.passo.alerta {
+  border-left: 4px solid var(--aviso);
+  background: var(--aviso-fundo);
+}
+.chamada-alerta.aviso,
+.faixa-contagem.alerta {
+  border-left: 4px solid var(--aviso);
+  border-radius: var(--raio);
+}
+.chamada-alerta.aviso {
+  padding: 0.5rem 0.6rem;
+  margin: 0 0 0.5rem;
+  display: grid;
+  gap: 0.35rem;
+}
+.chamada-alerta.vazia {
+  margin: 0;
+  padding: 0;
+}
+.chamada-alerta p,
+.faixa-contagem p {
+  margin: 0;
+}
+.chamada-alerta ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+.chamada-alerta li {
+  display: grid;
+  gap: 0.2rem;
+  justify-items: start;
+}
+.chamada-alerta button,
+.faixa-contagem button {
+  padding: 0.1rem 0.45rem;
+  font-size: 0.85em;
+}
+.coluna-fora {
+  font-size: 0.9em;
+}
+.faixa-contagem {
+  padding: 0.35rem 0.6rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--texto-suave);
+  display: grid;
+  gap: 0.2rem;
+}
+.faixa-contagem.alerta {
+  color: var(--aviso);
+}
+.so-leitor {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .passo-acoes {
   display: flex;
   gap: 0.2rem;

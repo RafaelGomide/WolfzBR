@@ -10,7 +10,7 @@ import polars as pl
 from pydantic import Field, model_validator
 
 from wolfz.br.booleanos import parse_bool_br
-from wolfz.br.datas import parse_date_br, parse_month_year
+from wolfz.br.datas import parse_date_br, parse_datetime_br, parse_month_year
 from wolfz.br.documentos import (
     clean_cep,
     clean_cnpj,
@@ -138,6 +138,7 @@ class ParseBrl(Op):
 # ---------------------------------------------------------------------------
 
 _DATA = __import__("datetime").date
+_DATA_HORA = __import__("datetime").datetime
 
 
 class _ValorBr(Op):
@@ -403,6 +404,150 @@ class ParseDateBr(_ValorBr):
     def _m(self, valor: str) -> str:
         serial = str(self.accept_excel_serial).lower()
         return f'WolfzDataBr({valor}, "{self.eight_digits}", {self.century_pivot}, {serial})'
+
+
+# Formas de data e hora que o Polars converte direto, sem chamar Python por
+# valor: dia e mês com 2 dígitos, ano com 4, hora com 2 e segundos
+# opcionais, sem fração nem fuso. É o que sistema exporta em massa, e quase
+# não se repete (1,5 milhão de valores distintos levariam ~25 s por valor).
+# Todo o resto passa por parse_datetime_br; nas duas formas o resultado é o
+# mesmo dela (teste de equivalência).
+_DATA_HORA_DMY = r"^\d{2}/\d{2}/\d{4} \d{2}:\d{2}(:\d{2})?$"
+_DATA_HORA_ISO = r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?$"
+
+
+def parse_datetime_serie(
+    s: pl.Series, eight_digits: str = "auto", century_pivot: int = 30, accept_excel_serial: bool = True
+) -> pl.Series:
+    """``parse_datetime_br`` numa coluna: as formas comuns de sistema pelo
+    ``strptime`` do Polars, o resto uma vez por valor distinto."""
+    texto = s.cast(pl.String)
+    col = pl.col("t")
+    dmy, iso = col.str.contains(_DATA_HORA_DMY), col.str.contains(_DATA_HORA_ISO)
+    cheio = col.str.replace("T", " ", literal=True)
+    cheio = pl.when(cheio.str.len_chars() == 16).then(cheio + ":00").otherwise(cheio)
+    lido = (
+        pl.when(dmy)
+        .then(cheio.str.strptime(pl.Datetime("us"), "%d/%m/%Y %H:%M:%S", strict=False))
+        .when(iso)
+        .then(cheio.str.strptime(pl.Datetime("us"), "%Y-%m-%d %H:%M:%S", strict=False))
+    )
+    # O strptime aceita o segundo 60 (vira o minuto seguinte) e qualquer ano;
+    # parse_datetime_br não.
+    valido = lido.dt.year().is_between(1800, 9998) & (
+        cheio.str.slice(17, 2).cast(pl.Int32, strict=False) <= 59
+    )
+    df = pl.DataFrame({"t": texto}).select(
+        rapido=(dmy | iso).fill_null(False), valor=pl.when(valido).then(lido)
+    )
+    resto = ~df["rapido"] & texto.is_not_null()
+    saida = df["valor"]
+    if resto.any():
+
+        def fn(v):
+            return parse_datetime_br(v, eight_digits, century_pivot, accept_excel_serial)
+
+        lentos = map_unique(fn, pl.Datetime("us"))(texto.filter(resto))
+        saida = saida.scatter(resto.arg_true(), lentos)
+    return saida.alias(s.name)
+
+
+@register_op
+class ParseDatetimeBr(_ValorBr):
+    """Data e hora: '31/01/2026 14:35:22', '31/01/2026 14:35',
+    '2026-01-31T14:35:22', com milissegundos, serial do Excel com fração.
+    Lê a data como ``parse_date_br`` (mesmos parâmetros) e mantém a hora;
+    data sem hora fica com 00:00:00. O fuso no fim ('Z', '-03:00') é
+    ignorado: fica a hora do relógio, e o arquivo não grava fuso. Hora
+    impossível ('25:61') vira nulo."""
+
+    op: Literal["parse_datetime_br"]
+    m_label = "Datas e horas convertidas"
+    eight_digits: Literal["auto", "ymd", "dmy"] = "auto"
+    century_pivot: int = Field(default=30, ge=0, le=99)
+    accept_excel_serial: bool = True
+
+    funcao = parse_datetime_br
+    dtype = "Datetime"
+    m_tipo = "type nullable datetime"
+    python_helpers = (parse_datetime_serie,)
+    m_helpers = {**m_br.BASE, "WolfzDataBr": m_br.DATA_BR, "WolfzDataHoraBr": m_br.DATA_HORA_BR}  # noqa: RUF012
+    examples = (
+        {
+            "step": {"cols": ["d"]},
+            "input": {
+                "d": [
+                    "31/01/2026 14:35:22",
+                    "31/01/2026 14:35",
+                    "2026-01-31T14:35:22",
+                    "2026-01-31 14:35:22.123",
+                    "2026-01-31T14:35:22Z",
+                    "2026-01-31T14:35:22-03:00",
+                    "46053.6079",
+                    "31/01/2026",
+                    "31/02/2026 10:00",
+                    "31/01/2026 25:61",
+                    "31/01/2026 23:59:60",
+                    "1e300",
+                    "-1",
+                    "QXZ",
+                    None,
+                ]
+            },
+            "expected": {
+                "d": [
+                    _DATA_HORA(2026, 1, 31, 14, 35, 22),
+                    _DATA_HORA(2026, 1, 31, 14, 35),
+                    _DATA_HORA(2026, 1, 31, 14, 35, 22),
+                    _DATA_HORA(2026, 1, 31, 14, 35, 22, 123000),
+                    _DATA_HORA(2026, 1, 31, 14, 35, 22),
+                    _DATA_HORA(2026, 1, 31, 14, 35, 22),
+                    _DATA_HORA(2026, 1, 31, 14, 35, 22, 560000),
+                    _DATA_HORA(2026, 1, 31),
+                    *[None] * 7,
+                ]
+            },
+        },
+        {
+            "step": {"cols": ["d"], "eight_digits": "ymd", "accept_excel_serial": False},
+            "input": {"d": ["20240201 08:01:02", "01022024 08:01", "46053.6079", "45657"]},
+            "expected": {"d": [_DATA_HORA(2024, 2, 1, 8, 1, 2), None, None, None]},
+        },
+        {
+            "step": {"cols": ["d"], "eight_digits": "dmy", "century_pivot": 50},
+            "input": {
+                "d": ["01022024 08:01", "15/03/49 23:59:59", "31.12.9999 10:00", "31 de janeiro de 2026 8:05"]
+            },
+            "expected": {
+                "d": [
+                    _DATA_HORA(2024, 2, 1, 8, 1),
+                    _DATA_HORA(2049, 3, 15, 23, 59, 59),
+                    None,
+                    _DATA_HORA(2026, 1, 31, 8, 5),
+                ]
+            },
+        },
+    )
+
+    _kwargs = ParseDateBr._kwargs
+
+    def to_polars(self, lf: pl.LazyFrame) -> pl.LazyFrame:
+        kwargs = self._kwargs()
+        return lf.with_columns(
+            pl.col(c).map_batches(lambda s: parse_datetime_serie(s, **kwargs), return_dtype=pl.Datetime("us"))
+            for c in self.cols
+        )
+
+    def to_python(self) -> str:
+        args = "".join(f", {k}={v!r}" for k, v in self._kwargs().items())
+        return (
+            f"lf = lf.with_columns(pl.col(c).map_batches(lambda s: parse_datetime_serie(s{args}), "
+            f"return_dtype=pl.Datetime('us')) for c in {self.cols!r})"
+        )
+
+    def _m(self, valor: str) -> str:
+        serial = str(self.accept_excel_serial).lower()
+        return f'WolfzDataHoraBr({valor}, "{self.eight_digits}", {self.century_pivot}, {serial})'
 
 
 @register_op

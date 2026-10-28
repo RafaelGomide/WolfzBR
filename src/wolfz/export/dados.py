@@ -104,13 +104,16 @@ def neutralizar_formulas(df: pl.DataFrame) -> pl.DataFrame:
 def escrever_csv(df: pl.DataFrame, path: Path, opcoes: OpcoesCsv | None = None) -> None:
     """CSV UTF-8 com BOM. Com ``decimal_comma``, número sai como ``1234,5``
     (e entre aspas se o separador também for vírgula). Datas em ISO
-    (``2024-01-31``), que o Excel reconhece em qualquer idioma."""
+    (``2024-01-31``), que o Excel reconhece em qualquer idioma; data e hora
+    com espaço e sem fuso (``2024-01-31 14:35:22``, fração só se houver),
+    porque o Excel não reconhece o ``T`` nem os seis zeros do padrão."""
     opcoes = opcoes or OpcoesCsv()
     df.write_csv(
         path,
         include_bom=True,
         separator=opcoes.separator,
         decimal_comma=opcoes.decimal_comma,
+        datetime_format="%Y-%m-%d %H:%M:%S%.f",
     )
 
 

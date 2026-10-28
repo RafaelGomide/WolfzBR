@@ -1,10 +1,12 @@
 // Tela do projeto: receita à esquerda, grades no centro, perfil à direita.
 // Cada edição salva a receita inteira (PUT com If-Match, gravação atômica no
 // servidor); os salvamentos vão em fila para cada um usar a ETag do
-// anterior.
+// anterior. Depois do preview vem a contagem de linhas por passo (F1 da
+// 1.1), que nunca segura a grade.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  abortado,
   api,
   chamar,
   ErroApi,
@@ -13,18 +15,37 @@ import {
   type Passo,
   type Projeto,
   type Receita,
+  type Reconciliacao,
 } from "../api/cliente";
 import { CaixaErro, Carregando } from "../componentes/Estado";
 import { Exportar } from "../componentes/Exportar";
 import { GradeDados } from "../componentes/GradeDados";
 import { PainelPerfil } from "../componentes/PainelPerfil";
 import { PainelReceita } from "../componentes/PainelReceita";
+import { FaixaContagem } from "../componentes/Reconciliacao";
 import { SeletorTema } from "../componentes/SeletorTema";
 import { VisaoBruta } from "../componentes/VisaoBruta";
 import { T } from "../textos";
 import { novoId, passoAnterior } from "../util/receita";
+import { focarPasso, type Contagem } from "../util/reconciliacao";
 import { irPara } from "../util/rota";
 import { useCarregar } from "../util/useCarregar";
+
+interface ResultadoContagem {
+  chave: string;
+  dados?: Reconciliacao;
+  erro?: unknown;
+  /** A última contagem que deu certo, para as linhas lidas e a chamada
+   * continuarem na tela enquanto a próxima conta. */
+  anterior?: Reconciliacao;
+}
+
+function estadoDaContagem(r: ResultadoContagem | null, chave: string): Contagem {
+  if (!r) return { tipo: "contando" };
+  if (r.chave !== chave) return { tipo: "contando", anterior: r.dados ?? r.anterior };
+  if (r.dados) return { tipo: "pronta", dados: r.dados };
+  return { tipo: "erro", erro: r.erro, anterior: r.anterior };
+}
 
 type Salvamento =
   { tipo: "ocioso" | "salvando" | "salvo" | "conflito" } | { tipo: "erro"; erro: unknown };
@@ -70,6 +91,10 @@ function Editor({
   const [erroPasso, setErroPasso] = useState<ErroApi | null>(null);
   const [perfil, setPerfil] = useState<{ coluna: string; passo?: string } | null>(null);
   const [exportando, setExportando] = useState(false);
+  const [rodadaContagem, setRodadaContagem] = useState(0);
+  const [resContagem, setResContagem] = useState<ResultadoContagem | null>(null);
+  const chaveContagem = `${versao}|${rodadaContagem}`;
+  const contagem = estadoDaContagem(resContagem, chaveContagem);
 
   const salvar = useCallback(
     (nova: Receita): Promise<void> => {
@@ -119,22 +144,43 @@ function Editor({
   }
 
   // Confere a receita inteira a cada versão: um passo que falha fica
-  // destacado mesmo que não seja o selecionado (F1.H10).
+  // destacado mesmo que não seja o selecionado (F1.H10). Só depois pede a
+  // contagem (a grade não espera por ela); resposta de outra versão da
+  // receita é descartada.
   useEffect(() => {
     const ctrl = new AbortController();
+    const chave = `${versao}|${rodadaContagem}`;
     chamar(
       api.GET("/api/projects/{project_id}/preview", {
         params: { path: { project_id: id }, query: { limit: 1 } },
         signal: ctrl.signal,
       }),
-    ).then(
-      () => setErroPasso(null),
-      (e) => {
-        if (e instanceof ErroApi) setErroPasso(e.passoComErro ? e : null);
-      },
-    );
+    )
+      .then(
+        () => setErroPasso(null),
+        (e) => {
+          if (e instanceof ErroApi) setErroPasso(e.passoComErro ? e : null);
+        },
+      )
+      .then(() => {
+        if (ctrl.signal.aborted) return;
+        return chamar(
+          api.GET("/api/projects/{project_id}/reconciliation", {
+            params: { path: { project_id: id } },
+            signal: ctrl.signal,
+          }),
+        ).then(
+          (dados) => {
+            if (dados.etag === versao) setResContagem({ chave, dados });
+          },
+          (erro) => {
+            if (!abortado(erro))
+              setResContagem((r) => ({ chave, erro, anterior: r?.dados ?? r?.anterior }));
+          },
+        );
+      });
     return () => ctrl.abort();
-  }, [id, versao]);
+  }, [id, versao, rodadaContagem]);
 
   const existe = sel === "raw" || receita.steps.some((p) => p.id === sel);
   const atual = existe ? sel : null;
@@ -145,6 +191,11 @@ function Editor({
   function selecionar(passo: string | null) {
     setSel(passo);
     setAba("antesdepois");
+  }
+
+  function verPasso(passo: string) {
+    selecionar(passo);
+    focarPasso(passo);
   }
 
   function usarArea(inicio: string, fim: string) {
@@ -223,6 +274,8 @@ function Editor({
           erroPasso={erroPasso}
           colunasAntes={colunasAntes}
           colunasDepois={colunasDepois}
+          contagem={contagem}
+          aoTentarContagem={() => setRodadaContagem((r) => r + 1)}
           salvar={salvar}
         />
         <section className="centro">
@@ -244,6 +297,9 @@ function Editor({
               {T.projeto.antesDepois}
             </button>
           </div>
+          {aba === "antesdepois" && (
+            <FaixaContagem contagem={contagem} passo={atual} aoVerPasso={verPasso} />
+          )}
           {aba === "original" ? (
             <VisaoBruta
               projeto={id}

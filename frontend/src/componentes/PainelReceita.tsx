@@ -1,14 +1,17 @@
 // Painel da receita (F1.H8): lista de passos; adicionar, remover,
 // reordenar (arrastar ou botões), desativar e editar. O passo que falhou
-// fica destacado com a mensagem e as colunas disponíveis (F1.H10).
+// fica destacado com a mensagem e as colunas disponíveis (F1.H10). Cada
+// passo mostra quantas linhas tirou ou acrescentou (F1 da 1.1).
 
 import { useMemo, useState } from "react";
 import { ErroApi, type Operacao, type Passo, type Receita } from "../api/cliente";
 import { T } from "../textos";
 import { ativo, mover, nomeOp, novoId, resumo } from "../util/receita";
+import { focarPasso, idFala, type Contagem } from "../util/reconciliacao";
 import { passoNovo } from "../util/schema";
 import { AbaDaFonte } from "./AbaDaFonte";
 import { FormPasso } from "./FormPasso";
+import { ChamadaAlerta, ContadorPasso, ContagemOrigem } from "./Reconciliacao";
 import { RevisaoMunicipios } from "./RevisaoMunicipios";
 import { Sugestoes } from "./Sugestoes";
 
@@ -81,6 +84,8 @@ export function PainelReceita({
   erroPasso,
   colunasAntes,
   colunasDepois,
+  contagem,
+  aoTentarContagem,
   salvar,
 }: {
   projetoId: string;
@@ -92,6 +97,8 @@ export function PainelReceita({
   erroPasso: ErroApi | null;
   colunasAntes: string[];
   colunasDepois: string[];
+  contagem: Contagem;
+  aoTentarContagem: () => void;
   salvar: (nova: Receita) => Promise<void>;
 }) {
   const [modo, setModo] = useState<Modo>(null);
@@ -145,6 +152,14 @@ export function PainelReceita({
         </button>
       </div>
 
+      <ChamadaAlerta
+        contagem={contagem}
+        aoVerPasso={(id) => {
+          aoSelecionar(id);
+          focarPasso(id);
+        }}
+      />
+
       {modo?.tipo === "escolher" && (
         <EscolherOp ops={ops} aoEscolher={novo} aoCancelar={() => setModo(null)} />
       )}
@@ -178,7 +193,7 @@ export function PainelReceita({
 
       {passos.length === 0 && <p className="dica">{T.receita.vazia}</p>}
       <ol className="passos">
-        <li>
+        <li className="origem">
           <button
             type="button"
             className={`passo-origem${selecionado === "raw" ? " selecionado" : ""}`}
@@ -186,14 +201,20 @@ export function PainelReceita({
           >
             {T.projeto.arquivoOriginal}
           </button>
+          <ContagemOrigem contagem={contagem} tentarDeNovo={aoTentarContagem} />
         </li>
         {passos.map((p, i) => {
           const comErro = erroPasso?.step_id === p.id;
+          const alerta =
+            contagem.tipo === "pronta" &&
+            ativo(p) &&
+            contagem.dados.passos.some((c) => c.id === p.id && c.alerta);
           const classes = [
             "passo",
             selecionado === p.id ? "selecionado" : "",
             ativo(p) ? "" : "desativado",
             comErro ? "com-erro" : "",
+            alerta ? "alerta" : "",
             arrastado === i ? "arrastando" : "",
           ].join(" ");
           return (
@@ -223,11 +244,13 @@ export function PainelReceita({
                   className="passo-nome"
                   onClick={() => aoSelecionar(p.id)}
                   aria-current={selecionado === p.id}
+                  aria-describedby={idFala(p.id)}
                 >
                   <span className="passo-id">{p.id}</span> {nomeOp(p.op)}
                   {!ativo(p) && <em className="etiqueta">{T.receita.desativado}</em>}
                   <small>{resumo(p)}</small>
                 </button>
+                <ContadorPasso contagem={contagem} passo={p.id} ativo={ativo(p)} />
               </div>
               <div className="passo-acoes">
                 <button

@@ -1,6 +1,8 @@
 // Todos os textos da interface (F1.H16). Para traduzir, basta trocar este
 // arquivo: nenhum componente tem texto para o usuário escrito direto no JSX.
 
+const fmt = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+
 export const T = {
   app: {
     nome: "WolfzBR",
@@ -115,6 +117,55 @@ export const T = {
     confirmarRemover: (id: string) => `Remover o passo ${id}?`,
     novoPasso: "Novo passo",
     editarPasso: (id: string) => `Editar ${id}`,
+  },
+  // Contagem de linhas por passo (F1, ux.md §3.1). A regra do alerta é do
+  // servidor; aqui só o texto.
+  reconciliacao: {
+    lidas: (n: number) => `${fmt(n)} ${n === 1 ? "linha" : "linhas"}`,
+    tirou: (n: number) => `−${fmt(n)} ${n === 1 ? "linha" : "linhas"}`,
+    tirouPct: (n: number, pct: string) => `−${fmt(n)} ${n === 1 ? "linha" : "linhas"} (${pct})`,
+    vazias: (n: number) => `−${fmt(n)} ${n === 1 ? "linha vazia" : "linhas vazias"}`,
+    acrescentou: (n: number) => `+${fmt(n)} ${n === 1 ? "linha" : "linhas"}`,
+    fator: (k: number, total: number) => `× ${fmt(k)} → ${fmt(total)} linhas`,
+    foraDaArea: "dado fora da área",
+    contando: "contando…",
+    indisponivel: "Contagem indisponível",
+    dica: (entrada: number, saida: number) =>
+      `Entraram ${fmt(entrada)} linhas, saíram ${fmt(saida)}.`,
+    dicaVazias: (entrada: number, saida: number, vazias: number) =>
+      `Entraram ${fmt(entrada)} linhas, saíram ${fmt(saida)}. As ${fmt(vazias)} que saíram estavam vazias.`,
+    // texto para leitor de tela (o "−" nem sempre é lido)
+    falaTirou: (n: number) => `tirou ${fmt(n)} ${n === 1 ? "linha" : "linhas"}`,
+    falaVazias: (n: number) => `tirou ${fmt(n)} ${n === 1 ? "linha vazia" : "linhas vazias"}`,
+    falaAcrescentou: (n: number) => `acrescentou ${fmt(n)} ${n === 1 ? "linha" : "linhas"}`,
+    falaFator: (k: number, total: number) =>
+      `multiplicou as linhas por ${fmt(k)}, ficaram ${fmt(total)}`,
+    falaForaDaArea: "deixou dado fora da área",
+
+    atencao: "Atenção:",
+    chamada: (n: number) =>
+      n === 1 ? "1 passo tirou muitas linhas." : `${n} passos tiraram muitas linhas.`,
+    chamadaMais: (n: number) =>
+      n === 1 ? "1 passo acrescentou linhas." : `${n} passos acrescentaram linhas.`,
+    chamadaGeral: (n: number) =>
+      n === 1 ? "1 passo pede sua atenção." : `${n} passos pedem sua atenção.`,
+    chamadaPasso: (id: string, op: string, texto: string) => `${id} ${op}: ${texto}.`,
+    colunaFora: (letra: string, cabecalho: string | null, n: number, area: string, id: string) =>
+      `A coluna ${letra} (${cabecalho ?? "sem cabeçalho"}) tem ${fmt(n)} ${n === 1 ? "célula preenchida" : "células preenchidas"} fora da área ${area} do passo ${id}. Elas não entram na saída.`,
+    eMais: (n: number) => `e mais ${n}`,
+    verPasso: "Ver o passo",
+
+    faixaAntes: (rotulo: string, n: number) =>
+      `${rotulo} ${fmt(n)} ${n === 1 ? "linha" : "linhas"}`,
+    faixaVazias: (n: number) => `${fmt(n)} ${n === 1 ? "vazia" : "vazias"}`,
+    totalPerda: (pct: string) => `a receita tirou ${pct} das linhas.`,
+    totalMultiplicou: (k: number) =>
+      `a tabela final tem ${fmt(k)} vezes mais linhas que o arquivo.`,
+    maiorParte: (id: string, op: string) => `A maior parte saiu no passo ${id} ${op}.`,
+    multiplicouEm: (ids: string[], op: string) =>
+      ids.length === 1
+        ? `A multiplicação veio do passo ${ids[0]} ${op}.`
+        : `A multiplicação veio dos passos ${ids.slice(0, -1).join(", ")} e ${ids.at(-1)} ${op}.`,
   },
   aba: {
     rotulo: "Aba",
@@ -288,6 +339,7 @@ export const T = {
     parse_brl: "Moeda (R$)",
     parse_percent: "Percentual",
     parse_date_br: "Data (dd/mm/aaaa)",
+    parse_datetime_br: "Data e hora (dd/mm/aaaa hh:mm)",
     parse_month_year: "Mês/ano",
     parse_bool_br: "Sim/não",
     clean_cpf: "Limpar CPF",

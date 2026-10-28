@@ -40,6 +40,7 @@ PUBLICA_BR = {
     "parse_bool_br",
     "parse_brl",
     "parse_date_br",
+    "parse_datetime_br",
     "parse_ibge_value",
     "parse_month_year",
     "parse_number_br",

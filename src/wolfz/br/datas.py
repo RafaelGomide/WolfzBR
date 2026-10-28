@@ -1,4 +1,4 @@
-"""Datas em formato brasileiro, mês/ano e serial do Excel."""
+"""Datas e data e hora em formato brasileiro, mês/ano e serial do Excel."""
 
 from __future__ import annotations
 
@@ -30,6 +30,10 @@ _DATE_ISO = re.compile(r"(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})")
 _DATE_DMY = re.compile(r"(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4}|\d{2})")
 _DATE_TEXT = re.compile(r"(\d{1,2})(?:\s+de\s+|[\s/\-.])([a-z]{3,9})\.?(?:\s+de\s+|[\s/\-.])(\d{4}|\d{2})")
 _TIME_SUFFIX = re.compile(r"[ T]\d{1,2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$")
+# A mesma hora do _TIME_SUFFIX, com os pedaços: hora, minuto, segundo,
+# fração. O fuso no fim é aceito e ignorado (R12): fica a hora do relógio.
+_TIME_PARTS = re.compile(r"[ T](\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(?:Z|[+-]\d{2}:?\d{2})?$")
+_SERIAL = re.compile(r"\d{5}([.,]\d+)?")
 
 
 def _make_date(y: int, m: int, d: int) -> date | None:
@@ -85,7 +89,12 @@ def parse_date_br(
     s = normalize_spaces(str(value))
     if is_null_token(s):
         return None
-    s = _TIME_SUFFIX.sub("", s)
+    return _data_texto(_TIME_SUFFIX.sub("", s), eight_digits, century_pivot, accept_excel_serial)
+
+
+def _data_texto(s: str, eight_digits: str, century_pivot: int, accept_excel_serial: bool) -> date | None:
+    """O núcleo de ``parse_date_br`` e ``parse_datetime_br``: a data de um
+    texto já normalizado e sem a hora."""
     k = remove_accents(s).lower()
 
     if m := _DATE_ISO.fullmatch(k):
@@ -107,10 +116,59 @@ def parse_date_br(
         if eight_digits == "dmy":
             return dmy
         return ymd or dmy
-    is_serial = accept_excel_serial and re.fullmatch(r"\d{5}([.,]\d+)?", k)
+    is_serial = accept_excel_serial and _SERIAL.fullmatch(k)
     if is_serial and 20_000 <= float(k.replace(",", ".")) <= 80_000:
         return excel_serial_to_date(k)
     return None
+
+
+def parse_datetime_br(
+    value: object,
+    eight_digits: str = "auto",
+    century_pivot: int = 30,
+    accept_excel_serial: bool = True,
+) -> datetime | None:
+    """Converte data e hora em formato comum no Brasil para ``datetime``,
+    sem fuso.
+
+    Aceita tudo o que ``parse_date_br`` aceita, mantendo a hora:
+      '31/01/2026 14:35:22'  '31/01/2026 14:35'                 dia primeiro
+      '2026-01-31T14:35:22'  '2026-01-31 14:35:22.123'          ISO
+      '2026-01-31T14:35:22Z' '2026-01-31T14:35:22-03:00'        o fuso é ignorado
+      '46053.6079'                                              serial do Excel com fração
+      '31/01/2026'                                              sem hora: 00:00:00
+
+    A data é lida exatamente como em ``parse_date_br`` (mesmos parâmetros).
+    Fração de segundo é guardada até o microssegundo; o serial do Excel é
+    arredondado ao milissegundo, como no Power Query. Hora impossível
+    ('25:61') faz o valor inteiro virar ``None``, e nada levanta exceção.
+    O sufixo de fuso ('Z', '-03:00') é ignorado: fica a hora do relógio,
+    sem converter, para o resultado não depender do fuso da máquina."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=None)
+    if isinstance(value, date):
+        return datetime(value.year, value.month, value.day)
+    s = normalize_spaces(str(value))
+    if is_null_token(s):
+        return None
+    if m := _TIME_PARTS.search(s):
+        dia = _data_texto(s[: m.start()], eight_digits, century_pivot, accept_excel_serial)
+        h, mi, seg = int(m[1]), int(m[2]), int(m[3] or 0)
+        if dia is None or h > 23 or mi > 59 or seg > 59:
+            return None
+        micro = int((m[4] or "0")[:6].ljust(6, "0"))
+        return datetime(dia.year, dia.month, dia.day, h, mi, seg, micro)
+    k = remove_accents(s).lower()
+    if accept_excel_serial and _SERIAL.fullmatch(k) and "." in k.replace(",", "."):
+        n = float(k.replace(",", "."))
+        if not 20_000 <= n <= 80_000:
+            return None
+        ms = round((n - int(n)) * 86_400_000)
+        return datetime.combine(_EXCEL_EPOCH, datetime.min.time()) + timedelta(days=int(n), milliseconds=ms)
+    dia = _data_texto(s, eight_digits, century_pivot, accept_excel_serial)
+    return None if dia is None else datetime(dia.year, dia.month, dia.day)
 
 
 def parse_month_year(value: object, century_pivot: int = 30) -> date | None:
