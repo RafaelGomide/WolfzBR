@@ -64,7 +64,7 @@ Este documento descreve o formato `wolfz_version: "1.0"`. As operações, uma po
 
 | Campo | Tipo | Obrigatório | O que é |
 |---|---|---|---|
-| `wolfz_version` | texto `"maior.menor"` | sim | Versão do **formato** da receita, não do programa. Hoje, `"1.0"`. |
+| `wolfz_version` | texto `"maior.menor"` | sim | Versão do **formato** da receita, não do programa: `"1.0"`, ou `"1.1"` quando a receita usa algo da 1.1 (ver [Versões do formato](#versões-do-formato)). |
 | `name` | texto | sim | Nome da receita. Vira o nome da tabela e dos arquivos exportados. Não pode ser vazio. |
 | `created_at` | data e hora ISO 8601 | sim | Quando a receita foi criada, por exemplo `2026-10-16T14:00:00Z`. |
 | `source` | objeto | sim | De onde vêm os dados (abaixo). |
@@ -79,6 +79,27 @@ Qualquer campo fora destes é erro, inclusive dentro de `source` e dos passos: u
 | `type` | `"excel"`, `"csv"` ou `"ods"` | Tipo do arquivo de origem. `"excel"` vale para `.xlsx`, `.xlsm` e `.xls`. |
 | `sheet` | texto, opcional | Nome da aba lida. Sem ele, a primeira aba visível. Não se aplica a CSV. |
 | `match.sheet_name_regex` | expressão regular, opcional | Para a aba que muda de nome a cada arquivo (`DEZEMBRO_2025` → `JANEIRO_2026`). Se a aba `sheet` não existe no arquivo novo, vale a primeira cujo nome **inteiro** casa com o padrão. A importação propõe o padrão quando o nome da aba tem mês ou ano. |
+| `combine_sheets` | objeto, opcional (formato 1.1) | Juntar várias abas do arquivo numa tabela só (abaixo). Não vale para CSV nem junto com `match`. |
+
+#### `combine_sheets`: juntar abas
+
+```json
+"source": {"type": "excel", "sheet": "JAN", "combine_sheets": {"sheets_regex": "(?i)JAN|FEV|MAR", "origin_col": "aba"}}
+```
+
+| Campo | Tipo | O que é |
+|---|---|---|
+| `sheets_regex` | expressão regular, opcional | Sem ele, todas as abas **visíveis**. Com ele, as visíveis cujo nome **inteiro** casa com o padrão. A interface monta o padrão a partir das abas marcadas. |
+| `origin_col` | texto ou `null` (padrão `"aba"`) | Nome da coluna, em primeiro lugar, com o nome da aba de cada linha. `null` tira a coluna. Não pode ter o nome de uma coluna da tabela. |
+
+Como funciona:
+
+- A receita roda **inteira em cada aba**, e as tabelas são empilhadas na ordem das abas no arquivo, como o "Combinar arquivos" do Power Query. Por isso `dedupe` e `sort` valem **dentro de cada aba**. `sheet` continua sendo a aba em que a receita foi feita.
+- Aba oculta nunca entra, nem casando com o padrão. O `wolfz run` e a interface dizem quais ficaram de fora.
+- As colunas são casadas pelo nome **exato**. Coluna que falta numa aba e que nenhum passo cita fica vazia nas linhas dela. Nome que só difere em espaço ou caixa (`Vendedor` × `vendedor`) vira duas colunas. Nos dois casos há aviso. Coluna que um passo cita e falta numa aba é erro, com o nome da aba. Tipo diferente entre abas (número numa, texto noutra) também é erro.
+- A receita escolhe só abas, nunca arquivos. Para juntar **arquivos**, use `wolfz run --combine`.
+- O padrão roda num motor de expressão regular sem retrocesso: não aceita retrorreferência (``) nem lookaround, e um padrão mal escrito não trava o programa.
+- No Power Query, a consulta junta todas as abas visíveis. A exceção é o padrão que a importação propõe para nome com mês e ano, que vira o mesmo molde do `match`. Outro padrão não vai para o M, e a exportação avisa.
 
 A receita não guarda o caminho do arquivo nem a codificação ou o separador do CSV: ela é reaplicada a arquivos diferentes, e a codificação e o separador são detectados a cada leitura.
 
@@ -133,7 +154,10 @@ O campo `wolfz_version` é a versão do formato, que muda bem menos que a do pro
 | Formato | Gravado por | Mudança para o seguinte |
 |---|---|---|
 | `0.1` | WolfzBR 0.1.0 a 0.9.0 | Na 1.0, parâmetros renomeados: `split_col.delimiter` e `header_rows.joiner` viraram `separator`; `clean_cpf.flag` e `clean_cnpj.flag` viraram `add_valid_col`; `parse_ibge_value.status` virou `add_status_col`. A migração faz isso sozinha. |
-| `1.0` | WolfzBR 1.0 em diante | — |
+| `1.0` | WolfzBR 1.0 em diante | Na 1.1, só acréscimos: a operação `parse_datetime_br` e o campo `source.combine_sheets`. Nada muda numa receita 1.0. |
+| `1.1` | WolfzBR 1.1 em diante | — |
+
+Uma receita é gravada com o **menor formato que ela usa**: sem nenhum recurso da 1.1, ela continua `"1.0"`, com os mesmos bytes, e abre no WolfzBR 1.0.x. Com `parse_datetime_br` ou `combine_sheets`, ela é gravada `"1.1"`, e o WolfzBR 1.0.x a recusa pedindo para atualizar.
 
 ## Segurança
 

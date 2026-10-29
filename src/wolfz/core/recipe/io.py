@@ -11,12 +11,18 @@ from __future__ import annotations
 import importlib
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
-from wolfz.core.recipe.migrate import NewerRecipeVersion, RecipeVersionError, migrate
-from wolfz.core.recipe.models import Recipe, recipe_validator
+from wolfz.core.recipe.migrate import (
+    NewerRecipeVersion,
+    RecipeDict,
+    RecipeVersionError,
+    migrate,
+    parse_version,
+)
+from wolfz.core.recipe.models import Recipe, Source, recipe_validator, registered_ops
 from wolfz.core.workspace import replace_atomic
 
 
@@ -162,10 +168,48 @@ def load_recipe(path: str | Path) -> Recipe:
     return loads_recipe(Path(path).read_text(encoding="utf-8-sig"))
 
 
+def _desde_dos_campos(model: type[BaseModel], data: Any) -> str:
+    """O maior ``desde`` dos campos de ``model`` (e dos modelos dentro dele)
+    que aparecem em ``data``."""
+    if not isinstance(data, dict):
+        return "1.0"
+    versao = "1.0"
+    for nome, campo in model.model_fields.items():
+        if nome not in data:
+            continue
+        extra = campo.json_schema_extra
+        if isinstance(extra, dict) and isinstance(extra.get("desde"), str):
+            versao = max(versao, extra["desde"], key=parse_version)
+        for tipo in _modelos(campo.annotation):
+            versao = max(versao, _desde_dos_campos(tipo, data[nome]), key=parse_version)
+    return versao
+
+
+def _modelos(anotacao: Any) -> list[type[BaseModel]]:
+    if isinstance(anotacao, type) and issubclass(anotacao, BaseModel):
+        return [anotacao]
+    return [m for arg in get_args(anotacao) for m in _modelos(arg)]
+
+
+def formato_minimo(data: RecipeDict) -> str:
+    """O menor formato que lê a receita serializada (ADR-9): ``"1.1"`` se
+    ela usa uma op ou um campo da 1.1, senão ``"1.0"``."""
+    _load_catalog()
+    versao = _desde_dos_campos(Source, data.get("source"))
+    ops = registered_ops()
+    for passo in data.get("steps") or []:
+        cls = ops.get(passo.get("op")) if isinstance(passo, dict) else None
+        if cls is not None:
+            versao = max(versao, cls.desde, _desde_dos_campos(cls, passo), key=parse_version)
+    return versao
+
+
 def dumps_recipe(recipe: Recipe) -> str:
     """Texto canônico da receita: chaves ordenadas, indentação de 2, ``\\n``
-    no fim. Campos com valor ``None`` são omitidos."""
+    no fim. Campos com valor ``None`` são omitidos, e ``wolfz_version`` é o
+    menor formato que a receita usa (``formato_minimo``, ADR-9)."""
     data = recipe.model_dump(mode="json", exclude_none=True)
+    data["wolfz_version"] = formato_minimo(data)
     return json.dumps(data, sort_keys=True, indent=2, ensure_ascii=False) + "\n"
 
 

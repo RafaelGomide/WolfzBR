@@ -4,6 +4,7 @@ from wolfz.core.recipe.io import (
     RecipeError,
     RecipeTooNewError,
     dumps_recipe,
+    formato_minimo,
     load_recipe,
     loads_recipe,
     recipe_from_dict,
@@ -11,7 +12,15 @@ from wolfz.core.recipe.io import (
     save_recipe,
 )
 from wolfz.core.recipe.migrate import CURRENT_VERSION, NewerRecipeVersion, RecipeVersionError, migrate
-from wolfz.core.recipe.models import Op, Recipe, Source, SourceMatch, register_op, registered_ops
+from wolfz.core.recipe.models import (
+    Op,
+    Recipe,
+    Source,
+    SourceCombine,
+    SourceMatch,
+    register_op,
+    registered_ops,
+)
 
 __all__ = [
     "CURRENT_VERSION",
@@ -22,8 +31,10 @@ __all__ = [
     "RecipeTooNewError",
     "RecipeVersionError",
     "Source",
+    "SourceCombine",
     "SourceMatch",
     "dumps_recipe",
+    "formato_minimo",
     "load_recipe",
     "loads_recipe",
     "migrate",

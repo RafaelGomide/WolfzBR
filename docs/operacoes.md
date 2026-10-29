@@ -2,7 +2,7 @@
 
 <!-- Gerado por scripts/gerar_operacoes.py a partir do catálogo. Não edite à mão. -->
 
-As 41 operações que um passo de receita pode usar, no formato `wolfz_version: "1.0"`. O formato da receita está em [`receita.md`](receita.md). Cada operação tem a mesma regra no motor (Polars), na consulta Power Query M e no script Python exportados, com teste de equivalência.
+As 41 operações que um passo de receita pode usar, no formato `wolfz_version: "1.1"`. O formato da receita está em [`receita.md`](receita.md). Cada operação tem a mesma regra no motor (Polars), na consulta Power Query M e no script Python exportados, com teste de equivalência.
 
 Todo passo tem também `id` (`s1`, `s2`, …), `op` (o nome da operação) e, opcional, `enabled` (`false` deixa o passo na receita sem rodar). Os exemplos abaixo são calculados pelo motor a cada geração deste arquivo.
 
@@ -1935,6 +1935,8 @@ Lê a data como ``parse_date_br`` (mesmos parâmetros) e mantém a hora;
 data sem hora fica com 00:00:00. O fuso no fim ('Z', '-03:00') é
 ignorado: fica a hora do relógio, e o arquivo não grava fuso. Hora
 impossível ('25:61') vira nulo.
+
+Formato da receita 1.1: uma receita com esta operação não abre no WolfzBR 1.0.
 
 | Parâmetro | Tipo | Padrão | Descrição |
 |---|---|---|---|

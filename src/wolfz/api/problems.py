@@ -17,7 +17,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from wolfz.core.engine import StepError
+from wolfz.core.engine import ErroAoJuntar, StepError
 from wolfz.core.ingest import IngestError
 from wolfz.core.recipe import RecipeError, RecipeTooNewError
 from wolfz.core.registro import resumo_da_falha
@@ -75,6 +75,10 @@ def install(app: FastAPI) -> None:
     async def _step(request: Request, exc: StepError) -> JSONResponse:
         corpo = exc.to_problem(status=422, instance=request.url.path)
         return JSONResponse(corpo, status_code=422, media_type=PROBLEM_JSON)
+
+    @app.exception_handler(ErroAoJuntar)
+    async def _juntar(request: Request, exc: ErroAoJuntar) -> JSONResponse:
+        return problem_response(request, 422, exc.titulo, exc.mensagem)
 
     @app.exception_handler(IngestError)
     async def _ingest(request: Request, exc: IngestError) -> JSONResponse:

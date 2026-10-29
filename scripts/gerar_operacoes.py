@@ -31,6 +31,7 @@ from wolfz.core.recipe import CURRENT_VERSION, Op, registered_ops
 RAIZ = Path(__file__).resolve().parents[1]
 DESTINO = RAIZ / "docs" / "operacoes.md"
 TEXTOS = RAIZ / "frontend" / "src" / "textos.ts"
+_NAO_ABRE_NA_1_0 = "uma receita com esta operação não abre no WolfzBR 1.0."
 
 # Módulo de wolfz.ops -> seção do documento, na ordem do fluxo de limpeza.
 GRUPOS = {
@@ -233,6 +234,7 @@ def gerar() -> str:
             "",
             inspect.cleandoc(cls.__doc__ or ""),
             "",
+            *([f"Formato da receita {cls.desde}: {_NAO_ABRE_NA_1_0}", ""] if cls.desde != "1.0" else []),
             *_parametros(cls, params),
             "",
         ]

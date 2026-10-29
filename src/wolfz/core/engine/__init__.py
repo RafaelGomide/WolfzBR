@@ -13,25 +13,33 @@ Toda falha vira ``StepError``, com o id do passo e as colunas disponíveis.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
 import polars as pl
 
 from wolfz.core.engine.errors import StepError, missing_column
-from wolfz.core.engine.reconcilia import OutsideColumn, RunReport, StepCount, conta_passo
-from wolfz.core.ingest import list_sheets, open_file, read_sheet_raw
+from wolfz.core.engine.juntar import ErroAoJuntar, abas_a_juntar, empilhar
+from wolfz.core.engine.reconcilia import OutsideColumn, PartReport, RunReport, StepCount, conta_passo, somar
+from wolfz.core.ingest import IngestError, list_sheets, open_file, read_sheet_raw
 from wolfz.core.ingest.csv import open_csv_lazy, read_csv_raw
+from wolfz.core.ingest.errors import sheet_not_found
 from wolfz.core.recipe import Op, Recipe, load_recipe
 
 __all__ = [
+    "ErroAoJuntar",
+    "Parte",
     "RunReport",
     "StepCount",
     "StepError",
     "collect",
+    "como_parte",
     "conta_area",
     "read_input",
+    "read_parts",
     "reconciliar",
+    "reconciliar_partes",
     "run",
     "run_file",
     "run_report",
@@ -220,16 +228,24 @@ def _sheet(recipe: Recipe, path: Path) -> str | None:
     return next((n for n in nomes if re.fullmatch(match.sheet_name_regex, n)), sheet)
 
 
-def read_input(recipe: Recipe, input_path: str | Path) -> pl.DataFrame:
+def read_input(recipe: Recipe, input_path: str | Path, *, sheet: str | None = None) -> pl.DataFrame:
     """Lê o arquivo de entrada como a receita espera, tudo como texto.
 
     Planilha (``.xlsx``, ``.xls``, ``.ods``) vem como grade: colunas com o
     nome da letra e linha i = linha i + 1 da planilha. CSV vem com o
     cabeçalho da primeira linha, a não ser que a receita comece por
     ``select_range`` ou ``header_rows``; aí também vem como grade. Erros de
-    leitura são ``IngestError``, com mensagem para o usuário."""
+    leitura são ``IngestError``, com mensagem para o usuário.
+
+    ``sheet`` (``wolfz run --sheet``) passa por cima de ``source.sheet`` e
+    de ``source.match``; a aba precisa existir."""
     path, fmt, _ = open_file(input_path)
     if fmt != "csv":
+        if sheet is not None:
+            nomes = [s.name for s in list_sheets(path)]
+            if sheet not in nomes:
+                raise sheet_not_found(path.name, sheet, nomes)
+            return read_sheet_raw(path, sheet)
         return read_sheet_raw(path, _sheet(recipe, path))
     if recipe.active_steps and recipe.active_steps[0].op in _PASSOS_DE_GRADE:
         with open_csv_lazy(path, has_header=False) as lf:
@@ -237,20 +253,116 @@ def read_input(recipe: Recipe, input_path: str | Path) -> pl.DataFrame:
     return read_csv_raw(path)
 
 
-def run_file(recipe: Recipe | str | Path, input_path: str | Path) -> pl.DataFrame:
+@dataclass(frozen=True)
+class Parte:
+    """Uma aba a processar. ``origem`` é o nome da aba quando a receita
+    junta abas (``source.combine_sheets``); ``None`` quando é uma aba só."""
+
+    origem: str | None
+    grade: pl.DataFrame
+
+
+def read_parts(
+    recipe: Recipe, input_path: str | Path, *, sheet: str | None = None
+) -> tuple[list[Parte], tuple[str, ...]]:
+    """As partes do arquivo e as abas ocultas que ficaram de fora.
+
+    Sem ``combine_sheets`` (ou com ``sheet``), uma parte só, lida por
+    ``read_input``. Com ela, uma parte por aba visível que a regra escolhe,
+    na ordem do arquivo (ADR-11)."""
+    path, fmt, _ = open_file(input_path)
+    combine = recipe.source.combine_sheets
+    if fmt == "csv" or combine is None or sheet is not None:
+        return [Parte(None, read_input(recipe, path, sheet=sheet))], ()
+    abas = list_sheets(path)
+    nomes, ocultas = abas_a_juntar(abas, combine.sheets_regex)
+    if not nomes:
+        todas = ", ".join(a.name for a in abas) or "(nenhuma)"
+        regra = f"casa com {combine.sheets_regex!r}" if combine.sheets_regex else "é visível"
+        raise IngestError(
+            "no_sheets",
+            "Nenhuma aba para juntar",
+            f"Nenhuma aba de {path.name} {regra}. Abas do arquivo: {todas}.",
+            404,
+        )
+    return [Parte(n, read_sheet_raw(path, n)) for n in nomes], tuple(ocultas)
+
+
+def _na_parte(parte: Parte, exc: StepError) -> StepError:
+    """O erro do passo diz em qual aba foi (ADR-11)."""
+    if parte.origem is not None:
+        exc.message = f"Na aba {parte.origem}: {exc.message}"
+        exc.args = (exc.message,)
+    return exc
+
+
+def _origem(recipe: Recipe) -> str | None:
+    combine = recipe.source.combine_sheets
+    return combine.origin_col if combine is not None else None
+
+
+def run_file(
+    recipe: Recipe | str | Path, input_path: str | Path, *, sheet: str | None = None
+) -> pl.DataFrame:
     """Aplica a receita a um arquivo e devolve a tabela limpa.
 
     Exposta como ``wolfz.run``::
 
         df = wolfz.run("vendas.wolfz.json", "vendas_jan.xlsx")
 
-    Lê CSV, ``.xlsx``, ``.xls`` e ``.ods`` (ver ``read_input``)."""
+    Lê CSV, ``.xlsx``, ``.xls`` e ``.ods`` (ver ``read_input``). Com
+    ``source.combine_sheets``, a receita roda em cada aba e as tabelas são
+    empilhadas (``ErroAoJuntar`` se não der). ``sheet`` lê só essa aba."""
     if not isinstance(recipe, Recipe):
         recipe = load_recipe(recipe)
-    return collect(recipe, read_input(recipe, input_path).lazy())
+    partes, _ = read_parts(recipe, input_path, sheet=sheet)
+    if len(partes) == 1 and partes[0].origem is None:
+        return collect(recipe, partes[0].grade.lazy())
+    tabelas = []
+    for parte in partes:
+        try:
+            tabelas.append((parte.origem or "", collect(recipe, parte.grade.lazy())))
+        except StepError as exc:
+            raise _na_parte(parte, exc) from None
+    return empilhar(tabelas, _origem(recipe)).tabela
 
 
-def run_report(recipe: Recipe | str | Path, input_path: str | Path) -> RunReport:
+def reconciliar_partes(recipe: Recipe, partes: list[Parte], ocultas: tuple[str, ...] = ()) -> RunReport:
+    """``reconciliar`` em cada parte e a tabela empilhada, com a conta de
+    cada parte em ``parts``. Uma parte sem origem é o caso de uma aba só."""
+    if len(partes) == 1 and partes[0].origem is None:
+        return reconciliar(recipe, partes[0].grade)
+    tabelas: list[tuple[str, pl.DataFrame]] = []
+    contas: list[PartReport] = []
+    for parte in partes:
+        try:
+            r = reconciliar(recipe, parte.grade)
+        except StepError as exc:
+            raise _na_parte(parte, exc) from None
+        origem = parte.origem or ""
+        tabelas.append((origem, r.table))
+        contas.append(como_parte(r, origem))
+    juncao = empilhar(tabelas, _origem(recipe))
+    return somar(contas, juncao.tabela, juncao.divergencias, ocultas)
+
+
+def como_parte(r: RunReport, origem: str) -> PartReport:
+    """A conta de uma execução como parte de uma junção."""
+    fora = tuple(replace(c, part=origem) for c in r.outside_columns)
+    return PartReport(
+        r.rows_read,
+        r.rows_written,
+        r.steps,
+        fora,
+        r.area_ends,
+        r.parts,
+        r.divergences,
+        r.hidden_sheets,
+        origin=origem,
+    )
+
+
+def run_report(recipe: Recipe | str | Path, input_path: str | Path, *, sheet: str | None = None) -> RunReport:
     """Como ``run_file``, mas conta as linhas de cada passo (ADR-10).
 
     Exposta como ``wolfz.run_report``::
@@ -264,4 +376,4 @@ def run_report(recipe: Recipe | str | Path, input_path: str | Path) -> RunReport
     ``wolfz.run``; a tabela é a mesma."""
     if not isinstance(recipe, Recipe):
         recipe = load_recipe(recipe)
-    return reconciliar(recipe, read_input(recipe, input_path))
+    return reconciliar_partes(recipe, *read_parts(recipe, input_path, sheet=sheet))

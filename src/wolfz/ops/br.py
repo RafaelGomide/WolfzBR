@@ -463,6 +463,7 @@ class ParseDatetimeBr(_ValorBr):
 
     op: Literal["parse_datetime_br"]
     m_label = "Datas e horas convertidas"
+    desde = "1.1"
     eight_digits: Literal["auto", "ymd", "dmy"] = "auto"
     century_pivot: int = Field(default=30, ge=0, le=99)
     accept_excel_serial: bool = True

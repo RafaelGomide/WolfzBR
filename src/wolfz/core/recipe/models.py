@@ -58,6 +58,9 @@ class Op(_Model, ABC):
     # linhas depois dos passos que não são ``mantem``; um teste confere que
     # nenhum exemplo de uma op ``mantem`` muda o número de linhas.
     efeito_linhas: ClassVar[Literal["mantem", "remove", "estrutura", "multiplica"]] = "mantem"
+    # Formato da receita em que a op apareceu (ADR-9). Uma receita com uma op
+    # "1.1" é gravada como "1.1"; sem nenhuma, continua "1.0".
+    desde: ClassVar[str] = "1.0"
     python_helpers: ClassVar[tuple[Callable[..., Any], ...]] = ()
     # Funções M auxiliares, declaradas uma vez no início da consulta: nome -> definição.
     m_helpers: ClassVar[dict[str, str]] = {}
@@ -122,10 +125,66 @@ class SourceMatch(_Model):
         return value
 
 
+def _regex_de_aba(value: str | None) -> str | None:
+    """A regex de nome de aba roda no motor do Polars (sem retrocesso, R5):
+    precisa valer nele, que não aceita retrorreferência nem lookaround."""
+    if value is not None:
+        try:
+            re.compile(value)
+            pl.Series([""], dtype=pl.String).str.contains(f"^(?:{value})$")
+        except (re.error, pl.exceptions.PolarsError) as exc:
+            primeira = str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__
+            raise ValueError(f"regex inválida: {primeira}") from None
+    return value
+
+
+class SourceCombine(_Model):
+    """Juntar abas de um arquivo numa tabela só (F3, ADR-11). A receita roda
+    inteira em cada aba e as tabelas são empilhadas no fim, na ordem das
+    abas no arquivo. Por isso ``dedupe`` e ``sort`` valem dentro de cada aba.
+    Aba oculta nunca entra (R6). A receita escolhe só abas, nunca arquivos
+    (R5)."""
+
+    sheets_regex: str | None = Field(
+        default=None,
+        description="Sem padrão, todas as abas visíveis; com padrão, as que casam inteiras com ele.",
+    )
+    origin_col: str | None = Field(
+        default="aba",
+        min_length=1,
+        description="Coluna com o nome da aba de cada linha, em primeiro lugar. null: sem a coluna.",
+    )
+
+    _regex_valida = field_validator("sheets_regex")(_regex_de_aba)
+
+    @model_serializer(mode="wrap")
+    def _grava_origem_nula(self, handler: SerializerFunctionWrapHandler) -> Any:
+        # O dumps tira os campos None, mas "origin_col": null (coluna
+        # desligada) precisa ficar no arquivo: sem o campo, vale "aba".
+        data = handler(self)
+        if isinstance(data, dict) and self.origin_col is None:
+            data["origin_col"] = None
+        return data
+
+
 class Source(_Model):
     type: Literal["excel", "csv", "ods"]
     sheet: str | None = None
     match: SourceMatch | None = None
+    combine_sheets: SourceCombine | None = Field(
+        default=None,
+        description="Juntar várias abas do arquivo numa tabela só (formato 1.1).",
+        json_schema_extra={"desde": "1.1"},
+    )
+
+    @model_validator(mode="after")
+    def _combine(self) -> Source:
+        if self.combine_sheets is not None:
+            if self.type == "csv":
+                raise ValueError("combine_sheets junta abas de planilha; CSV não tem abas")
+            if self.match is not None:
+                raise ValueError("use combine_sheets ou match, não os dois")
+        return self
 
 
 class Recipe(_Model):

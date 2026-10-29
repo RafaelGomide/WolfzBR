@@ -164,6 +164,35 @@ class ColunaForaDaArea(_Resposta):
     )
     passo: str = Field(description="O select_range que deixou a coluna de fora.")
     area: str = Field(description='Colunas da área, ex.: "A:H".')
+    parte: str | None = Field(default=None, description="A aba, quando a receita junta abas.")
+
+
+class Divergencia(_Resposta):
+    """Colunas de uma aba que não batem com as das outras (F3)."""
+
+    parte: str
+    falta: list[str]
+    a_mais: list[str]
+    quase_iguais: list[dict[str, str]] = Field(
+        description='[{"nesta": "vendedor", "nas_outras": "Vendedor"}]'
+    )
+
+
+class ContagemParte(_Resposta):
+    """A reconciliação de uma aba juntada (F3)."""
+
+    origem: str
+    linhas_lidas: int
+    linhas_gravadas: int | None
+    alerta: bool
+    passos: list[ContagemPasso]
+    colunas_fora_da_area: list[ColunaForaDaArea]
+
+
+class RegraAbas(_Resposta):
+    sheets_regex: str | None = Field(description="Regra para source.combine_sheets.sheets_regex.")
+    matches: list[str] = Field(description="Abas que a regra escolhe neste arquivo.")
+    all_visible: bool
 
 
 class Reconciliacao(_Resposta):
@@ -178,6 +207,11 @@ class Reconciliacao(_Resposta):
     passos: list[ContagemPasso]
     colunas_fora_da_area: list[ColunaForaDaArea]
     passo_com_erro: str | None = None
+    partes: list[ContagemParte] = Field(default=[], description="Com abas juntas: a conta de cada aba.")
+    divergencias: list[Divergencia] = []
+    abas_ocultas: list[str] = Field(
+        default=[], description="Abas ocultas que casariam com a regra e ficaram de fora."
+    )
 
 
 class ReceitaSalva(_Resposta):

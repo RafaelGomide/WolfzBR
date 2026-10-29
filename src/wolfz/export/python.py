@@ -24,7 +24,7 @@ from typing import Any
 
 from wolfz import __version__
 from wolfz.core.recipe import Recipe
-from wolfz.export.leitura import ler_entrada
+from wolfz.export.leitura import empilhar_abas, ler_abas, ler_entrada
 
 _HEADER = '''"""Receita "{name}", exportada pelo WolfzBR {version} em {date}.
 
@@ -50,7 +50,11 @@ def main() -> None:
     if len(sys.argv) != 3:
         sys.exit(f"uso: python {sys.argv[0]} entrada saida.csv")
     entrada, saida = sys.argv[1:3]
-    df = transform(ler_entrada(entrada, ABA, ABA_REGEX, GRADE).lazy()).collect()
+    if JUNTAR_ABAS:
+        partes = [(nome, transform(grade.lazy()).collect()) for nome, grade in ler_abas(entrada, ABAS_REGEX)]
+        df = empilhar_abas(partes, COLUNA_ABA)
+    else:
+        df = transform(ler_entrada(entrada, ABA, ABA_REGEX, GRADE).lazy()).collect()
     if saida.lower().endswith(".parquet"):
         df.write_parquet(saida)
     else:
@@ -172,7 +176,7 @@ def recipe_to_python(recipe: Recipe, today: date | None = None) -> str:
     """Script Python autônomo: ``transform(lf)`` aplica todos os passos
     ativos da receita, e ``main`` lê a entrada e grava a saída."""
     steps = recipe.active_steps
-    helpers: list[Callable[..., Any]] = [ler_entrada]
+    helpers: list[Callable[..., Any]] = [ler_entrada, ler_abas, empilhar_abas]
     for step in steps:
         helpers.extend(h for h in step.python_helpers if h not in helpers)
     stdlib, helper_code = bundle(helpers)
@@ -185,6 +189,16 @@ def recipe_to_python(recipe: Recipe, today: date | None = None) -> str:
         f"ABA = {recipe.source.sheet!r}",
         f"ABA_REGEX = {match.sheet_name_regex if match else None!r}",
         f"GRADE = {grade!r}  # CSV lido como grade (A, B, ...) e não com cabeçalho",
+    ]
+    combine = recipe.source.combine_sheets
+    # Os nomes das abas são lidos do arquivo na hora de rodar; no script só
+    # entram a regex e o nome da coluna, pelo repr (R8).
+    constants += [
+        "",
+        "# Juntar abas (source.combine_sheets): a receita roda em cada aba e as tabelas são empilhadas",
+        f"JUNTAR_ABAS = {combine is not None!r}",
+        f"ABAS_REGEX = {combine.sheets_regex if combine else None!r}",
+        f"COLUNA_ABA = {combine.origin_col if combine else None!r}",
     ]
     extras = {k: v for step in steps for k, v in step.python_constants.items()}
     if extras:

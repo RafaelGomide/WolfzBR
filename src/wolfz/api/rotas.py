@@ -29,14 +29,29 @@ from wolfz.api.projetos import Projetos
 from wolfz.api.security import Settings
 from wolfz.br.municipios import buscar
 from wolfz.core.detect import Detection, detect_tables, main_table
-from wolfz.core.engine import StepError, collect, run
-from wolfz.core.engine.preview import LIMITE_PAGINA, contagens_project, preview_project
+from wolfz.core.engine import StepError
+from wolfz.core.engine.preview import LIMITE_PAGINA
+from wolfz.core.engine.projeto import (
+    contagens_do_projeto,
+    partes_do_projeto,
+    preview_do_projeto,
+    regra_das_abas,
+    tabela_do_projeto,
+)
 from wolfz.core.engine.reconcilia import Reconciliation, StepCount
 from wolfz.core.ingest import SheetStructure, import_file, list_sheets, open_file
 from wolfz.core.ingest.abas import padrao_de_aba
 from wolfz.core.ingest.limits import too_large_message
 from wolfz.core.profile import profile_table
-from wolfz.core.recipe import Recipe, dumps_recipe, load_recipe, recipe_from_dict, registered_ops, save_recipe
+from wolfz.core.recipe import (
+    Recipe,
+    SourceCombine,
+    dumps_recipe,
+    load_recipe,
+    recipe_from_dict,
+    registered_ops,
+    save_recipe,
+)
 from wolfz.core.recipe.migrate import CURRENT_VERSION
 from wolfz.core.suggest import suggest
 from wolfz.core.workspace import PROJECT_FILE, RAW_FILE, STRUCTURE_FILE, write_json_atomic
@@ -50,7 +65,7 @@ from wolfz.export.dados import (
     gravar_juntos,
 )
 from wolfz.export.depara import ARQUIVO_DEPARA, depara_municipios, gravar_depara
-from wolfz.export.m import PARAMETRO, parameter_to_m, recipe_to_m, source_from_project
+from wolfz.export.m import PARAMETRO, aviso_de_abas, parameter_to_m, recipe_to_m, source_from_project
 from wolfz.export.pbip import OpcoesPbip, escrever_arquivo, escrever_pasta, parametros_pbip, projeto_pbip
 from wolfz.export.python import recipe_to_python
 from wolfz.export.tableau import INSTALAR, escrever_hyper, escrever_tds, formatos_colunas, hyper_disponivel
@@ -66,6 +81,12 @@ _TIPO_FONTE = {"xlsx": "excel", "xls": "excel", "ods": "ods", "csv": "csv"}
 class PedidoRejeicao(BaseModel):
     rule: str = Field(min_length=1, description="Regra da sugestão rejeitada.")
     cols: list[str] = Field(default_factory=list, description="Colunas; vazio rejeita a regra inteira.")
+
+
+class PedidoRegraAbas(BaseModel):
+    sheets: list[str] = Field(min_length=1, description="Abas marcadas no diálogo de importação.")
+    available: list[str] = Field(min_length=1, description="Todas as abas visíveis do arquivo, na ordem.")
+    recipe_sheet: str | None = Field(default=None, description="Aba em que a receita é feita (source.sheet).")
 
 
 class PedidoExportacao(BaseModel):
@@ -104,13 +125,27 @@ def _receita_json(recipe: Recipe) -> dict[str, Any]:
     return json.loads(dumps_recipe(recipe))
 
 
+def _depara_do_projeto(pasta: Path, recipe: Recipe) -> pl.DataFrame | None:
+    """O de-para de municípios de todas as abas que a receita junta."""
+    partes, _ = partes_do_projeto(pasta, recipe)
+    tabelas = [d for p in partes if (d := depara_municipios(recipe, pl.scan_parquet(p.raw))) is not None]
+    return pl.concat(tabelas).unique(maintain_order=True) if tabelas else None
+
+
 def _reconciliacao_json(r: Reconciliation, etag: str) -> dict[str, Any]:
     # O cabeçalho da coluna fora da área vai para a interface, que já mostra
     # a grade (D3); o --report (``to_dict``) não o grava.
-    fora = [
-        {**c.to_dict(), "cabecalho": c.header, "passo": c.step, "area": c.area} for c in r.outside_columns
-    ]
-    return {"etag": etag, **r.to_dict(), "colunas_fora_da_area": fora, "passo_com_erro": None}
+    def fora(cols: tuple) -> list[dict[str, Any]]:
+        return [
+            {**c.to_dict(), "cabecalho": c.header, "passo": c.step, "area": c.area, "parte": c.part}
+            for c in cols
+        ]
+
+    corpo = r.to_dict()
+    corpo["colunas_fora_da_area"] = fora(r.outside_columns)
+    for parte, dados in zip(r.parts, corpo["partes"], strict=True):
+        dados["colunas_fora_da_area"] = fora(parte.outside_columns)
+    return {"etag": etag, **corpo, "passo_com_erro": None}
 
 
 def _nome_seguro(nome: str, padrao: str = "tabela") -> str:
@@ -151,14 +186,52 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
                 return []
             return [s.to_dict() for s in list_sheets(caminho, fmt, settings.limits)]
 
+    @api.post("/sheets/combine-rule", response_model=m.RegraAbas)
+    def regra_de_abas(pedido: PedidoRegraAbas) -> dict[str, Any]:
+        """A ``sheets_regex`` que escolhe exatamente as abas marcadas (D8):
+        ``null`` quando são todas as visíveis; o padrão do mês quando ele
+        escolhe as mesmas abas (e aceita as dos próximos arquivos); senão, a
+        lista dos nomes. ``matches`` são as abas que a regra escolhe neste
+        arquivo, para a interface conferir."""
+        try:
+            regra = regra_das_abas(pedido.sheets, pedido.available, pedido.recipe_sheet)
+        except ValueError as exc:
+            raise Problem(422, str(exc), title="Abas inválidas") from None
+        from wolfz.core.engine.juntar import casa_inteira
+
+        casam = (
+            pedido.available
+            if regra is None
+            else [
+                n for n, c in zip(pedido.available, casa_inteira(pedido.available, regra), strict=True) if c
+            ]
+        )
+        return {"sheets_regex": regra, "matches": casam, "all_visible": regra is None}
+
     @api.post("/projects", status_code=201, response_model=m.ProjetoCriado)
     def criar_projeto(
         file: Annotated[UploadFile, File(description="Planilha ou CSV.")],
         sheet: Annotated[str | None, Form()] = None,
+        combine_sheets: Annotated[
+            str | None,
+            Form(
+                description='Juntar abas (F3): JSON de source.combine_sheets, ex. {"sheets_regex": null}. '
+                "A receita é feita em sheet (ou na primeira aba visível) e roda em cada aba que a regra "
+                "escolhe. Use POST /sheets/combine-rule para montar a regra a partir das abas marcadas."
+            ),
+        ] = None,
     ) -> dict[str, Any]:
         """Importa o arquivo, detecta a estrutura e grava a receita inicial."""
+        juntar: dict[str, Any] | None = None
+        if combine_sheets is not None:
+            try:
+                juntar = SourceCombine.model_validate_json(combine_sheets).model_dump(mode="json")
+            except ValueError as exc:
+                raise Problem(422, f"combine_sheets inválido: {exc}", title="Pedido inválido") from None
         with _upload_temporario(file) as caminho:
-            resultado = import_file(caminho, sheet=sheet, workspace=ws, limits=settings.limits)
+            resultado = import_file(
+                caminho, sheet=sheet, workspace=ws, limits=settings.limits, all_sheets=juntar is not None
+            )
 
         pasta = resultado.path
         projeto = resultado.project
@@ -176,8 +249,11 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
         fonte: dict[str, Any] = {"type": _TIPO_FONTE[projeto["source"]["format"]]}
         if projeto["source"]["sheet"]:
             fonte["sheet"] = projeto["source"]["sheet"]
+            if juntar is not None:
+                # A regra de abas vale para este arquivo e para os próximos (D8).
+                fonte["combine_sheets"] = juntar
             # Aba com mês ou ano no nome: aceita a do próximo arquivo (F2.F4).
-            if padrao := padrao_de_aba(projeto["source"]["sheet"]):
+            elif padrao := padrao_de_aba(projeto["source"]["sheet"]):
                 fonte["match"] = {"sheet_name_regex": padrao}
         inicial = recipe_from_dict(
             {
@@ -188,6 +264,8 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
                 "steps": [{"id": f"s{i}", **p} for i, p in enumerate(passos, 1)],
             }
         )
+        if juntar is not None:
+            partes_do_projeto(pasta, inicial)  # 422 se nenhuma aba casa com a regra
         save_recipe(inicial, pasta / RECIPE_FILE)
         projetos.abrir(resultado.project_id)
         return {
@@ -247,14 +325,12 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
         sample: Annotated[int, Query(ge=1, le=100_000)] = 10_000,
     ) -> dict[str, Any]:
         pasta = projetos.abrir(project_id)
-        sub = _ate_o_passo(receita(pasta), step)
-        raw = pl.scan_parquet(pasta / RAW_FILE)
-        plano = run(sub, raw)
-        try:
-            tabela = plano.collect()
-        except Exception:
-            collect(sub, raw)  # aponta o passo culpado (StepError)
-            raise
+        atual = receita(pasta)
+        _ate_o_passo(atual, step)  # 404 se o passo não existe
+        if step == "raw" and atual.source.combine_sheets is None:
+            tabela = pl.read_parquet(pasta / RAW_FILE)
+        else:
+            tabela = tabela_do_projeto(pasta, atual, step)
         return profile_table(tabela, sample).to_dict()
 
     # -----------------------------------------------------------------------
@@ -311,7 +387,7 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
         atual = receita(pasta)
         _ate_o_passo(atual, step)  # 404 se o passo não existe
         with projetos.lock_preview(project_id):
-            pagina = preview_project(pasta, atual, step, offset, limit)
+            pagina = preview_do_projeto(pasta, atual, step, offset, limit)
         if columns:
             pedidas = [c for c in columns.split(",") if c]
             faltam = [c for c in pedidas if c not in pagina.frame.columns]
@@ -332,7 +408,7 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
         etag = _etag(atual)
         with projetos.lock_preview(project_id):
             try:
-                r = contagens_project(pasta, atual)
+                r = contagens_do_projeto(pasta, atual)
             except StepError as exc:
                 if exc.contagem_parcial is None:
                     raise
@@ -356,7 +432,7 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
         pasta = projetos.abrir(project_id)
         atual = receita(pasta)
         with projetos.lock_preview(project_id):
-            tabela = collect(atual, pl.scan_parquet(pasta / RAW_FILE))
+            tabela = tabela_do_projeto(pasta, atual)
         passos = [s.model_dump(mode="json") for s in atual.steps]
         return [s.to_dict() for s in suggest(tabela, _rejeitadas(pasta), steps=passos)]
 
@@ -395,7 +471,7 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
             raise Problem(422, f"O passo {step_id} não é de município ({passo.op}).")
         antes = [s for s in atual.steps[: ids.index(step_id)] if s.enabled]
         with projetos.lock_preview(project_id):
-            entrada = collect(atual.model_copy(update={"steps": antes}), pl.scan_parquet(pasta / RAW_FILE))
+            entrada = tabela_do_projeto(pasta, atual.model_copy(update={"steps": antes}))
             return passo.revisao(entrada.lazy())  # type: ignore[attr-defined]
 
     @api.get("/municipios", response_model=list[m.Municipio])
@@ -475,7 +551,7 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
         tabela = None
         formulas = None
         if set(alvos) & {*EXTENSOES, "hyper", "pbip"}:
-            tabela = collect(atual, pl.scan_parquet(pasta / RAW_FILE))
+            tabela = tabela_do_projeto(pasta, atual)
             formulas = celulas_formula(tabela)
         opcoes = OpcoesCsv(separator=pedido.csv_separator, decimal_comma=pedido.decimal_comma)
         # Arquivo enviado por upload, sem source_path: fica o nome, para o usuário completar.
@@ -518,7 +594,7 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
             elif fmt in ("pbip_modelo", "pbip_relatorio"):
                 escritas[alvo] = partial(escrever_pasta, arquivos_pbip, alvo.name)
             elif fmt == "depara":
-                depara = depara_municipios(atual, pl.scan_parquet(pasta / RAW_FILE))
+                depara = _depara_do_projeto(pasta, atual)
                 escritas[alvo] = partial(gravar_depara, depara)
             else:
                 escritas[alvo] = partial(_escrever_texto, recipe_to_python(atual))
@@ -532,6 +608,8 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
             "formula_cells": formulas,
             "neutralized": bool(pedido.neutralize_formulas and "csv" in alvos),
             "source_path_missing": sem_caminho and bool({"powerquery", "pbip"} & set(alvos)),
+            # F3: a regra de abas da receita não vai para o M (regex escrita à mão).
+            "m_warning": aviso_de_abas(atual) if {"powerquery", "pbip"} & set(alvos) else None,
         }
 
     @api.get("/export-formats", response_model=list[m.FormatoExportacao])

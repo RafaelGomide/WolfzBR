@@ -101,3 +101,32 @@ def ler_entrada(caminho: str, aba: str | None, aba_regex: str | None, grade: boo
     if Path(caminho).suffix.lower() in PLANILHAS:
         return ler_planilha(caminho, aba, aba_regex)
     return ler_csv(caminho, grade)
+
+
+def ler_abas(caminho: str, regex: str | None) -> list[tuple[str, pl.DataFrame]]:
+    """As abas visíveis que casam inteiras com ``regex`` (sem ``regex``,
+    todas as visíveis), na ordem do arquivo, cada uma como grade de texto.
+    Aba oculta nunca entra. A regex roda no motor do Polars, como no
+    WolfzBR (``source.combine_sheets``)."""
+    from python_calamine import CalamineWorkbook, SheetTypeEnum, SheetVisibleEnum
+
+    with CalamineWorkbook.from_path(caminho) as livro:
+        nomes = [
+            m.name
+            for m in livro.sheets_metadata
+            if m.typ == SheetTypeEnum.WorkSheet and m.visible == SheetVisibleEnum.Visible
+        ]
+    if regex is not None:
+        casam = pl.Series(nomes, dtype=pl.String).str.contains(f"^(?:{regex})$").fill_null(False).to_list()
+        nomes = [n for n, c in zip(nomes, casam, strict=True) if c]
+    if not nomes:
+        raise SystemExit(f"nenhuma aba de {caminho} para juntar")
+    return [(n, ler_planilha(caminho, n, None)) for n in nomes]
+
+
+def empilhar_abas(tabelas: list[tuple[str, pl.DataFrame]], origem: str | None) -> pl.DataFrame:
+    """Empilha as tabelas pelo nome exato das colunas; a coluna ``origem``
+    (o nome da aba) vem em primeiro."""
+    if origem is not None:
+        tabelas = [(n, df.select(pl.lit(n, dtype=pl.String).alias(origem), pl.all())) for n, df in tabelas]
+    return pl.concat([df for _, df in tabelas], how="diagonal")

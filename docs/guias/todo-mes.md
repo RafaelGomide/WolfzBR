@@ -37,6 +37,18 @@ wolfz run vendas.wolfz.json "entrada/*.xlsx" -o saida/ --report relatorio.json
 
 Cada arquivo é processado à parte: um que falha não para os outros. No fim aparece a tabela do que deu certo e do que falhou; `--report` grava o mesmo em JSON, para automatizar.
 
+### Outra aba, várias abas, vários arquivos numa saída só
+
+- **Outra aba do mesmo arquivo:** `--sheet "FEV"` lê essa aba no lugar da aba da receita.
+- **Todas as abas numa tabela só** (três meses no mesmo arquivo): na importação, escolha "Juntar várias abas numa tabela só". A receita guarda a regra (`source.combine_sheets`, ver [A receita](../receita.md#combine_sheets-juntar-abas)), e o `wolfz run` aplica a mesma regra ao arquivo do próximo trimestre. Uma coluna `aba` diz de onde veio cada linha.
+- **Vários arquivos numa saída só** (12 meses num Parquet):
+
+```bash
+wolfz run vendas.wolfz.json "entrada/*.xlsx" --combine -o saida/vendas_2025.parquet --format parquet
+```
+
+  A receita roda em cada arquivo, e as tabelas são empilhadas com uma coluna `arquivo` (só o nome do arquivo, nunca a pasta). `--origin-col Mes` troca o nome da coluna, e `--no-origin-col` tira a coluna. **Tudo ou nada:** se um arquivo falha, nada é gravado, e a mensagem diz qual arquivo e qual passo. A saída consolidada nunca entra como entrada (pode ficar na mesma pasta), e o arquivo `~$...` que o Excel cria com a planilha aberta é ignorado. Para não estourar a memória, o lote é recusado antes de ler se passar de 1.000 arquivos ou de 2 GB abertos; aí, rode sem `--combine`.
+
 ### Quantas linhas cada passo tirou
 
 Depois de gravar, o `wolfz run` diz quantas linhas leu e quantas gravou:

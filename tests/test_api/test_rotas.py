@@ -508,8 +508,8 @@ def test_tableau_sem_o_extra(client, projeto, tmp_path, monkeypatch):
 
 def test_catalogo_de_operacoes(client):
     ops = {o["op"]: o for o in client.get("/api/ops").json()}
-    # Os testes de receita registram operações extras ("teste_…"); as do WolfzBR são 40.
-    assert len([o for o in ops if not o.startswith("teste_")]) == 40
+    # Os testes de receita registram operações extras ("teste_…"); as do WolfzBR são 41.
+    assert len([o for o in ops if not o.startswith("teste_")]) == 41
     assert ops["parse_brl"]["schema"]["properties"]["cols"]["type"] == "array"
     assert ops["sort"]["full_checkpoint"] is True and ops["rename"]["full_checkpoint"] is False
     assert ops["select_range"]["examples"] and ops["trim"]["doc"]
@@ -549,7 +549,7 @@ def test_erro_inesperado_nao_vaza_detalhe(settings, monkeypatch, caplog):
     def explode(*args, **kwargs):
         raise RuntimeError("CPF 123.456.789-09 na mensagem")
 
-    monkeypatch.setattr("wolfz.api.rotas.preview_project", explode)
+    monkeypatch.setattr("wolfz.api.rotas.preview_do_projeto", explode)
     caplog.set_level("DEBUG")
     with cliente(settings) as client:
         projeto = enviar(client).json()

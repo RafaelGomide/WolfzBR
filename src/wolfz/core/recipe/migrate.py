@@ -8,6 +8,11 @@ interpretada pela metade.
 
 Para mudar o formato: suba ``CURRENT_VERSION`` e registre em ``MIGRATIONS``
 uma função que leva o dicionário da versão anterior para a seguinte.
+
+Na memória toda receita fica no formato atual, mas ela é **gravada com o
+menor formato que usa** (ADR-9, ``formato_minimo``): uma receita sem nada da
+1.1 continua ``"1.0"``, byte a byte, e abre no WolfzBR 1.0.x. Toda op nova
+declara ``desde`` (``Op.desde``) e todo campo novo, ``json_schema_extra={"desde": …}``.
 """
 
 from __future__ import annotations
@@ -16,7 +21,7 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-CURRENT_VERSION = "1.0"
+CURRENT_VERSION = "1.1"
 
 RecipeDict = dict[str, Any]
 
@@ -47,6 +52,8 @@ def _de_0_1_para_1_0(data: RecipeDict) -> RecipeDict:
 # versão de origem -> (versão de destino, função).
 MIGRATIONS: dict[str, tuple[str, Callable[[RecipeDict], RecipeDict]]] = {
     "0.1": ("1.0", _de_0_1_para_1_0),
+    # A 1.1 só acrescenta: toda receita 1.0 é uma receita 1.1 válida.
+    "1.0": ("1.1", dict),
 }
 
 

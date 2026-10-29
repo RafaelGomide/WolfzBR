@@ -104,7 +104,8 @@ def test_caso_feliz_conta_cada_passo_sem_alerta():
 def test_to_dict_tem_as_chaves_do_report():
     r = reconciliar(_receita({"op": "select_range", "start": "A2"}, {"op": "header_rows"}), _grade_feliz())
     d = r.to_dict()
-    assert set(d) == {"linhas_lidas", "linhas_gravadas", "alerta", "passos", "colunas_fora_da_area"}
+    assert set(d) == {"linhas_lidas", "linhas_gravadas", "alerta", "passos", "colunas_fora_da_area", "partes"}
+    assert d["partes"] == []
     assert set(d["passos"][0]) == {
         "id",
         "op",

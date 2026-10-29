@@ -15,6 +15,7 @@ from typing import Any, Literal
 
 import polars as pl
 
+from wolfz.core.engine.juntar import Divergencia
 from wolfz.core.recipe import Op
 
 # Passo que tira mais que esta fração da entrada, e pelo menos MINIMO_ALERTA
@@ -28,10 +29,13 @@ __all__ = [
     "LIMITE_PERDA",
     "MINIMO_ALERTA",
     "OutsideColumn",
+    "PartReport",
     "Reconciliation",
     "RunReport",
     "StepCount",
     "conta_passo",
+    "juntar_contas",
+    "somar",
 ]
 
 
@@ -82,6 +86,7 @@ class OutsideColumn:
     header: str | None
     step: str  # id do select_range
     area: str  # "A:H"
+    part: str | None = None  # a aba ou o arquivo, quando a receita junta partes
 
     def to_dict(self) -> dict[str, Any]:
         return {"letra": self.letter, "celulas": self.cells}
@@ -98,6 +103,11 @@ class Reconciliation:
     # Do select_range com dado abaixo da área: última linha da área e última
     # linha preenchida da grade (linhas do Excel), para a mensagem do terminal.
     area_ends: dict[str, tuple[int | None, int | None]] = field(default_factory=dict)
+    # Juntar abas ou arquivos (F3): a conta de cada parte, o que cada parte
+    # tem de diferente das outras e as abas ocultas que ficaram de fora.
+    parts: tuple[PartReport, ...] = ()
+    divergences: tuple[Divergencia, ...] = ()
+    hidden_sheets: tuple[str, ...] = ()
 
     @property
     def lost(self) -> int:
@@ -114,13 +124,30 @@ class Reconciliation:
     def to_dict(self) -> dict[str, Any]:
         """O JSON do ``--report`` e do ``GET /reconciliation``, sem valor de
         célula."""
-        return {
+        saida: dict[str, Any] = {
             "linhas_lidas": self.rows_read,
             "linhas_gravadas": self.rows_written,
             "alerta": self.alert,
             "passos": [s.to_dict() for s in self.steps],
             "colunas_fora_da_area": [c.to_dict() for c in self.outside_columns],
+            "partes": [p.to_dict() for p in self.parts],
         }
+        if self.divergences:
+            saida["divergencias"] = [d.to_dict() for d in self.divergences]
+        if self.hidden_sheets:
+            saida["abas_ocultas"] = list(self.hidden_sheets)
+        return saida
+
+
+@dataclass(frozen=True)
+class PartReport(Reconciliation):
+    """A conta de uma aba ou de um arquivo juntado. ``origin`` é só o nome
+    da aba ou do arquivo, nunca a pasta (D6)."""
+
+    origin: str = field(kw_only=True)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"origem": self.origin, **super().to_dict()}
 
 
 @dataclass(frozen=True)
@@ -129,6 +156,62 @@ class RunReport(Reconciliation):
     ``wolfz.run``) e a conta das linhas."""
 
     table: pl.DataFrame = field(kw_only=True)
+
+
+def juntar_contas(
+    partes: list[PartReport],
+    rows_written: int,
+    divergences: tuple[Divergencia, ...] = (),
+    hidden: tuple[str, ...] = (),
+) -> Reconciliation:
+    """A conta da tabela juntada: as linhas de todas as partes e, por passo,
+    a soma das partes. O passo alerta se alertou em alguma parte (o motivo é
+    o da primeira); o fator do unpivot é recalculado sobre as somas."""
+    passos: dict[str, list[StepCount]] = {}
+    for parte in partes:
+        for s in parte.steps:
+            passos.setdefault(s.id, []).append(s)
+    somados = []
+    for contas in passos.values():
+        rows_in, rows_out = sum(s.rows_in for s in contas), sum(s.rows_out for s in contas)
+        motivo = next((s.reason for s in contas if s.alert), None)
+        somados.append(
+            StepCount(
+                id=contas[0].id,
+                op=contas[0].op,
+                rows_in=rows_in,
+                rows_out=rows_out,
+                empty_removed=sum(s.empty_removed for s in contas),
+                structure_removed=sum(s.structure_removed for s in contas),
+                outside_area=sum(s.outside_area for s in contas),
+                factor=(rows_out / rows_in if rows_in else None) if contas[0].factor is not None else None,
+                alert=motivo is not None,
+                reason=motivo,
+            )
+        )
+    return Reconciliation(
+        sum(p.rows_read for p in partes),
+        rows_written,
+        tuple(somados),
+        tuple(c for p in partes for c in p.outside_columns),
+        {},
+        tuple(partes),
+        divergences,
+        hidden,
+    )
+
+
+def somar(
+    partes: list[PartReport],
+    table: pl.DataFrame,
+    divergences: tuple[Divergencia, ...] = (),
+    hidden: tuple[str, ...] = (),
+) -> RunReport:
+    """``juntar_contas`` com a tabela juntada (``wolfz.run_report``)."""
+    r = juntar_contas(partes, table.height, divergences, hidden)
+    return RunReport(
+        r.rows_read, r.rows_written, r.steps, r.outside_columns, {}, r.parts, divergences, hidden, table=table
+    )
 
 
 def _perda_grande(perda: int, base: int) -> bool:

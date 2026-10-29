@@ -23,9 +23,18 @@ from rich.markup import escape
 from rich.table import Table
 
 from wolfz import __version__
-from wolfz.core.engine import RunReport, StepCount, StepError, read_input, reconciliar
-from wolfz.core.engine.reconcilia import OutsideColumn
-from wolfz.core.ingest import IngestError
+from wolfz.core.engine import (
+    ErroAoJuntar,
+    RunReport,
+    StepCount,
+    StepError,
+    como_parte,
+    read_parts,
+    reconciliar_partes,
+)
+from wolfz.core.engine.juntar import empilhar, teto_de_juntar
+from wolfz.core.engine.reconcilia import OutsideColumn, somar
+from wolfz.core.ingest import IngestError, list_sheets
 from wolfz.core.profile import ColumnProfile, LoadedTable, TableProfile, load_table, profile_table
 from wolfz.core.profile.column import SAMPLE_SIZE
 from wolfz.core.recipe import Recipe, RecipeError, RecipeTooNewError, load_recipe, recipe_json_schema
@@ -97,7 +106,8 @@ def _output_path(saida: str, arquivo: Path, formato: Formato) -> Path:
 
 _EPILOG = (
     "Vários arquivos (ou um padrão como 'entrada/*.xlsx'): -o é uma pasta e cada arquivo é processado "
-    "à parte, com um relatório no fim. "
+    "à parte, com um relatório no fim; com --combine, -o é um arquivo e todos são juntados nele "
+    "(se um falhar, nada é gravado). "
     "Códigos de saída: 0 ok · 1 um passo falhou (ou uma verificação reprovou) · "
     "2 receita inválida ou uso incorreto · 3 arquivo de entrada ilegível. "
     "Em lote, o maior código entre os arquivos."
@@ -106,14 +116,16 @@ _EPILOG = (
 
 class _Falha(Exception):
     """Falha de um arquivo: o código de saída, as linhas da mensagem do
-    terminal e o que vai para o ``--report``. ``relatorio`` nunca leva texto
-    de exceção nem valor de célula (S2, D9)."""
+    terminal e o que vai para o ``--report``. Cada chamada declara o que vai
+    para o relatório (achado A2 do André): ele nunca copia as linhas do
+    terminal, que podem trazer o texto de uma exceção, e nunca leva valor de
+    célula (S2, D9)."""
 
-    def __init__(self, code: ExitCode, *lines: str, relatorio: dict[str, Any] | None = None):
+    def __init__(self, code: ExitCode, *lines: str, relatorio: dict[str, Any]):
         super().__init__(lines[0] if lines else "")
         self.code = code
         self.lines = lines
-        self.relatorio = relatorio if relatorio is not None else {"erro": " ".join(lines)}
+        self.relatorio = relatorio
 
 
 def _carregar_receita(receita: Path) -> Recipe:
@@ -355,16 +367,99 @@ def _avisos_fora_da_area(r: RunReport, prefixo: str = "") -> list[str]:
     return avisos
 
 
-def _imprimir_resumo(r: RunReport, prefixo: str = "") -> None:
+def _avisos_da_juncao(r: RunReport, prefixo: str = "", o_que: str = "as abas") -> list[str]:
+    """Abas ocultas que ficaram de fora (R6) e colunas que não batem entre
+    as partes (ADR-11, ux.md §3.4). Nome de aba e de coluna vêm do arquivo:
+    sem caractere de controle e cortados (R9)."""
+    avisos = []
+    if r.hidden_sheets:
+        n = len(r.hidden_sheets)
+        nomes = ", ".join(_literal(a, 60) for a in r.hidden_sheets)
+        quantas = "1 aba oculta não foi incluída" if n == 1 else f"{n} abas ocultas não foram incluídas"
+        avisos.append(f"{prefixo}Atenção: {quantas}: {nomes}.")
+    if r.divergences:
+        avisos.append(f"{prefixo}Atenção: {o_que} não têm as mesmas colunas.")
+        for d in r.divergences:
+            parte = _literal(d.parte, 60)
+            quase = {a for a, _ in d.quase_iguais} | {b for _, b in d.quase_iguais}
+            falta = [_literal(c, 60) for c in d.falta if c not in quase]
+            a_mais = [_literal(c, 60) for c in d.a_mais if c not in quase]
+            if falta and a_mais:
+                avisos.append(f"  {parte}: falta {', '.join(falta)}; tem a mais {', '.join(a_mais)}.")
+            elif falta:
+                avisos.append(f"  {parte}: falta {', '.join(falta)}.")
+            elif a_mais:
+                avisos.append(f"  {parte}: tem a mais {', '.join(a_mais)}.")
+            for nesta, nas_outras in d.quase_iguais:
+                avisos.append(
+                    f'  {parte}: tem "{_literal(nesta, 60)}", as outras têm "{_literal(nas_outras, 60)}". '
+                    "Viraram duas colunas."
+                )
+        avisos.append("Nas linhas de uma parte sem a coluna, ela fica vazia. Nenhuma coluna foi tirada.")
+    return avisos
+
+
+def _imprimir_resumo(r: RunReport, prefixo: str = "", o_que: str = "as abas") -> None:
     for texto, aviso in _resumo(r, prefixo):
         typer.secho(texto, err=True, fg="yellow" if aviso else None)
     for texto in _avisos_fora_da_area(r, prefixo):
+        typer.secho(texto, err=True, fg="yellow")
+    for texto in _avisos_da_juncao(r, prefixo, o_que):
         typer.secho(texto, err=True, fg="yellow")
 
 
 # ---------------------------------------------------------------------------
 # Processar um arquivo
 # ---------------------------------------------------------------------------
+
+
+def _calcular(
+    recipe: Recipe,
+    arquivo: Path,
+    sheet: str | None = None,
+    max_drop: float | None = None,
+    mostrar_valores: bool = False,
+) -> RunReport:
+    """Lê o arquivo e aplica a receita, contando as linhas, sem gravar
+    nada. Falhou, ou a perda passou do ``--max-drop``: ``_Falha``."""
+    if not arquivo.is_file():
+        nao_existe = f"Arquivo não encontrado: {arquivo}"
+        raise _Falha(ExitCode.UNREADABLE_INPUT, nao_existe, relatorio={"erro": f"{nao_existe}."})
+    if sheet is not None and arquivo.suffix.lower() in (".csv", ".txt", ".tsv"):
+        sem_abas = f"--sheet vale para planilha; {arquivo.name} é CSV e não tem abas."
+        raise _Falha(ExitCode.INVALID_RECIPE, sem_abas, "Nada foi gravado.", relatorio={"erro": sem_abas})
+    try:
+        partes, ocultas = read_parts(recipe, arquivo, sheet=sheet)
+    except IngestError as exc:
+        if exc.code == "sheet_not_found" and sheet is not None:
+            abas = ", ".join(s.name for s in list_sheets(arquivo))
+            linhas = (
+                f"A aba {_literal(sheet, 60)} não existe em {_literal(arquivo.name, 60)}.",
+                f"Abas do arquivo: {_literal(abas)}.",
+            )
+            raise _Falha(
+                ExitCode.UNREADABLE_INPUT, *linhas, "Nada foi gravado.", relatorio={"erro": " ".join(linhas)}
+            ) from None
+        # Mensagem montada pela ingestão (tamanho, senha, aba que falta).
+        texto = f"{exc.title}: {exc.message}"
+        raise _Falha(ExitCode.UNREADABLE_INPUT, texto, relatorio={"erro": texto}) from None
+    except (OSError, pl.exceptions.PolarsError) as exc:
+        # O texto da exceção fica só no terminal (A2).
+        raise _Falha(
+            ExitCode.UNREADABLE_INPUT,
+            f"Não foi possível ler {arquivo}: {_first_line(exc)}",
+            relatorio={"erro": f"Não foi possível ler {arquivo}."},
+        ) from None
+    try:
+        report = reconciliar_partes(recipe, partes, ocultas)
+    except StepError as exc:
+        raise _falha_de_passo(exc, mostrar_valores) from None
+    except ErroAoJuntar as exc:
+        texto = f"{exc.titulo}: {exc.mensagem}"
+        raise _Falha(ExitCode.STEP_ERROR, texto, "Nada foi gravado.", relatorio={"erro": texto}) from None
+    if max_drop is not None and report.lost > max_drop * report.rows_read:
+        raise _parado(report, max_drop)
+    return report
 
 
 def _processar(
@@ -377,49 +472,75 @@ def _processar(
     overwrite: bool,
     max_drop: float | None = None,
     mostrar_valores: bool = False,
+    sheet: str | None = None,
 ) -> RunReport:
     """Aplica a receita a um arquivo, contando as linhas, e grava. Nada é
     gravado se algo falhar ou se a perda passar do ``--max-drop``."""
     if destino.exists() and not overwrite:
+        existe = f"A saída já existe: {destino}"
         raise _Falha(
-            ExitCode.INVALID_RECIPE, f"A saída já existe: {destino}", "Use --overwrite para substituir."
+            ExitCode.INVALID_RECIPE,
+            existe,
+            "Use --overwrite para substituir.",
+            relatorio={"erro": f"{existe}."},
         )
-    if not arquivo.is_file():
-        raise _Falha(ExitCode.UNREADABLE_INPUT, f"Arquivo não encontrado: {arquivo}")
-    try:
-        df = read_input(recipe, arquivo)
-    except IngestError as exc:
-        raise _Falha(ExitCode.UNREADABLE_INPUT, f"{exc.title}: {exc.message}") from None
-    except (OSError, pl.exceptions.PolarsError) as exc:
-        raise _Falha(
-            ExitCode.UNREADABLE_INPUT, f"Não foi possível ler {arquivo}: {_first_line(exc)}"
-        ) from None
-    try:
-        report = reconciliar(recipe, df)
-    except StepError as exc:
-        raise _falha_de_passo(exc, mostrar_valores) from None
-    if max_drop is not None and report.lost > max_drop * report.rows_read:
-        raise _parado(report, max_drop)
+    report = _calcular(recipe, arquivo, sheet, max_drop, mostrar_valores)
     try:
         gravar_juntos({destino: escritor(formato.value, report.table, opcoes, neutralizar, aba=recipe.name)})
     except ExportError as exc:
-        raise _Falha(ExitCode.INVALID_RECIPE, str(exc), "Nada foi gravado.") from None
+        raise _Falha(
+            ExitCode.INVALID_RECIPE, str(exc), "Nada foi gravado.", relatorio={"erro": str(exc)}
+        ) from None
     return report
+
+
+_BLOQUEIO = re.compile(r"^~\$.*|^\.~lock\..*#$")
 
 
 def _expandir(arquivos: list[str]) -> list[Path]:
     """Os arquivos pedidos; padrões ('pasta/*.xlsx') são expandidos aqui,
-    porque o PowerShell e o cmd do Windows não expandem sozinhos."""
+    porque o PowerShell e o cmd do Windows não expandem sozinhos. O arquivo
+    de bloqueio que o Excel (``~$``) e o LibreOffice (``.~lock.…#``) criam
+    com a planilha aberta é ignorado quando vem de um padrão, com aviso
+    (R4); passado pelo nome, continua dando erro de leitura."""
     saida: list[Path] = []
     for a in arquivos:
         if any(ch in a for ch in "*?["):
             achados = sorted(Path(p) for p in glob.glob(a))
             if not achados:
                 _fail(ExitCode.UNREADABLE_INPUT, f"Nenhum arquivo casa com {a}")
-            saida += achados
+            for achado in achados:
+                if _BLOQUEIO.fullmatch(achado.name):
+                    typer.echo(
+                        f"Atenção: {_literal(str(achado))} é o arquivo de bloqueio de uma planilha aberta "
+                        "e foi ignorado.",
+                        err=True,
+                    )
+                else:
+                    saida.append(achado)
         else:
             saida.append(Path(a))
     return list(dict.fromkeys(saida))
+
+
+def _sem_as_saidas(entradas: list[Path], saidas: list[Path]) -> list[Path]:
+    """Tira das entradas as que são uma das saídas (R4): o consolidado do
+    mês passado na pasta de entrada não entra de novo, e uma saída nunca
+    sobrescreve uma entrada. Compara o caminho resolvido (pega link e caixa
+    no Windows)."""
+    ficam = []
+    for e in entradas:
+        if any(_mesmo_arquivo(e, s) for s in saidas):
+            typer.echo(
+                f"Atenção: {_literal(str(e))} é a saída deste comando e foi tirado das entradas.", err=True
+            )
+        else:
+            ficam.append(e)
+    if not ficam:
+        _fail(
+            ExitCode.INVALID_RECIPE, "Nenhum arquivo de entrada sobrou: a única entrada era a própria saída."
+        )
+    return ficam
 
 
 def _mesmo_arquivo(a: Path, b: Path) -> bool:
@@ -449,9 +570,15 @@ def _conferir_relatorio(relatorio: Path, receita: Path, entradas: list[Path], ov
         )
 
 
-def _gravar_relatorio(relatorio: Path, recipe: Recipe, itens: list[dict[str, Any]]) -> None:
-    """Grava o relatório por um temporário renomeado no fim (R2)."""
-    corpo = json.dumps({"receita": recipe.name, "arquivos": itens}, ensure_ascii=False, indent=2) + "\n"
+def _gravar_relatorio(
+    relatorio: Path, recipe: Recipe, itens: list[dict[str, Any]], combinado: dict[str, Any] | None = None
+) -> None:
+    """Grava o relatório por um temporário renomeado no fim (R2). Com
+    ``--combine``, ``combinado`` é a conta da saída juntada."""
+    dados: dict[str, Any] = {"receita": recipe.name, "arquivos": itens}
+    if combinado is not None:
+        dados["combinado"] = combinado
+    corpo = json.dumps(dados, ensure_ascii=False, indent=2) + "\n"
     gravar_juntos({relatorio: lambda tmp: tmp.write_text(corpo, encoding="utf-8")})
 
 
@@ -531,17 +658,78 @@ def run(
             "Eles nunca vão para o --report.",
         ),
     ] = False,
+    sheet: Annotated[
+        str | None,
+        typer.Option(
+            "--sheet",
+            help="Aba a ler, no lugar da aba da receita (e do padrão de nome). Lê só essa aba.",
+            show_default=False,
+        ),
+    ] = None,
+    combinar: Annotated[
+        bool,
+        typer.Option(
+            "--combine",
+            help="Junta as tabelas de todos os arquivos num arquivo só (-o é um arquivo), com a coluna de "
+            "origem. Se um arquivo falhar, nada é gravado.",
+        ),
+    ] = False,
+    origem: Annotated[
+        str,
+        typer.Option(
+            "--origin-col", help="Com --combine: nome da coluna com o nome do arquivo de cada linha."
+        ),
+    ] = "arquivo",
+    sem_origem: Annotated[
+        bool, typer.Option("--no-origin-col", help="Com --combine: sem a coluna com o nome do arquivo.")
+    ] = False,
 ) -> None:
     """Aplica uma receita a uma ou mais planilhas e grava a tabela limpa.
 
     Nada é gravado para um arquivo se algum passo falhar nele.
     """
     limite = _max_drop(max_drop)
+    if (origem != "arquivo" or sem_origem) and not combinar:
+        _fail(ExitCode.INVALID_RECIPE, "--origin-col e --no-origin-col só valem com --combine.")
+    if origem != "arquivo" and sem_origem:
+        _fail(ExitCode.INVALID_RECIPE, "Use --origin-col ou --no-origin-col, não os dois.")
+    if not origem.strip():
+        _fail(ExitCode.INVALID_RECIPE, "--origin-col precisa de um nome.")
     recipe = _carregar_receita(receita)
     entradas = _expandir(arquivos)
+    opcoes = OpcoesCsv(separator="\t" if sep is Sep.tab else sep.value, decimal_comma=decimal_comma)
+
+    if combinar:
+        destino = Path(saida)
+        if saida.endswith(("/", "\\")) or destino.is_dir():
+            _fail(
+                ExitCode.INVALID_RECIPE, f"Com --combine, -o precisa ser um arquivo, não uma pasta: {saida}"
+            )
+        entradas = _sem_as_saidas(entradas, [destino])
+        if relatorio is not None:
+            _conferir_relatorio(relatorio, receita, [*entradas, destino], overwrite)
+        _juntar_arquivos(
+            recipe,
+            entradas,
+            destino,
+            formato,
+            opcoes,
+            neutralizar,
+            overwrite,
+            relatorio,
+            limite,
+            mostrar_valores,
+            sheet,
+            None if sem_origem else origem,
+        )
+        return
+
+    if len(entradas) == 1:
+        entradas = _sem_as_saidas(entradas, [_output_path(saida, entradas[0], formato)])
+    else:
+        entradas = _sem_as_saidas(entradas, [Path(saida) / f"{a.stem}.{formato.value}" for a in entradas])
     if relatorio is not None:
         _conferir_relatorio(relatorio, receita, entradas, overwrite)
-    opcoes = OpcoesCsv(separator="\t" if sep is Sep.tab else sep.value, decimal_comma=decimal_comma)
 
     if len(entradas) == 1:
         arquivo = entradas[0]
@@ -550,7 +738,16 @@ def run(
             _fail(ExitCode.INVALID_RECIPE, f"--report e -o apontam para o mesmo arquivo: {relatorio}")
         try:
             r = _processar(
-                recipe, arquivo, destino, formato, opcoes, neutralizar, overwrite, limite, mostrar_valores
+                recipe,
+                arquivo,
+                destino,
+                formato,
+                opcoes,
+                neutralizar,
+                overwrite,
+                limite,
+                mostrar_valores,
+                sheet,
             )
         except _Falha as falha:
             if relatorio is not None:
@@ -564,7 +761,17 @@ def run(
         return
 
     _lote(
-        recipe, entradas, saida, formato, opcoes, neutralizar, overwrite, relatorio, limite, mostrar_valores
+        recipe,
+        entradas,
+        saida,
+        formato,
+        opcoes,
+        neutralizar,
+        overwrite,
+        relatorio,
+        limite,
+        mostrar_valores,
+        sheet,
     )
 
 
@@ -589,6 +796,7 @@ def _lote(
     relatorio: Path | None,
     max_drop: float | None = None,
     mostrar_valores: bool = False,
+    sheet: str | None = None,
 ) -> None:
     """Vários arquivos (F2.F3): cada um à parte; uma falha não para os
     outros. No fim, a tabela do que deu certo e do que falhou, e o resumo
@@ -614,7 +822,16 @@ def _lote(
     for i, (arquivo, destino) in enumerate(zip(entradas, destinos, strict=True)):
         try:
             r = _processar(
-                recipe, arquivo, destino, formato, opcoes, neutralizar, overwrite, max_drop, mostrar_valores
+                recipe,
+                arquivo,
+                destino,
+                formato,
+                opcoes,
+                neutralizar,
+                overwrite,
+                max_drop,
+                mostrar_valores,
+                sheet,
             )
         except _Falha as falha:
             pior = max(pior, falha.code)
@@ -625,7 +842,9 @@ def _lote(
         itens.append(_item_ok(arquivo, destino, r))
         linhas_terminal.append("")
 
-    tabela = Table(title=escape(f"{recipe.name}: {sum(r['ok'] for r in itens)} de {len(itens)} arquivos"))
+    # O nome vem da receita, que pode vir de terceiro: sem controle nem ANSI (A1, R9).
+    titulo = f"{_literal(recipe.name, 60)}: {sum(r['ok'] for r in itens)} de {len(itens)} arquivos"
+    tabela = Table(title=escape(titulo))
     tabela.add_column("Arquivo")
     tabela.add_column("Resultado")
     for i, item in enumerate(itens):
@@ -640,12 +859,112 @@ def _lote(
             tabela.add_row(nome, f"[red]falhou[/red] {escape(_literal(linhas_terminal[i]))}")
     Console(width=max(120, Console().width)).print(tabela)
     for i, r in reports.items():
-        if r.alert or r.outside_columns:
+        if r.alert or r.outside_columns or r.hidden_sheets or r.divergences:
             _imprimir_resumo(r, prefixo=f"{_literal(entradas[i].name, 60)}: ")
     if relatorio is not None:
         _gravar_relatorio(relatorio, recipe, itens)
     if pior is not ExitCode.OK:
         raise typer.Exit(int(pior))
+
+
+def _juntar_arquivos(
+    recipe: Recipe,
+    entradas: list[Path],
+    destino: Path,
+    formato: Formato,
+    opcoes: OpcoesCsv,
+    neutralizar: bool,
+    overwrite: bool,
+    relatorio: Path | None,
+    max_drop: float | None,
+    mostrar_valores: bool,
+    sheet: str | None,
+    origem: str | None,
+) -> None:
+    """``--combine`` (F3, ADR-12): a receita roda em cada arquivo, as
+    tabelas são empilhadas num arquivo só, com a coluna de origem (só o nome
+    do arquivo, nunca a pasta). Tudo ou nada: se um arquivo falhar, nada é
+    gravado. O lote passa antes pelo teto de memória (R3)."""
+    if destino.exists() and not overwrite:
+        _fail(ExitCode.INVALID_RECIPE, f"A saída já existe: {destino}", "Use --overwrite para substituir.")
+    nomes = [a.name for a in entradas]
+    repetidos = sorted({n for n in nomes if nomes.count(n) > 1})
+    if repetidos and origem is not None:
+        _fail(
+            ExitCode.INVALID_RECIPE,
+            f"Arquivos com o mesmo nome em pastas diferentes: {', '.join(repetidos)}. "
+            "A coluna de origem não conseguiria separá-los.",
+        )
+    try:
+        teto_de_juntar(entradas)
+    except ErroAoJuntar as exc:
+        _fail(ExitCode.INVALID_RECIPE, f"{exc.titulo}: {exc.mensagem}", "Nada foi gravado.")
+
+    itens: list[dict[str, Any]] = []
+    feitos: list[tuple[Path, RunReport]] = []
+    falhas: list[tuple[Path, _Falha]] = []
+    for arquivo in entradas:
+        try:
+            r = _calcular(recipe, arquivo, sheet, max_drop, mostrar_valores)
+        except _Falha as falha:
+            falhas.append((arquivo, falha))
+            itens.append(_item_falha(arquivo, falha))
+            continue
+        feitos.append((arquivo, r))
+        itens.append({"arquivo": str(arquivo), "ok": True, **r.to_dict()})
+
+    combinado: RunReport | None = None
+    if not falhas:
+        try:
+            juncao = empilhar([(a.name, r.table) for a, r in feitos], origem)
+        except ErroAoJuntar as exc:
+            falhas.append(
+                (Path("(junção)"), _Falha(ExitCode.STEP_ERROR, f"{exc.titulo}: {exc.mensagem}", relatorio={}))
+            )
+        else:
+            combinado = somar([como_parte(r, a.name) for a, r in feitos], juncao.tabela, juncao.divergencias)
+    if falhas or combinado is None:
+        pior = max(f.code for _, f in falhas)
+        quantas = "1 arquivo não passou" if len(falhas) == 1 else f"{len(falhas)} arquivos não passaram"
+        typer.echo(f"Lote parado: {quantas}.", err=True)
+        for arquivo, falha in falhas:
+            typer.echo(f"  {_literal(arquivo.name, 60)}: {' '.join(falha.lines)}", err=True)
+        if feitos:
+            outros = "1 arquivo passou" if len(feitos) == 1 else f"Os outros {len(feitos)} arquivos passaram"
+            typer.echo(f"{outros}, mas a saída junta todos.", err=True)
+        typer.echo("Nenhum arquivo consolidado foi gravado.", err=True)
+        if relatorio is not None:
+            _gravar_relatorio(relatorio, recipe, itens)
+        raise typer.Exit(int(pior))
+    try:
+        gravar_juntos(
+            {destino: escritor(formato.value, combinado.table, opcoes, neutralizar, aba=recipe.name)}
+        )
+    except ExportError as exc:
+        _fail(ExitCode.INVALID_RECIPE, str(exc), "Nada foi gravado.")
+    typer.echo(
+        f"{combinado.rows_written} linhas, {combinado.table.width} colunas -> {destino} "
+        f"({len(feitos)} {'arquivo' if len(feitos) == 1 else 'arquivos'} juntos)"
+    )
+    for arquivo, r in feitos:
+        nome = _literal(arquivo.name, 60)
+        contas = f"lidas {_int_br(r.rows_read)} · gravadas {_int_br(r.rows_written)}"
+        typer.secho(
+            f"{'Atenção: ' if r.alert else '  '}{nome}  {contas}",
+            err=True,
+            fg="yellow" if r.alert else None,
+        )
+        if r.alert or r.outside_columns or r.hidden_sheets or r.divergences:
+            for texto, _ in _resumo(r, f"{nome}: ")[1:]:
+                typer.secho(texto, err=True, fg="yellow")
+            for texto in [*_avisos_fora_da_area(r, f"{nome}: "), *_avisos_da_juncao(r, f"{nome}: ")]:
+                typer.secho(texto, err=True, fg="yellow")
+    for texto in _avisos_da_juncao(combinado, o_que="os arquivos"):
+        typer.secho(texto, err=True, fg="yellow")
+    _avisar_formulas(combinado.table, formato, neutralizar)
+    if relatorio is not None:
+        corpo = {"saida": str(destino), "linhas": combinado.rows_written, "colunas": combinado.table.width}
+        _gravar_relatorio(relatorio, recipe, itens, combinado={**corpo, **combinado.to_dict()})
 
 
 @app.command()

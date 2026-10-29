@@ -165,7 +165,7 @@ def _fluxo(client, csv_marcado, saida, monkeypatch):
     def preview_que_quebra(*args, **kwargs):
         raise RuntimeError(f"célula {CPF} QXZ")
 
-    monkeypatch.setattr("wolfz.api.rotas.preview_project", preview_que_quebra)
+    monkeypatch.setattr("wolfz.api.rotas.preview_do_projeto", preview_que_quebra)
     assert client.get(url + "/preview").status_code == 500
     return receita
 

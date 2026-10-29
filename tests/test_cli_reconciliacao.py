@@ -235,3 +235,78 @@ def test_erro_do_polars_so_com_show_values():
     assert "QXZ" in " ".join(_falha_de_passo(exc, mostrar_valores=True).lines)
     for falha in (sem, _falha_de_passo(exc, mostrar_valores=True)):
         assert falha.relatorio["erro"] == "Erro ao executar o passo: o passo s3 (cast) falhou."
+
+
+# ---------------------------------------------------------------------------
+# Achados A1 e A2 da revisão da S2 (seguranca.md §6)
+# ---------------------------------------------------------------------------
+
+
+def test_nome_da_receita_sem_ansi_no_lote(tmp_path):
+    """A1: a receita pode vir de terceiro; o nome dela vai para o título da
+    tabela do lote sem caractere de controle."""
+    receita = tmp_path / "r.wolfz.json"
+    save_recipe(
+        recipe_from_dict(
+            {
+                "wolfz_version": "1.0",
+                "name": "t\x1b[2J\x1b]0;x\x07",
+                "created_at": "2026-01-01T00:00:00Z",
+                "source": {"type": "csv"},
+                "steps": [{"id": "s1", "op": "drop_empty_rows"}],
+            }
+        ),
+        receita,
+    )
+    for nome in ("a.csv", "b.csv"):
+        (tmp_path / nome).write_text("v\n1\n", encoding="utf-8")
+    result = runner.invoke(
+        app,
+        ["run", str(receita), str(tmp_path / "a.csv"), str(tmp_path / "b.csv"), "-o", str(tmp_path / "s")],
+    )
+    assert result.exit_code == 0, result.output
+    assert "\x1b" not in result.stdout and "\x07" not in result.stdout
+    assert "2 de 2 arquivos" in result.stdout
+
+
+def test_erro_de_leitura_nao_leva_o_texto_da_excecao_ao_relatorio(tmp_path, monkeypatch, janeiro):
+    """A2: o texto de um erro do Polars ou do sistema na leitura fica só no
+    terminal; o --report diz só que o arquivo não pôde ser lido."""
+    import wolfz.cli as cli
+
+    def falha(*_a, **_k):
+        raise pl.exceptions.ComputeError("could not parse 'QXZ 529.982.247-25' as utf8")
+
+    monkeypatch.setattr(cli, "read_parts", falha)
+    monkeypatch.chdir(tmp_path)
+    _marco(tmp_path)
+    result = _run(janeiro, "marco.csv", "-o", "s.csv", "--report", "rel.json")
+    assert result.exit_code == 3
+    assert "QXZ" in result.stderr  # o terminal é de quem rodou
+    [item] = json.loads((tmp_path / "rel.json").read_text(encoding="utf-8"))["arquivos"]
+    assert item == {
+        "arquivo": "marco.csv",
+        "ok": False,
+        "codigo": 3,
+        "erro": "Não foi possível ler marco.csv.",
+    }
+
+
+def test_report_de_um_arquivo_com_verificacao_reprovada(tmp_path):
+    """O caso a_unique do test_privacidade, sem lote: o relatório traz os
+    campos estruturados e nenhum valor."""
+    receita = _receita(tmp_path / "r.wolfz.json", {"op": "assert", "check": "unique", "cols": ["cpf"]})
+    entrada = tmp_path / "v.csv"
+    entrada.write_text("cpf\n529.982.247-25QXZ\n529.982.247-25QXZ\n", encoding="utf-8")
+    relatorio = tmp_path / "rel.json"
+    result = _run(receita, entrada, "-o", tmp_path / "s.csv", "--report", relatorio)
+    assert result.exit_code == 1
+    texto = relatorio.read_text(encoding="utf-8")
+    assert "QXZ" not in texto and "529" not in texto
+    [item] = json.loads(texto)["arquivos"]
+    assert (item["verificacao"], item["coluna"], item["quantidade"], item["linhas"]) == (
+        "unique",
+        "cpf",
+        2,
+        [1, 2],
+    )

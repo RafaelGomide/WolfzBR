@@ -24,7 +24,7 @@ from typing import Any, Literal
 
 import polars as pl
 
-from wolfz.core.ingest.abas import MESES_DO_MOLDE
+from wolfz.core.ingest.abas import MESES_DO_MOLDE, padrao_de_aba
 from wolfz.core.ingest.cells import column_index
 from wolfz.core.recipe import Op, Recipe
 
@@ -358,9 +358,86 @@ def _indent(text: str, prefix: str = "    ") -> str:
     return "\n".join(f"{prefix}{line}" if line else "" for line in text.splitlines())
 
 
+def abas_no_m(recipe: Recipe) -> str | None:
+    """Com ``combine_sheets``: a regra de abas que o M consegue seguir, ou
+    ``None`` se ele junta todas as visíveis. O M não tem expressão regular:
+    só a regex que ``padrao_de_aba`` gera para a aba da receita vira o molde
+    (``WolfzMoldeAba``). Outra regex não vai para o M, e a exportação avisa
+    (``aviso_de_abas``)."""
+    combine = recipe.source.combine_sheets
+    if combine is None or combine.sheets_regex is None or recipe.source.sheet is None:
+        return None
+    return recipe.source.sheet if combine.sheets_regex == padrao_de_aba(recipe.source.sheet) else None
+
+
+def aviso_de_abas(recipe: Recipe) -> str | None:
+    """O aviso da exportação quando a escolha de abas da receita não vai
+    para o M (F3, critério 10)."""
+    combine = recipe.source.combine_sheets
+    if combine is None or combine.sheets_regex is None or abas_no_m(recipe) is not None:
+        return None
+    return (
+        "O padrão de nome das abas desta receita não vai para o Power Query, que não tem expressão "
+        "regular: a consulta M junta todas as abas visíveis do arquivo."
+    )
+
+
+def _juntar_no_m(
+    recipe: Recipe, fonte: FonteM, helpers: dict[str, str], corpo_passos: list[str], ultimo: str
+) -> list[str]:
+    """Passos da consulta que junta abas: a receita vira uma função aplicada
+    a cada aba visível, e as tabelas são empilhadas com ``Table.Combine``.
+    O nome de cada aba vem do arquivo na hora do refresh; na consulta só
+    entram o molde e o nome da coluna de origem, pelo escape do M (R8).
+
+    Diferença conhecida: o ``Excel.Workbook`` entrega cada aba a partir da
+    área usada, e a consulta devolve as linhas e colunas de antes com o
+    deslocamento da aba da receita. Uma aba cuja tabela começa em outra
+    célula fica com as letras trocadas no M (no WolfzBR, não)."""
+    combine = recipe.source.combine_sheets
+    assert combine is not None
+    molde = abas_no_m(recipe)
+    filtro = 'each [Kind] = "Sheet" and not [Hidden]'
+    if molde is not None:
+        filtro += f" and WolfzMoldeAba([Item]) = WolfzMoldeAba({m_text(molde)})"
+        # Import tardio: wolfz.ops.m_br importa este módulo.
+        from wolfz.ops import m_br
+
+        helpers |= {**m_br.BASE, "WolfzMoldeAba": _M_MOLDE_ABA}
+    grade = f"WolfzGrade(Aba, {fonte.linha0}, {fonte.coluna0})"
+    if corpo_passos:
+        linhas = [f"Fonte = {grade}", *corpo_passos]
+        corpo = ",\n".join(_indent(bloco, "        ") for bloco in linhas)
+        funcao = f"(Aba as table) as table =>\n    let\n{corpo}\n    in\n        {ultimo}"
+    else:
+        funcao = f"(Aba as table) as table => {grade}"
+    if combine.origin_col is None:
+        cada = "each Limpar([Data])"
+    else:
+        origem = m_text(combine.origin_col)
+        cada = (
+            "(aba) => let\n"
+            "            t = Limpar(aba[Data]),\n"
+            f"            c = Table.AddColumn(t, {origem}, each aba[Item], type text)\n"
+            f"        in Table.ReorderColumns(c, {{{origem}}} & Table.ColumnNames(t))"
+        )
+    if molde is None:
+        descricao = "todas as abas visíveis"
+    else:
+        descricao = f"as abas visíveis com o nome no molde de {molde}"
+    arquivo = f"Excel.Workbook(File.Contents({PARAMETRO}), null, true)"
+    return [
+        f"// Fonte: {_comment(descricao)}, juntas numa tabela só\nArquivo = {arquivo}",
+        f"Abas = Table.SelectRows(Arquivo, {filtro})",
+        f"// A receita, aplicada a cada aba\nLimpar = {funcao}",
+        f"Juntas = Table.Combine(List.Transform(Table.ToRecords(Abas), {cada}))",
+    ]
+
+
 def recipe_to_m(recipe: Recipe, fonte: FonteM | None = None) -> str:
     """Consulta M completa: lê o arquivo de ``CaminhoArquivo`` e aplica os
-    passos ativos da receita. Sem ``fonte``, usa o tipo e a aba da receita."""
+    passos ativos da receita. Sem ``fonte``, usa o tipo e a aba da receita.
+    Com ``source.combine_sheets``, aplica a receita a cada aba e empilha."""
     if fonte is None:
         fonte = FonteM(recipe.source.type, aba=recipe.source.sheet)
     match = recipe.source.match
@@ -376,14 +453,19 @@ def recipe_to_m(recipe: Recipe, fonte: FonteM | None = None) -> str:
 
     extras = list(dict.fromkeys(p for step in steps for p in step.m_parameters))
     reservados = {*helpers, PARAMETRO, *extras, "Arquivo", "Aba", "Cabecalho", "Fonte"}
+    reservados |= {"Abas", "Limpar", "Juntas"}
     nomes = step_names(steps, reservados)
-    blocos = [f"{name} = {definition.strip()}" for name, definition in helpers.items()]
-    blocos += fonte_passos
+    passos_m = []
     prev = "Fonte"
     for step in steps:
         nome = nomes[step.id]
-        blocos.append(f"// {_comment(f'{step.id} {step.op}')}\n" + step.to_m(prev, nome))
+        passos_m.append(f"// {_comment(f'{step.id} {step.op}')}\n" + step.to_m(prev, nome))
         prev = nome
+    if recipe.source.combine_sheets is not None and fonte.tipo != "csv":
+        fonte_passos = _juntar_no_m(recipe, fonte, helpers, passos_m, prev)
+        passos_m, prev = [], "Juntas"
+    blocos = [f"{name} = {definition.strip()}" for name, definition in helpers.items()]
+    blocos += fonte_passos + passos_m
     corpo = ",\n".join(blocos)
 
     cabecalho = [
@@ -396,6 +478,7 @@ def recipe_to_m(recipe: Recipe, fonte: FonteM | None = None) -> str:
             for p in extras
         ),
         "// Para colar esta consulta: Nova Fonte > Consulta Nula > Editor Avançado.",
+        *([f"// Atenção: {_comment(aviso)}"] if (aviso := aviso_de_abas(recipe)) else []),
     ]
     return "\n".join(cabecalho) + f"\nlet\n{_indent(corpo)}\nin\n    {prev}\n"
 

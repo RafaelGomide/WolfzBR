@@ -26,10 +26,11 @@ def test_api_publica():
 def test_help_documenta_codigos_de_saida():
     result = runner.invoke(app, ["run", "--help"], terminal_width=200)
     assert result.exit_code == 0
-    assert "0 ok" in result.output
-    assert "1 um passo falhou" in result.output
-    assert "2 receita inválida" in result.output
-    assert "3 arquivo de entrada ilegível" in result.output
+    texto = " ".join(result.output.split())  # o Rich quebra a linha onde quiser
+    assert "0 ok" in texto
+    assert "1 um passo falhou" in texto
+    assert "2 receita inválida" in texto
+    assert "3 arquivo de entrada ilegível" in texto
 
 
 # ---------------------------------------------------------------------------

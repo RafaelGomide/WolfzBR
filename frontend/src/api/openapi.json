@@ -54,6 +54,18 @@
       },
       "Body_criar_projeto_api_projects_post": {
         "properties": {
+          "combine_sheets": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Juntar abas (F3): JSON de source.combine_sheets, ex. {\"sheets_regex\": null}. A receita é feita em sheet (ou na primeira aba visível) e roda em cada aba que a regra escolhe. Use POST /sheets/combine-rule para montar a regra a partir das abas marcadas.",
+            "title": "Combine Sheets"
+          },
           "file": {
             "contentMediaType": "application/octet-stream",
             "description": "Planilha ou CSV.",
@@ -122,6 +134,18 @@
             "title": "Letra",
             "type": "string"
           },
+          "parte": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A aba, quando a receita junta abas.",
+            "title": "Parte"
+          },
           "passo": {
             "description": "O select_range que deixou a coluna de fora.",
             "title": "Passo",
@@ -155,6 +179,59 @@
           "dtype"
         ],
         "title": "ColunaPreview",
+        "type": "object"
+      },
+      "ContagemParte": {
+        "additionalProperties": true,
+        "description": "A reconciliação de uma aba juntada (F3).",
+        "properties": {
+          "alerta": {
+            "title": "Alerta",
+            "type": "boolean"
+          },
+          "colunas_fora_da_area": {
+            "items": {
+              "$ref": "#/components/schemas/ColunaForaDaArea"
+            },
+            "title": "Colunas Fora Da Area",
+            "type": "array"
+          },
+          "linhas_gravadas": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linhas Gravadas"
+          },
+          "linhas_lidas": {
+            "title": "Linhas Lidas",
+            "type": "integer"
+          },
+          "origem": {
+            "title": "Origem",
+            "type": "string"
+          },
+          "passos": {
+            "items": {
+              "$ref": "#/components/schemas/ContagemPasso"
+            },
+            "title": "Passos",
+            "type": "array"
+          }
+        },
+        "required": [
+          "origem",
+          "linhas_lidas",
+          "linhas_gravadas",
+          "alerta",
+          "passos",
+          "colunas_fora_da_area"
+        ],
+        "title": "ContagemParte",
         "type": "object"
       },
       "ContagemPasso": {
@@ -315,6 +392,49 @@
           "colunas"
         ],
         "title": "Deteccao",
+        "type": "object"
+      },
+      "Divergencia": {
+        "additionalProperties": true,
+        "description": "Colunas de uma aba que não batem com as das outras (F3).",
+        "properties": {
+          "a_mais": {
+            "items": {
+              "type": "string"
+            },
+            "title": "A Mais",
+            "type": "array"
+          },
+          "falta": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Falta",
+            "type": "array"
+          },
+          "parte": {
+            "title": "Parte",
+            "type": "string"
+          },
+          "quase_iguais": {
+            "description": "[{\"nesta\": \"vendedor\", \"nas_outras\": \"Vendedor\"}]",
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Quase Iguais",
+            "type": "array"
+          }
+        },
+        "required": [
+          "parte",
+          "falta",
+          "a_mais",
+          "quase_iguais"
+        ],
+        "title": "Divergencia",
         "type": "object"
       },
       "Estrutura": {
@@ -780,6 +900,46 @@
         "title": "PedidoExportacao",
         "type": "object"
       },
+      "PedidoRegraAbas": {
+        "properties": {
+          "available": {
+            "description": "Todas as abas visíveis do arquivo, na ordem.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Available",
+            "type": "array"
+          },
+          "recipe_sheet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Aba em que a receita é feita (source.sheet).",
+            "title": "Recipe Sheet"
+          },
+          "sheets": {
+            "description": "Abas marcadas no diálogo de importação.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Sheets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sheets",
+          "available"
+        ],
+        "title": "PedidoRegraAbas",
+        "type": "object"
+      },
       "PedidoRejeicao": {
         "properties": {
           "cols": {
@@ -1175,6 +1335,15 @@
         "additionalProperties": true,
         "description": "Reconciliação de linhas da receita da versão ``etag`` (F1). Com um\npasso que falha, ``passo_com_erro`` diz qual e ``passos`` para antes\ndele; ``linhas_gravadas`` fica nulo.",
         "properties": {
+          "abas_ocultas": {
+            "default": [],
+            "description": "Abas ocultas que casariam com a regra e ficaram de fora.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Abas Ocultas",
+            "type": "array"
+          },
           "alerta": {
             "title": "Alerta",
             "type": "boolean"
@@ -1184,6 +1353,14 @@
               "$ref": "#/components/schemas/ColunaForaDaArea"
             },
             "title": "Colunas Fora Da Area",
+            "type": "array"
+          },
+          "divergencias": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Divergencia"
+            },
+            "title": "Divergencias",
             "type": "array"
           },
           "etag": {
@@ -1204,6 +1381,15 @@
           "linhas_lidas": {
             "title": "Linhas Lidas",
             "type": "integer"
+          },
+          "partes": {
+            "default": [],
+            "description": "Com abas juntas: a conta de cada aba.",
+            "items": {
+              "$ref": "#/components/schemas/ContagemParte"
+            },
+            "title": "Partes",
+            "type": "array"
           },
           "passo_com_erro": {
             "anyOf": [
@@ -1233,6 +1419,42 @@
           "colunas_fora_da_area"
         ],
         "title": "Reconciliacao",
+        "type": "object"
+      },
+      "RegraAbas": {
+        "additionalProperties": true,
+        "properties": {
+          "all_visible": {
+            "title": "All Visible",
+            "type": "boolean"
+          },
+          "matches": {
+            "description": "Abas que a regra escolhe neste arquivo.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Matches",
+            "type": "array"
+          },
+          "sheets_regex": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Regra para source.combine_sheets.sheets_regex.",
+            "title": "Sheets Regex"
+          }
+        },
+        "required": [
+          "sheets_regex",
+          "matches",
+          "all_visible"
+        ],
+        "title": "RegraAbas",
         "type": "object"
       },
       "Sugestao": {
@@ -2223,6 +2445,45 @@
           }
         },
         "summary": "Listar Abas"
+      }
+    },
+    "/api/sheets/combine-rule": {
+      "post": {
+        "description": "A ``sheets_regex`` que escolhe exatamente as abas marcadas (D8):\n``null`` quando são todas as visíveis; o padrão do mês quando ele\nescolhe as mesmas abas (e aceita as dos próximos arquivos); senão, a\nlista dos nomes. ``matches`` são as abas que a regra escolhe neste\narquivo, para a interface conferir.",
+        "operationId": "regra_de_abas_api_sheets_combine_rule_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PedidoRegraAbas"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegraAbas"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Regra De Abas"
       }
     }
   }
