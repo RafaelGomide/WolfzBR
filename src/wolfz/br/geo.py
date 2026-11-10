@@ -20,6 +20,9 @@ _MUN_UF = (
     re.compile(r"(.+?)\s*\(([A-Za-z]{2})\)"),  # Alta Floresta D'Oeste (RO)  [SIDRA]
     re.compile(r"(.+?)\s*[-\u2013/]\s*([A-Za-z]{2})"),  # Vitória - ES / Vitória/ES
 )
+# 'Abadia dos Dourados - Minas Gerais': a UF por extenso depois do último
+# separador (C-M2, base 30).
+_MUN_UF_EXTENSO = re.compile(r"(.+)[-\u2013/]([^-\u2013/]+)")
 
 
 def split_municipio_uf(text: object) -> tuple[str | None, str | None]:
@@ -27,6 +30,7 @@ def split_municipio_uf(text: object) -> tuple[str | None, str | None]:
 
     'Alta Floresta D'Oeste (RO)' -> ("Alta Floresta D'Oeste", 'RO')
     'Vitória - ES' -> ('Vitória', 'ES');  'Vitória' -> ('Vitória', None).
+    'Abadia dos Dourados - Minas Gerais' -> ('Abadia dos Dourados', 'MG').
     Só separa se o sufixo for uma UF real, para não cortar nomes como
     'Embu-Guaçu'."""
     s = clean_text(text)
@@ -35,6 +39,9 @@ def split_municipio_uf(text: object) -> tuple[str | None, str | None]:
     for pattern in _MUN_UF:
         if (m := pattern.fullmatch(s)) and m[2].upper() in UFS:
             return m[1].strip(), m[2].upper()
+    m = _MUN_UF_EXTENSO.fullmatch(s)
+    if m and len(normalize_key(m[2])) > 2 and m[1].strip() and (uf := normalize_uf(m[2])):
+        return m[1].strip(), uf
     return s, None
 
 

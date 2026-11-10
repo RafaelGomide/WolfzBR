@@ -378,6 +378,14 @@
             "title": "Titulo",
             "type": "array"
           },
+          "titulo_celulas": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Titulo Celulas",
+            "type": "array"
+          },
           "totais": {
             "default": [],
             "items": {
@@ -1461,6 +1469,12 @@
         "additionalProperties": true,
         "description": "Passos propostos por uma regra (F2.E). ``kind=\"aviso\"`` não tem passo.",
         "properties": {
+          "accept_all": {
+            "default": true,
+            "description": "false: a sugestão aparece, mas não entra no \"Aceitar todas\" (S1: dedupe sem coluna de código).",
+            "title": "Accept All",
+            "type": "boolean"
+          },
           "cols": {
             "items": {
               "type": "string"

@@ -507,6 +507,11 @@ export interface components {
        */
       titulo: string[];
       /**
+       * Titulo Celulas
+       * @default []
+       */
+      titulo_celulas: string[];
+      /**
        * Totais
        * @default []
        */
@@ -957,6 +962,12 @@ export interface components {
      * @description Passos propostos por uma regra (F2.E). ``kind="aviso"`` não tem passo.
      */
     Sugestao: {
+      /**
+       * Accept All
+       * @description false: a sugestão aparece, mas não entra no "Aceitar todas" (S1: dedupe sem coluna de código).
+       * @default true
+       */
+      accept_all: boolean;
       /** Cols */
       cols: string[];
       /** Confidence */

@@ -125,6 +125,16 @@ def _receita_json(recipe: Recipe) -> dict[str, Any]:
     return json.loads(dumps_recipe(recipe))
 
 
+def _titulos(pasta: Path) -> list[tuple[str, str | None]]:
+    """As linhas de título acima do cabeçalho, com a célula, da detecção
+    gravada na importação (a regra "Mil Reais" das sugestões, F7.6)."""
+    if not (pasta / DETECTION_FILE).is_file():
+        return []
+    detectado = _ler_json(pasta / DETECTION_FILE) or {}
+    textos, celulas = detectado.get("titulo") or [], detectado.get("titulo_celulas") or []
+    return [(t, celulas[i] if i < len(celulas) else None) for i, t in enumerate(textos)]
+
+
 def _depara_do_projeto(pasta: Path, recipe: Recipe) -> pl.DataFrame | None:
     """O de-para de municípios de todas as abas que a receita junta."""
     partes, _ = partes_do_projeto(pasta, recipe)
@@ -434,7 +444,8 @@ def router(settings: Settings, projetos: Projetos) -> APIRouter:
         with projetos.lock_preview(project_id):
             tabela = tabela_do_projeto(pasta, atual)
         passos = [s.model_dump(mode="json") for s in atual.steps]
-        return [s.to_dict() for s in suggest(tabela, _rejeitadas(pasta), steps=passos)]
+        titulos = _titulos(pasta)
+        return [s.to_dict() for s in suggest(tabela, _rejeitadas(pasta), steps=passos, titulos=titulos)]
 
     @api.post("/projects/{project_id}/suggestions/rejections", status_code=204)
     def rejeitar_sugestao(project_id: str, pedido: PedidoRejeicao) -> Response:

@@ -48,6 +48,7 @@ class Deteccao(_Resposta):
     totais: list[int] = []
     fill_down: list[str] = []
     titulo: list[str] = []
+    titulo_celulas: list[str] = []  # célula de cada título ('A2')
     notas: list[str] = []
     tabelas: list[TabelaDetectada] = []
 
@@ -251,6 +252,11 @@ class Sugestao(_Resposta):
     kind: str
     # Ordem de aplicação no "aceitar todas" (limpeza, conversão, forma).
     order: int
+    accept_all: bool = Field(
+        default=True,
+        description='false: a sugestão aparece, mas não entra no "Aceitar todas" '
+        "(S1: dedupe sem coluna de código).",
+    )
 
 
 class Municipio(_Resposta):

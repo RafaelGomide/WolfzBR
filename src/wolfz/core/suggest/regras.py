@@ -468,6 +468,31 @@ def _data_hora(ctx: Contexto) -> Iterator[Suggestion]:
         )
 
 
+_NOME_DE_DATA = re.compile(r"\b(data|dt|date|dia|vencimento|emissao)\b")
+
+
+def _data_com_serial(ctx: Contexto) -> list[tuple[str, float]]:
+    """Coluna com nome de data que o perfil não marca como data porque
+    parte dos valores é serial do Excel ('45657'), que o detector não aceita
+    (base 27: dd/mm/aaaa, ISO, '15-jan-2024', serial e dd/mm/aa misturados).
+    Vale se 90% dos valores são data aceitando o serial e pelo menos metade
+    é data sem ele: um código numérico com nome de data não passa."""
+    achadas = []
+    for c in ctx.texto:
+        if ctx.perfil(c).inferred_type in ("data", "data_hora") or not _NOME_DE_DATA.search(_nome(c)):
+            continue
+        valores = _uteis(ctx, c)
+        if not valores:
+            continue
+        com_serial = sum(parse_date_br(v) is not None for v in valores) / len(valores)
+        sem_serial = sum(parse_date_br(v, accept_excel_serial=False) is not None for v in valores) / len(
+            valores
+        )
+        if com_serial >= TAXA and sem_serial >= 0.5:
+            achadas.append((c, com_serial))
+    return achadas
+
+
 @rule
 def data(ctx: Contexto) -> Iterator[Suggestion]:
     """Datas; com 8 dígitos, a ordem (AAAAMMDD ou DDMMAAAA) que serve para
@@ -483,6 +508,8 @@ def data(ctx: Contexto) -> Iterator[Suggestion]:
             dmy = all(parse_date_br(v, eight_digits="dmy", accept_excel_serial=False) for v in oito)
             ordem = "ymd" if ymd and not dmy else "dmy" if dmy and not ymd else "auto"
         por_ordem.setdefault(ordem, []).append((c, taxa))
+    for c, taxa in _data_com_serial(ctx):
+        por_ordem.setdefault("auto", []).append((c, taxa))
     for ordem, achadas in por_ordem.items():
         cols = [c for c, _ in achadas]
         passo = {"op": "parse_date_br", "cols": cols}
@@ -852,6 +879,27 @@ def linhas_vazias(ctx: Contexto) -> Iterator[Suggestion]:
         )
 
 
+_NOME_DE_CHAVE = re.compile(
+    r"\b(id|cod|codigo|cd|chave|protocolo|nsu|documento|doc|cpf|cnpj|contrato|pedido|nf|nota|matricula|"
+    r"sinistro|apolice|lancamento|numero|num|n)\b"
+)
+
+
+def _sem_chave_com_valor(ctx: Contexto) -> bool:
+    """A tabela tem coluna de valor (número) e nenhuma coluna com cara de
+    chave pelo nome (S1)."""
+    if any(_NOME_DE_CHAVE.search(_nome(c)) for c in ctx.total.columns):
+        return False
+    return any(
+        t.is_numeric() or (c in ctx.texto and ctx.perfil(c).inferred_type in ("numero", "moeda"))
+        for c, t in ctx.total.schema.items()
+    )
+
+
+def _pct_br(x: float) -> str:
+    return f"{x * 100:.0f}%" if x >= 0.1 else f"{x * 100:.1f}%".replace(".", ",")
+
+
 @rule
 def duplicadas(ctx: Contexto) -> Iterator[Suggestion]:
     if ctx.total.height < 2:
@@ -863,7 +911,22 @@ def duplicadas(ctx: Contexto) -> Iterator[Suggestion]:
     # Linha vazia repetida é assunto da regra linhas_vazias.
     cheias = ctx.total.filter(~_linhas_vazias(ctx.total))
     repetidas = cheias.height - cheias.n_unique()
-    if repetidas:
+    if repetidas and _sem_chave_com_valor(ctx):
+        # S1 (base 08): sem coluna de código, duas linhas iguais com valor
+        # podem ser lançamentos diferentes. Aparece, mas fora do "Aceitar todas".
+        pct = _pct_br(repetidas / cheias.height)
+        yield Suggestion(
+            "duplicadas",
+            ({"op": "dedupe"},),
+            0.8,  # a mesma ordem de antes; o que a tira do "Aceitar todas" é accept_all
+            f"Encontramos {_n_br(repetidas)} {'linha repetida' if repetidas == 1 else 'linhas repetidas'} "
+            f"({pct}). Esta tabela não tem uma coluna de código (ID, protocolo, documento): duas vendas "
+            f"iguais no mesmo dia podem ser lançamentos diferentes. Remover tira {_n_br(repetidas)} "
+            f'{"linha" if repetidas == 1 else "linhas"}. Esta sugestão não entra no "Aceitar todas".',
+            order=FORMA,
+            accept_all=False,
+        )
+    elif repetidas:
         yield Suggestion(
             "duplicadas",
             ({"op": "dedupe"},),

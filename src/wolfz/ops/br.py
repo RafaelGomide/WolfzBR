@@ -1039,7 +1039,7 @@ class SplitMunicipioUf(Op):
     uf_col: str = "uf"
 
     python_helpers = (split_municipio_uf,)
-    m_helpers = {**m_br.BASE, "WolfzMunicipioUf": m_br.MUNICIPIO_UF}  # noqa: RUF012
+    m_helpers = {**m_br.BASE, "WolfzUf": m_br.UF, "WolfzMunicipioUf": m_br.MUNICIPIO_UF}  # noqa: RUF012
     examples = (
         {
             "step": {"col": "m"},
@@ -1062,6 +1062,30 @@ class SplitMunicipioUf(Op):
             "step": {"col": "local", "uf_col": "sigla"},
             "input": {"local": ["Serra \u2013 ES", "  Linhares  -  es "]},
             "expected": {"local": ["Serra", "Linhares"], "sigla": ["ES", "ES"]},
+        },
+        {
+            "step": {"col": "m"},
+            "input": {
+                "m": [
+                    "Abadia dos Dourados - Minas Gerais",
+                    "Santa Maria/RIO GRANDE DO SUL",
+                    "Vitória \u2013 espirito santo",
+                    "Embu-Guaçu",
+                    "Pau-Brasil",
+                    "Xique-Xique - Bahia",
+                ]
+            },
+            "expected": {
+                "m": [
+                    "Abadia dos Dourados",
+                    "Santa Maria",
+                    "Vitória",
+                    "Embu-Guaçu",
+                    "Pau-Brasil",
+                    "Xique-Xique",
+                ],
+                "uf": ["MG", "RS", "ES", None, None, "BA"],
+            },
         },
     )
 

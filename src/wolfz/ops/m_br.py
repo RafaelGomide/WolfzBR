@@ -518,10 +518,16 @@ MUNICIPIO_UF = f"""
             then {{Text.TrimEnd(Text.Start(antes, Text.Length(antes) - 1)), Text.End(s, 2)}}
             else null,
         valido = (p as nullable list) as logical =>
-            p <> null and Text.Length(p{{0}}) > 0 and letras(p{{1}}) and List.Contains(ufs, Text.Upper(p{{1}}))
+            p <> null and Text.Length(p{{0}}) > 0 and letras(p{{1}}) and List.Contains(ufs, Text.Upper(p{{1}})),
+        // 'Abadia dos Dourados - Minas Gerais': UF por extenso depois do último separador.
+        posExt = Text.PositionOfAny(s, {{"-", "#(2013)", "/"}}, Occurrence.Last),
+        caudaExt = if posExt > 0 then Text.Range(s, posExt + 1) else "",
+        nomeExt = if posExt > 0 then Text.Trim(Text.Start(s, posExt)) else "",
+        ufExt = if Text.Length(WolfzChave(caudaExt)) > 2 then WolfzUf(caudaExt) else null
     in
         if valido(parenteses) then {{parenteses{{0}}, Text.Upper(parenteses{{1}})}}
         else if valido(separado) then {{separado{{0}}, Text.Upper(separado{{1}})}}
+        else if ufExt <> null and Text.Length(nomeExt) > 0 then {{nomeExt, ufExt}}
         else {{s, null}}
 """
 

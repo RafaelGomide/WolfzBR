@@ -88,6 +88,7 @@ class Detection:
     totals: list[int] = field(default_factory=list)
     fill_down: list[int] = field(default_factory=list)
     title: list[str] = field(default_factory=list)
+    title_cells: list[str] = field(default_factory=list)  # célula de cada título ('A2')
     notes: list[str] = field(default_factory=list)
     labels: dict[int, str] = field(default_factory=dict)  # coluna -> nome depois do header_rows
     total_cells: dict[int, tuple[int, str]] = field(default_factory=dict)  # linha -> (coluna, rótulo)
@@ -128,6 +129,7 @@ class Detection:
             "totais": [r + 1 for r in self.totals],
             "fill_down": [column_letter(c) for c in self.fill_down],
             "titulo": self.title,
+            "titulo_celulas": self.title_cells,
             "notas": self.notes,
         }
 
@@ -799,9 +801,14 @@ def _metadados(det: Detection, df: pl.DataFrame, metrics: list[RowMetrics]) -> N
         valores = [v for v in df.row(r) if v is not None and str(v).strip()]
         return " ".join(str(valores[0]).split()) if len(valores) == 1 else None
 
+    def celula(r: int) -> str:
+        col = next(i for i, v in enumerate(df.row(r)) if v is not None and str(v).strip())
+        return to_a1(r, column_index(df.columns[col]))
+
     for r in range(0, det.top_row):
         if (t := texto(r)) is not None:
             det.title.append(t)
+            det.title_cells.append(celula(r))
     for r in range(det.last_row + 1, len(metrics)):
         if metrics[r].filled >= 2:
             break

@@ -2435,6 +2435,7 @@ vira nulo, como 0800 e DDD que não existe.
 | `cols` | lista de colunas | obrigatório | Colunas |
 | `default_ddd` | texto | `null` | DDD para número sem DDD |
 | `add_ninth_digit` | sim/não | `true` | Acrescentar o 9 no celular antigo |
+| `add_original_col` | sim/não | `false` | Guarda o número original em <col>_original, só nas células que viraram vazio. |
 
 **Exemplo 1**
 
@@ -2488,13 +2489,39 @@ Depois:
 | `+551188887777` |
 | `+552712345678` |
 
+**Exemplo 3**
+
+```json
+{"op": "clean_phone", "cols": ["tel"], "add_original_col": true}
+```
+
+Antes:
+
+| tel |
+|---|
+| `(27) 99999-9999` |
+| `(20) 3333-4444` |
+| `sem telefone` |
+| `␠␠` |
+| *nulo* |
+
+Depois:
+
+| tel | tel_original |
+|---|---|
+| `+5527999999999` | *nulo* |
+| *nulo* | `(20) 3333-4444` |
+| *nulo* | `sem telefone` |
+| *nulo* | *nulo* |
+| *nulo* | *nulo* |
+
 Em Power Query M (passo do primeiro exemplo):
 
 ```m
 Passo = Table.TransformColumns(Origem, {{"tel", each WolfzTelefone(_, null, true), type nullable text}})
 ```
 
-Usa as funções auxiliares `WolfzChave`, `WolfzEspacos`, `WolfzNulo`, `WolfzPrepId`, `WolfzSemAcento`, `WolfzTelefone`, declaradas no início da consulta exportada.
+Usa as funções auxiliares `WolfzChave`, `WolfzEspacos`, `WolfzNulo`, `WolfzPrepId`, `WolfzSemAcento`, `WolfzTelefone`, `WolfzVazia`, declaradas no início da consulta exportada.
 
 <a id="clean_cpf_cnpj"></a>
 
@@ -2632,13 +2659,41 @@ Depois:
 | `Serra` | `ES` |
 | `Linhares` | `ES` |
 
+**Exemplo 3**
+
+```json
+{"op": "split_municipio_uf", "col": "m"}
+```
+
+Antes:
+
+| m |
+|---|
+| `Abadia dos Dourados - Minas Gerais` |
+| `Santa Maria/RIO GRANDE DO SUL` |
+| `Vitória – espirito santo` |
+| `Embu-Guaçu` |
+| `Pau-Brasil` |
+| `Xique-Xique - Bahia` |
+
+Depois:
+
+| m | uf |
+|---|---|
+| `Abadia dos Dourados` | `MG` |
+| `Santa Maria` | `RS` |
+| `Vitória` | `ES` |
+| `Embu-Guaçu` | *nulo* |
+| `Pau-Brasil` | *nulo* |
+| `Xique-Xique` | `BA` |
+
 Em Power Query M (passo do primeiro exemplo):
 
 ```m
 Passo = Table.TransformColumns(Table.AddColumn(Origem, "uf", each WolfzMunicipioUf(Record.Field(_, "m")){1}, type nullable text), {{"m", each WolfzMunicipioUf(_){0}, type nullable text}})
 ```
 
-Usa as funções auxiliares `WolfzChave`, `WolfzEspacos`, `WolfzMunicipioUf`, `WolfzNulo`, `WolfzSemAcento`, declaradas no início da consulta exportada.
+Usa as funções auxiliares `WolfzChave`, `WolfzEspacos`, `WolfzMunicipioUf`, `WolfzNulo`, `WolfzSemAcento`, `WolfzUf`, declaradas no início da consulta exportada.
 
 <a id="parse_ibge_value"></a>
 
