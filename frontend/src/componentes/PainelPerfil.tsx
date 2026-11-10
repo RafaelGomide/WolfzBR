@@ -4,6 +4,7 @@
 
 import { api, chamar } from "../api/cliente";
 import { T } from "../textos";
+import { dataBr } from "../util/datas";
 import { useCarregar } from "../util/useCarregar";
 import { CaixaErro, Carregando } from "./Estado";
 
@@ -11,11 +12,10 @@ const pct = (x: number) =>
   x.toLocaleString("pt-BR", { style: "percent", maximumFractionDigits: 1 });
 
 // Mínimo e máximo como no Brasil: 1.234,5 e 31/12/2024 (a API manda número
-// e data ISO).
+// e data ou data e hora ISO).
 function valorBr(v: number | string): string {
   if (typeof v === "number") return v.toLocaleString("pt-BR", { maximumFractionDigits: 6 });
-  const data = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
-  return data ? `${data[3]}/${data[2]}/${data[1]}` : v;
+  return dataBr(v);
 }
 
 export function PainelPerfil({

@@ -311,6 +311,30 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/sheets/combine-rule": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Regra De Abas
+     * @description A ``sheets_regex`` que escolhe exatamente as abas marcadas (D8):
+     *     ``null`` quando são todas as visíveis; o padrão do mês quando ele
+     *     escolhe as mesmas abas (e aceita as dos próximos arquivos); senão, a
+     *     lista dos nomes. ``matches`` são as abas que a regra escolhe neste
+     *     arquivo, para a interface conferir.
+     */
+    post: operations["regra_de_abas_api_sheets_combine_rule_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -334,6 +358,11 @@ export interface components {
     };
     /** Body_criar_projeto_api_projects_post */
     Body_criar_projeto_api_projects_post: {
+      /**
+       * Combine Sheets
+       * @description Juntar abas (F3): JSON de source.combine_sheets, ex. {"sheets_regex": null}. A receita é feita em sheet (ou na primeira aba visível) e roda em cada aba que a regra escolhe. Use POST /sheets/combine-rule para montar a regra a partir das abas marcadas.
+       */
+      combine_sheets?: string | null;
       /**
        * File
        * @description Planilha ou CSV.
@@ -370,6 +399,11 @@ export interface components {
       /** Letra */
       letra: string;
       /**
+       * Parte
+       * @description A aba, quando a receita junta abas.
+       */
+      parte?: string | null;
+      /**
        * Passo
        * @description O select_range que deixou a coluna de fora.
        */
@@ -383,6 +417,26 @@ export interface components {
       dtype: string;
       /** Name */
       name: string;
+    } & {
+      [key: string]: unknown;
+    };
+    /**
+     * ContagemParte
+     * @description A reconciliação de uma aba juntada (F3).
+     */
+    ContagemParte: {
+      /** Alerta */
+      alerta: boolean;
+      /** Colunas Fora Da Area */
+      colunas_fora_da_area: components["schemas"]["ColunaForaDaArea"][];
+      /** Linhas Gravadas */
+      linhas_gravadas: number | null;
+      /** Linhas Lidas */
+      linhas_lidas: number;
+      /** Origem */
+      origem: string;
+      /** Passos */
+      passos: components["schemas"]["ContagemPasso"][];
     } & {
       [key: string]: unknown;
     };
@@ -457,6 +511,27 @@ export interface components {
        * @default []
        */
       totais: number[];
+    } & {
+      [key: string]: unknown;
+    };
+    /**
+     * Divergencia
+     * @description Colunas de uma aba que não batem com as das outras (F3).
+     */
+    Divergencia: {
+      /** A Mais */
+      a_mais: string[];
+      /** Falta */
+      falta: string[];
+      /** Parte */
+      parte: string;
+      /**
+       * Quase Iguais
+       * @description [{"nesta": "vendedor", "nas_outras": "Vendedor"}]
+       */
+      quase_iguais: {
+        [key: string]: string;
+      }[];
     } & {
       [key: string]: unknown;
     };
@@ -652,6 +727,24 @@ export interface components {
        */
       source_path?: string | null;
     };
+    /** PedidoRegraAbas */
+    PedidoRegraAbas: {
+      /**
+       * Available
+       * @description Todas as abas visíveis do arquivo, na ordem.
+       */
+      available: string[];
+      /**
+       * Recipe Sheet
+       * @description Aba em que a receita é feita (source.sheet).
+       */
+      recipe_sheet?: string | null;
+      /**
+       * Sheets
+       * @description Abas marcadas no diálogo de importação.
+       */
+      sheets: string[];
+    };
     /** PedidoRejeicao */
     PedidoRejeicao: {
       /**
@@ -808,20 +901,54 @@ export interface components {
      *     dele; ``linhas_gravadas`` fica nulo.
      */
     Reconciliacao: {
+      /**
+       * Abas Ocultas
+       * @description Abas ocultas que casariam com a regra e ficaram de fora.
+       * @default []
+       */
+      abas_ocultas: string[];
       /** Alerta */
       alerta: boolean;
       /** Colunas Fora Da Area */
       colunas_fora_da_area: components["schemas"]["ColunaForaDaArea"][];
+      /**
+       * Divergencias
+       * @default []
+       */
+      divergencias: components["schemas"]["Divergencia"][];
       /** Etag */
       etag: string;
       /** Linhas Gravadas */
       linhas_gravadas: number | null;
       /** Linhas Lidas */
       linhas_lidas: number;
+      /**
+       * Partes
+       * @description Com abas juntas: a conta de cada aba.
+       * @default []
+       */
+      partes: components["schemas"]["ContagemParte"][];
       /** Passo Com Erro */
       passo_com_erro?: string | null;
       /** Passos */
       passos: components["schemas"]["ContagemPasso"][];
+    } & {
+      [key: string]: unknown;
+    };
+    /** RegraAbas */
+    RegraAbas: {
+      /** All Visible */
+      all_visible: boolean;
+      /**
+       * Matches
+       * @description Abas que a regra escolhe neste arquivo.
+       */
+      matches: string[];
+      /**
+       * Sheets Regex
+       * @description Regra para source.combine_sheets.sheets_regex.
+       */
+      sheets_regex: string | null;
     } & {
       [key: string]: unknown;
     };
@@ -1437,6 +1564,39 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["Aba"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  regra_de_abas_api_sheets_combine_rule_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PedidoRegraAbas"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RegraAbas"];
         };
       };
       /** @description Validation Error */

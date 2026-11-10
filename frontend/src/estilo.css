@@ -975,3 +975,63 @@ pre {
 .erro-texto {
   color: var(--erro);
 }
+
+/* Juntar abas (F3, ux.md §2): modos do diálogo, bloco "Abas" e aviso de
+   colunas diferentes (borda, ⚠ e "Atenção:", como o alerta da F1). */
+.modo-abas > label {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-weight: 600;
+}
+.modo-abas .lista-abas {
+  margin-left: 1.5rem;
+}
+.lista-abas input:disabled + span {
+  color: var(--texto-suave);
+}
+.regra-abas,
+.aba-fonte-form [aria-live] {
+  display: grid;
+  gap: 0.2rem;
+}
+.regra-abas p,
+.aba-fonte-form p,
+.aviso-abas p {
+  margin: 0;
+}
+.abas-juntas > small,
+.aviso-abas {
+  flex-basis: 100%;
+}
+.aviso-abas {
+  border-left: 4px solid var(--aviso);
+  border-radius: var(--raio);
+  padding: 0.4rem 0.6rem;
+  display: grid;
+  gap: 0.25rem;
+}
+.aviso-abas ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+.aba-fonte-form fieldset {
+  border: 1px solid var(--borda);
+  border-radius: var(--raio);
+  display: grid;
+  gap: 0.3rem;
+}
+.campo-check {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+/* fieldset tem min-width: min-content por padrão: a regex longa estourava o
+   diálogo. */
+.modo-abas,
+.aba-fonte-form fieldset {
+  min-width: 0;
+}
+.regra-abas code {
+  word-break: break-all;
+}

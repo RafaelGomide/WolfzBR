@@ -85,6 +85,11 @@ export function Exportar({
     });
 
   const ocupado = estado.tipo === "exportando";
+  // A regra de abas escrita à mão não vai para o M (F3): o servidor avisa.
+  const avisoM =
+    estado.tipo === "pronto"
+      ? (estado.resultado as { m_warning?: string | null }).m_warning
+      : undefined;
   const formulas =
     estado.tipo === "pronto" && !estado.resultado.neutralized
       ? (estado.resultado.formula_cells ?? 0)
@@ -228,6 +233,11 @@ export function Exportar({
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+        {estado.tipo === "pronto" && avisoM && (
+          <div className="estado aviso" role="alert">
+            {avisoM}
           </div>
         )}
         {estado.tipo === "pronto" && estado.resultado.source_path_missing && (

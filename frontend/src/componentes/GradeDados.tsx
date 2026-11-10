@@ -17,6 +17,7 @@ import DataEditor, {
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { abortado, api, chamar, type Pagina } from "../api/cliente";
 import { T } from "../textos";
+import { dataBr } from "../util/datas";
 import { useTema, type Tema } from "../util/tema";
 import { CaixaErro, Carregando } from "./Estado";
 
@@ -83,8 +84,7 @@ function texto(valor: unknown): string {
   if (typeof valor === "number")
     return valor.toLocaleString("pt-BR", { maximumFractionDigits: 10 });
   if (typeof valor === "boolean") return valor ? T.comum.sim : T.comum.nao;
-  if (typeof valor === "string" && /^\d{4}-\d{2}-\d{2}$/.test(valor))
-    return valor.split("-").reverse().join("/");
+  if (typeof valor === "string") return dataBr(valor);
   return String(valor);
 }
 

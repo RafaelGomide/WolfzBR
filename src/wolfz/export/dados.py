@@ -40,6 +40,9 @@ Separador = Literal[",", ";", "\t"]
 # um CSV como fórmula.
 INICIO_FORMULA = ("=", "+", "-", "@", "\t", "\r")
 _RE_FORMULA = r"^[=+\-@\t\r]"
+# Telefone E.164 puro ('+5527999999999'): começa com '+', mas não executa
+# nada. Não conta no alerta (R7, D10); o neutralizador não muda.
+_RE_E164 = r"^\+\d{8,15}$"
 
 # Limites do formato .xlsx.
 MAX_LINHAS_XLSX = 1_048_576  # inclui a linha do cabeçalho
@@ -76,11 +79,15 @@ def _colunas_texto(df: pl.DataFrame) -> list[str]:
 
 
 def celulas_formula(df: pl.DataFrame) -> int:
-    """Quantas células de texto começam com um caractere de fórmula."""
+    """Quantas células de texto começam com um caractere de fórmula. O
+    telefone E.164 puro não conta: a exceção é só ``^\\+\\d{8,15}$``, sem
+    espaço nem outro caractere (R7)."""
     colunas = _colunas_texto(df)
     if not colunas or df.height == 0:
         return 0
-    contagem = df.select(pl.col(c).str.contains(_RE_FORMULA).sum() for c in colunas)
+    contagem = df.select(
+        (pl.col(c).str.contains(_RE_FORMULA) & ~pl.col(c).str.contains(_RE_E164)).sum() for c in colunas
+    )
     return int(sum(v or 0 for v in contagem.row(0)))
 
 

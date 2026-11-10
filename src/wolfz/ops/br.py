@@ -33,6 +33,7 @@ from wolfz.core.recipe import Op, register_op
 from wolfz.core.text import fix_mojibake, strip_footnote_marks
 from wolfz.export.m import m_field, m_text
 from wolfz.ops import m_br
+from wolfz.ops.estrutura import _M_VAZIA, celula_vazia
 
 
 def map_unique(fn: Callable[[Any], Any], dtype: pl.DataType) -> Callable[[pl.Series], pl.Series]:
@@ -173,20 +174,62 @@ class _ValorBr(Op):
     def _m(self, valor: str) -> str:
         raise NotImplementedError
 
+    # Guardar o original (ADR-14): a op que tem ``add_original_col`` cria
+    # ``<col>_original`` só com o valor de entrada das células que viraram
+    # nulo; nas outras, fica nula. O CPF, o CNPJ e o CEP usam o mesmo
+    # mecanismo na 1.2 (feature 8).
+    @property
+    def _com_original(self) -> bool:
+        return bool(getattr(self, "add_original_col", False))
+
+    def _originais(self, lf: pl.LazyFrame) -> list[str]:
+        nomes = lf.collect_schema().names()
+        novas = [f"{c}_original" for c in self.cols]
+        ja = [n for n in novas if n in nomes]
+        if ja:
+            raise ValueError(f"já existe uma coluna chamada {ja[0]!r}; renomeie antes de guardar o original")
+        return novas
+
     def to_polars(self, lf: pl.LazyFrame) -> pl.LazyFrame:
         dtype = getattr(pl, self.dtype)
         aplicar = map_unique(self._fn(), dtype)
-        return lf.with_columns(pl.col(c).map_batches(aplicar, return_dtype=dtype).alias(c) for c in self.cols)
+        convertidas = {c: pl.col(c).map_batches(aplicar, return_dtype=dtype) for c in self.cols}
+        if not self._com_original:
+            return lf.with_columns(e.alias(c) for c, e in convertidas.items())
+        novas = self._originais(lf)
+        return lf.with_columns(
+            *(e.alias(c) for c, e in convertidas.items()),
+            *(
+                pl.when(e.is_null() & ~celula_vazia(c)).then(pl.col(c).cast(pl.String)).alias(n)
+                for (c, e), n in zip(convertidas.items(), novas, strict=True)
+            ),
+        )
 
     def to_python(self) -> str:
+        converte = f"pl.col({self.cols!r}).map_elements({self._fn_python()}, return_dtype=pl.{self.dtype})"
+        if not self._com_original:
+            return f"lf = lf.with_columns({converte})"
+        um = f"pl.col(c).map_elements({self._fn_python()}, return_dtype=pl.{self.dtype})"
         return (
-            f"lf = lf.with_columns(pl.col({self.cols!r}).map_elements({self._fn_python()}, "
-            f"return_dtype=pl.{self.dtype}))"
+            "lf = lf.with_columns(\n"
+            f"    *(pl.when({um}.is_null() & ~celula_vazia(c)).then(pl.col(c).cast(pl.String))"
+            f".alias(c + '_original') for c in {self.cols!r}),\n"
+            f"    {converte},\n"
+            ")"
         )
 
     def to_m(self, prev: str, name: str) -> str:
         transforms = ", ".join(f"{{{m_text(c)}, each {self._m('_')}, {self.m_tipo}}}" for c in self.cols)
-        return f"{name} = Table.TransformColumns({prev}, {{{transforms}}})"
+        if not self._com_original:
+            return f"{name} = Table.TransformColumns({prev}, {{{transforms}}})"
+        tabela = prev
+        for c in self.cols:
+            original = (
+                f"each let o = {m_field(c)} in if not WolfzVazia(o) and {self._m('o')} = null "
+                "then Text.From(o) else null"
+            )
+            tabela = f"Table.AddColumn({tabela}, {m_text(c + '_original')}, {original}, type nullable text)"
+        return f"{name} = Table.TransformColumns({tabela}, {{{transforms}}})"
 
 
 @register_op
@@ -841,12 +884,22 @@ class CleanPhone(_ValorBr):
     m_label = "Telefone limpo"
     default_ddd: str | None = Field(default=None, pattern=r"^\d{2}$", description="DDD para número sem DDD")
     add_ninth_digit: bool = True
+    add_original_col: bool = Field(
+        default=False,
+        description="Guarda o número original em <col>_original, só nas células que viraram vazio.",
+        json_schema_extra={"desde": "1.1"},
+    )
 
     funcao = clean_phone
     dtype = "String"
     m_tipo = "type nullable text"
-    python_helpers = (clean_phone,)
-    m_helpers = {**m_br.BASE, "WolfzPrepId": m_br.PREP_ID, "WolfzTelefone": m_br.TELEFONE}  # noqa: RUF012
+    python_helpers = (clean_phone, celula_vazia)
+    m_helpers = {  # noqa: RUF012
+        **m_br.BASE,
+        "WolfzPrepId": m_br.PREP_ID,
+        "WolfzTelefone": m_br.TELEFONE,
+        "WolfzVazia": _M_VAZIA,
+    }
     examples = (
         {
             "step": {"cols": ["tel"]},
@@ -877,6 +930,14 @@ class CleanPhone(_ValorBr):
             "step": {"cols": ["tel"], "default_ddd": "27", "add_ninth_digit": False},
             "input": {"tel": ["8888-7777", "(11) 8888-7777", "27 1234-5678"]},
             "expected": {"tel": ["+552788887777", "+551188887777", "+552712345678"]},
+        },
+        {
+            "step": {"cols": ["tel"], "add_original_col": True},
+            "input": {"tel": ["(27) 99999-9999", "(20) 3333-4444", "sem telefone", " ", None]},
+            "expected": {
+                "tel": ["+5527999999999", None, None, None, None],
+                "tel_original": [None, "(20) 3333-4444", "sem telefone", None, None],
+            },
         },
     )
 

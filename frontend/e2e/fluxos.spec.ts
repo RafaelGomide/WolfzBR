@@ -115,8 +115,10 @@ test("planilha com várias abas pergunta qual importar", async ({ page }) => {
   await importar(page, arquivo("licitacoes_ods", "original.ods"));
   const dialogo = page.getByRole("dialog", { name: "Qual aba importar?" });
   await expect(dialogo).toBeVisible();
-  await expect(dialogo.getByRole("radio")).toHaveCount(2);
-  await dialogo.getByLabel("Legenda").check();
+  // Duas abas para escolher (e o modo "Juntar", F3, com as mesmas abas).
+  const umaAba = dialogo.getByRole("list", { name: "Uma aba" });
+  await expect(umaAba.getByRole("radio")).toHaveCount(2);
+  await umaAba.getByLabel("Legenda").check();
   await dialogo.getByRole("button", { name: "Importar esta aba" }).click();
   await esperarProjeto(page, "licitacoes_ods.ods");
   await expect(page.getByRole("banner").getByText("aba Legenda")).toBeVisible();

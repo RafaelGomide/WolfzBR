@@ -276,6 +276,7 @@ function Editor({
           colunasDepois={colunasDepois}
           contagem={contagem}
           aoTentarContagem={() => setRodadaContagem((r) => r + 1)}
+          abasDoArquivo={projeto.sheets ?? []}
           salvar={salvar}
         />
         <section className="centro">

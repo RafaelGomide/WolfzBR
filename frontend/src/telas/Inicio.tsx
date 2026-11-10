@@ -1,21 +1,25 @@
 // Tela inicial (F1.H3): arrastar arquivo e projetos recentes. Planilha com
-// mais de uma aba visível pergunta qual importar (F1.H4).
+// mais de uma aba visível pergunta qual importar (F1.H4), ou quais juntar
+// (F3).
 
-import { useRef, useState, type DragEvent } from "react";
+import { useMemo, useRef, useState, type DragEvent } from "react";
 import { api, chamar, formulario, type Aba, type ProjetoResumo } from "../api/cliente";
+import { RegraTexto } from "../componentes/AbaDaFonte";
 import { CaixaErro, Carregando } from "../componentes/Estado";
 import { SeletorTema } from "../componentes/SeletorTema";
 import { T } from "../textos";
+import { ORIGEM_PADRAO, preSelecao, useRegraAbas } from "../util/regraAbas";
 import { irPara } from "../util/rota";
 import { useCarregar } from "../util/useCarregar";
 
 const PLANILHA = /\.(xlsx|xlsm|xls|ods)$/i;
 
-function importar(arquivo: File, sheet?: string) {
+function importar(arquivo: File, sheet?: string, juntar?: { sheets_regex: string | null }) {
+  const combine_sheets = juntar ? JSON.stringify(juntar) : undefined;
   return chamar(
     api.POST("/api/projects", {
-      body: { file: arquivo as unknown as string, sheet },
-      bodySerializer: () => formulario({ file: arquivo, sheet }),
+      body: { file: arquivo as unknown as string, sheet, combine_sheets },
+      bodySerializer: () => formulario({ file: arquivo, sheet, combine_sheets }),
     }),
   );
 }
@@ -29,6 +33,12 @@ function listarAbas(arquivo: File) {
   );
 }
 
+type EscolhaAba =
+  { modo: "uma"; aba: string } | { modo: "juntar"; aba: string; sheets_regex: string | null };
+
+/** Diálogo "Qual aba importar?" (F1.H4; F3, ux.md §2.1): uma aba, ou várias
+ * juntas. Para juntar, a regra que vai para a receita vem do servidor e vale
+ * também para este arquivo (D8); aba oculta nunca entra (D11). */
 function SeletorAba({
   arquivo,
   abas,
@@ -37,11 +47,40 @@ function SeletorAba({
 }: {
   arquivo: File;
   abas: Aba[];
-  escolher: (aba: string) => void;
+  escolher: (escolha: EscolhaAba) => void;
   cancelar: () => void;
 }) {
-  const primeira = abas.find((a) => !a.hidden) ?? abas[0];
+  const visiveis = useMemo(() => abas.filter((a) => !a.hidden), [abas]);
+  const nomesVisiveis = useMemo(() => visiveis.map((a) => a.name), [visiveis]);
+  const primeira = visiveis[0] ?? abas[0];
+  const [modo, setModo] = useState<"uma" | "juntar">("uma");
   const [aba, setAba] = useState(primeira.name);
+  const [marcadas, setMarcadas] = useState<string[]>(() => {
+    const pre = preSelecao(visiveis);
+    return pre.length >= 2 ? pre : nomesVisiveis;
+  });
+  // Na ordem do arquivo, que é a ordem da junção.
+  const ordenadas = useMemo(
+    () => nomesVisiveis.filter((n) => marcadas.includes(n)),
+    [nomesVisiveis, marcadas],
+  );
+  const abaReceita = ordenadas[0] ?? null;
+  const juntando = modo === "juntar";
+  const { regra, erro, carregando } = useRegraAbas(
+    juntando ? ordenadas : [],
+    nomesVisiveis,
+    abaReceita,
+  );
+  const linhas = visiveis
+    .filter((a) => ordenadas.includes(a.name))
+    .reduce((s, a) => s + (a.rows ?? 0), 0);
+  const ocultas = abas.filter((a) => a.hidden).map((a) => a.name);
+  const pronto = !juntando || (ordenadas.length >= 2 && !!regra && !carregando);
+
+  function marcar(nome: string, sim: boolean) {
+    setMarcadas((m) => (sim ? [...m, nome] : m.filter((x) => x !== nome)));
+  }
+
   return (
     <div className="dialogo-fundo">
       <form
@@ -51,35 +90,82 @@ function SeletorAba({
         aria-label={T.abas.titulo}
         onSubmit={(e) => {
           e.preventDefault();
-          escolher(aba);
+          if (!juntando) escolher({ modo: "uma", aba });
+          else if (regra && abaReceita)
+            escolher({ modo: "juntar", aba: abaReceita, sheets_regex: regra.sheets_regex });
         }}
       >
         <h2>{T.abas.titulo}</h2>
         <p>{T.abas.texto(arquivo.name)}</p>
-        <ul className="lista-abas">
-          {abas.map((a) => (
-            <li key={a.name}>
-              <label>
-                <input
-                  type="radio"
-                  name="aba"
-                  value={a.name}
-                  checked={aba === a.name}
-                  onChange={() => setAba(a.name)}
-                />
-                <span>{a.name}</span>
-                {a.hidden && <em className="etiqueta">{T.abas.oculta}</em>}
-                <small>{T.abas.dimensao(a.rows, a.columns)}</small>
-              </label>
-            </li>
-          ))}
-        </ul>
+        <fieldset className="modo-abas">
+          <legend className="so-leitor">{T.abas.modo}</legend>
+          <label>
+            <input type="radio" name="modo" checked={!juntando} onChange={() => setModo("uma")} />
+            {T.abas.umaAba}
+          </label>
+          <ul className="lista-abas" aria-label={T.abas.umaAba}>
+            {abas.map((a) => (
+              <li key={a.name}>
+                <label>
+                  <input
+                    type="radio"
+                    name="aba"
+                    value={a.name}
+                    checked={aba === a.name}
+                    disabled={juntando}
+                    onChange={() => setAba(a.name)}
+                  />
+                  <span>{a.name}</span>
+                  {a.hidden && <em className="etiqueta">{T.abas.oculta}</em>}
+                  <small>{T.abas.dimensao(a.rows, a.columns)}</small>
+                </label>
+              </li>
+            ))}
+          </ul>
+          <label>
+            <input type="radio" name="modo" checked={juntando} onChange={() => setModo("juntar")} />
+            {T.abas.juntar}
+          </label>
+          <ul className="lista-abas" aria-label={T.abas.juntar}>
+            {abas.map((a) => (
+              <li key={a.name}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={!a.hidden && marcadas.includes(a.name)}
+                    disabled={!juntando || a.hidden}
+                    onChange={(e) => marcar(a.name, e.target.checked)}
+                  />
+                  <span>{a.name}</span>
+                  {a.hidden && <em className="etiqueta">{T.abas.naoEntra}</em>}
+                  <small>{T.abas.dimensao(a.rows, a.columns)}</small>
+                </label>
+              </li>
+            ))}
+          </ul>
+        </fieldset>
+        {juntando && (
+          <div className="regra-abas" aria-live="polite">
+            {ordenadas.length < 2 ? (
+              <p className="dica">{T.abas.minimo}</p>
+            ) : (
+              <>
+                <p>{T.abas.juntas(linhas)}</p>
+                <p>{T.abas.colunaOrigem(ORIGEM_PADRAO)}</p>
+                {erro != null && <CaixaErro erro={erro} />}
+                {carregando && <p className="dica">{T.abas.calculandoRegra}</p>}
+                {regra && !carregando && <RegraTexto regra={regra} />}
+                {ocultas.length > 0 && <p className="dica">{T.aba.ocultas(ocultas)}</p>}
+              </>
+            )}
+          </div>
+        )}
         <div className="acoes">
           <button type="button" onClick={cancelar}>
             {T.comum.cancelar}
           </button>
-          <button type="submit" className="primario">
-            {T.abas.importar}
+          <button type="submit" className="primario" disabled={!pronto}>
+            {juntando ? T.abas.importarVarias(ordenadas.length) : T.abas.importar}
           </button>
         </div>
       </form>
@@ -161,7 +247,8 @@ export function Inicio() {
   const [erro, setErro] = useState<unknown>(null);
   const [escolha, setEscolha] = useState<{ arquivo: File; abas: Aba[] } | null>(null);
 
-  async function receber(arquivo: File, sheet?: string) {
+  async function receber(arquivo: File, escolhida?: EscolhaAba) {
+    const sheet = escolhida?.aba;
     setErro(null);
     setEscolha(null);
     setImportando(arquivo.name);
@@ -173,7 +260,11 @@ export function Inicio() {
           return;
         }
       }
-      const projeto = await importar(arquivo, sheet);
+      const projeto = await importar(
+        arquivo,
+        sheet,
+        escolhida?.modo === "juntar" ? { sheets_regex: escolhida.sheets_regex } : undefined,
+      );
       irPara(projeto.id);
     } catch (e) {
       setErro(e);
@@ -238,7 +329,7 @@ export function Inicio() {
         <SeletorAba
           arquivo={escolha.arquivo}
           abas={escolha.abas}
-          escolher={(aba) => receber(escolha.arquivo, aba)}
+          escolher={(e) => receber(escolha.arquivo, e)}
           cancelar={() => setEscolha(null)}
         />
       )}

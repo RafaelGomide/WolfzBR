@@ -54,6 +54,18 @@ export const T = {
     dimensao: (linhas: number | null | undefined, colunas: number | null | undefined) =>
       linhas == null ? "" : `${linhas.toLocaleString("pt-BR")} × ${colunas ?? "?"}`,
     importar: "Importar esta aba",
+    // Juntar abas (F3, ux.md §2.1 e §3.2)
+    modo: "Como importar",
+    umaAba: "Uma aba",
+    juntar: "Juntar várias abas numa tabela só",
+    naoEntra: "oculta, não entra",
+    juntas: (n: number) => `Juntas: cerca de ${fmt(n)} linhas.`,
+    colunaOrigem: (nome: string) => `Uma coluna "${nome}" diz de qual aba veio cada linha.`,
+    importarVarias: (n: number) => `Importar ${n} abas`,
+    minimo: "Marque pelo menos 2 abas.",
+    calculandoRegra: "Conferindo as abas…",
+    regraEscolhe: (nomes: string[]) =>
+      `A regra gravada na receita escolhe neste arquivo: ${nomes.join(", ")}.`,
   },
   tema: {
     nomes: { auto: "automático", claro: "claro", escuro: "escuro" },
@@ -175,6 +187,32 @@ export const T = {
     padrao: "Padrão do nome da aba (expressão regular; vazio desliga)",
     exemplo: "ex.: (?i)Vendas \\d{4}",
     dica: "Para o relatório cuja aba muda de nome todo mês: DEZEMBRO_2025, JANEIRO_2026…",
+    // Várias abas juntas (F3, ux.md §2.2, §2.3 e §3.2)
+    rotuloVarias: "Abas",
+    listaVarias: (nomes: string[], n: number) =>
+      `${nomes.length > 4 ? `${nomes.slice(0, 3).join(", ")} e mais ${n - 3}` : nomes.join(", ")} (${n}), juntas`,
+    colunaOrigem: (nome: string) => `coluna ${nome}`,
+    semColunaOrigem: "sem coluna de origem",
+    proximasTodas: "Nos próximos arquivos: todas as abas visíveis",
+    proximasPadrao: "Nos próximos arquivos: as abas que casarem com",
+    ocultas: (nomes: string[]) =>
+      nomes.length === 1
+        ? `1 aba oculta não foi incluída: ${nomes[0]}.`
+        : `${nomes.length} abas ocultas não foram incluídas: ${nomes.join(", ")}.`,
+    escolherAbas: "Abas que entram",
+    usarColunaOrigem: "Coluna que diz de qual aba veio cada linha",
+    nomeColunaOrigem: "Nome da coluna",
+    diferentes: "As abas não têm as mesmas colunas.",
+    falta: (aba: string, cols: string) => `${aba}: falta ${cols}.`,
+    aMais: (aba: string, cols: string) => `${aba}: tem a mais ${cols}.`,
+    faltaEAMais: (aba: string, falta: string, mais: string) =>
+      `${aba}: falta ${falta}; tem a mais ${mais}.`,
+    quaseIgual: (aba: string, dela: string, outras: string) =>
+      `${aba}: tem "${dela}", as outras têm "${outras}". Viraram duas colunas.`,
+    ficaVazia: "Nas linhas de uma aba sem a coluna, ela fica vazia. Nenhuma coluna foi tirada.",
+    maisColunas: (cols: string[], n: number) => `${cols.join(", ")} e mais ${n}`,
+    maisAbas: (n: number) => `e mais ${n} ${n === 1 ? "aba" : "abas"} com diferenças`,
+    verTodas: "Ver todas",
   },
   sugestoes: {
     titulo: (n: number) => `Sugestões (${n})`,
@@ -258,6 +296,7 @@ export const T = {
       moeda: "moeda (R$)",
       percentual: "percentual",
       data: "data",
+      data_hora: "data e hora",
       mes_ano: "mês/ano",
       cpf: "CPF",
       cnpj: "CNPJ",

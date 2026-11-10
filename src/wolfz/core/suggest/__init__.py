@@ -47,6 +47,9 @@ class Suggestion:
     cols: tuple[str, ...] = ()
     kind: Literal["passo", "aviso"] = "passo"
     order: int = CONVERSAO
+    # Fora do "Aceitar todas": a sugestão aparece, mas só entra se o usuário
+    # aceitar ela sozinha (S1: dedupe numa tabela sem coluna de código).
+    accept_all: bool = True
 
     @property
     def id(self) -> str:
@@ -62,6 +65,7 @@ class Suggestion:
             "cols": list(self.cols),
             "kind": self.kind,
             "order": self.order,
+            "accept_all": self.accept_all,
         }
 
 
@@ -75,6 +79,9 @@ class Contexto:
     passos: list[dict[str, Any]] = field(default_factory=list)  # a receita atual
     _perfis: dict[str, ColumnProfile] = field(default_factory=dict)
     cache: dict[str, Any] = field(default_factory=dict)  # o que várias regras calculam igual
+    # Linhas de título acima do cabeçalho, vindas da detecção: (texto,
+    # célula). A regra da unidade procura "Mil Reais" nelas (F7.6).
+    titulos: tuple[tuple[str, str | None], ...] = ()
 
     @property
     def texto(self) -> list[str]:
@@ -112,16 +119,18 @@ def suggest(
     rejected: Iterable[tuple[str, str | None]] = (),
     sample: int = AMOSTRA,
     steps: Iterable[dict[str, Any]] = (),
+    titulos: Iterable[tuple[str, str | None]] = (),
 ) -> list[Suggestion]:
     """Sugestões para a tabela, na ordem de aplicação e, dentro dela, da
     mais confiante para a menos. ``rejected`` são pares (regra, coluna) que
     o usuário rejeitou; coluna ``None`` rejeita a regra inteira. ``steps``
     são os passos da receita (as regras de verificação não repetem um
-    ``assert`` que já está lá)."""
+    ``assert`` que já está lá). ``titulos`` são as linhas de título acima
+    do cabeçalho, com a célula de cada uma."""
     import wolfz.core.suggest.regras  # noqa: F401  (registra as regras)
 
     df = data.collect() if isinstance(data, pl.LazyFrame) else data
-    ctx = Contexto(sample_rows(df, sample), df, list(steps))
+    ctx = Contexto(sample_rows(df, sample), df, list(steps), titulos=tuple(titulos))
     recusadas = set(rejected)
     # Uma tabela já despivotada não se despivota de novo: as colunas que
     # sobraram estão repetidas em cada linha nova, e o segundo despivotar
@@ -197,7 +206,7 @@ def _sem_colunas(s: Suggestion, tirar: set[str]) -> Suggestion:
         {**p, "cols": [c for c in p["cols"] if c not in tirar]} if isinstance(p.get("cols"), list) else p
         for p in s.steps
     )
-    return Suggestion(s.rule, passos, s.confidence, s.reason, cols, s.kind, s.order)
+    return Suggestion(s.rule, passos, s.confidence, s.reason, cols, s.kind, s.order, s.accept_all)
 
 
 __all__ = ["Contexto", "Suggestion", "etapa", "registered_rules", "rule", "suggest"]

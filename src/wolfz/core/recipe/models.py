@@ -87,9 +87,16 @@ class Op(_Model, ABC):
     def _omite_enabled(self, handler: SerializerFunctionWrapHandler) -> Any:
         # Só o passo desativado grava o campo: receitas que nunca desativaram
         # nada continuam com os mesmos bytes (e as mesmas chaves de cache).
+        # Parâmetro novo (marcado com ``desde``, ADR-9) com o valor padrão
+        # também não é gravado, pelo mesmo motivo.
         data = handler(self)
-        if self.enabled and isinstance(data, dict):
-            data.pop("enabled", None)
+        if isinstance(data, dict):
+            if self.enabled:
+                data.pop("enabled", None)
+            for nome, campo in type(self).model_fields.items():
+                extra = campo.json_schema_extra
+                if isinstance(extra, dict) and "desde" in extra and getattr(self, nome) == campo.default:
+                    data.pop(nome, None)
         return data
 
     @abstractmethod

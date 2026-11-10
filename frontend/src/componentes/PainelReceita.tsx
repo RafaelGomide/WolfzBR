@@ -4,7 +4,7 @@
 // passo mostra quantas linhas tirou ou acrescentou (F1 da 1.1).
 
 import { useMemo, useState } from "react";
-import { ErroApi, type Operacao, type Passo, type Receita } from "../api/cliente";
+import { ErroApi, type Aba, type Operacao, type Passo, type Receita } from "../api/cliente";
 import { T } from "../textos";
 import { ativo, mover, nomeOp, novoId, resumo } from "../util/receita";
 import { focarPasso, idFala, type Contagem } from "../util/reconciliacao";
@@ -86,6 +86,7 @@ export function PainelReceita({
   colunasDepois,
   contagem,
   aoTentarContagem,
+  abasDoArquivo,
   salvar,
 }: {
   projetoId: string;
@@ -99,6 +100,7 @@ export function PainelReceita({
   colunasDepois: string[];
   contagem: Contagem;
   aoTentarContagem: () => void;
+  abasDoArquivo: Aba[];
   salvar: (nova: Receita) => Promise<void>;
 }) {
   const [modo, setModo] = useState<Modo>(null);
@@ -176,7 +178,12 @@ export function PainelReceita({
         />
       )}
 
-      <AbaDaFonte receita={receita} salvar={salvar} />
+      <AbaDaFonte
+        receita={receita}
+        abasDoArquivo={abasDoArquivo}
+        contagem={contagem}
+        salvar={salvar}
+      />
 
       {modo === null && (
         <Sugestoes

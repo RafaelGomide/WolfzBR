@@ -11,13 +11,24 @@ from __future__ import annotations
 import re
 from collections import Counter
 from collections.abc import Iterator
+from typing import Any
 
 import polars as pl
 
+from wolfz.br.booleanos import parse_bool_br
 from wolfz.br.constants import MESES, UFS
 from wolfz.br.datas import parse_date_br, parse_month_year
-from wolfz.br.documentos import clean_cep, clean_cnpj, clean_cpf, clean_cpf_cnpj, cnpj_is_valid, cpf_is_valid
-from wolfz.br.numeros import decimal_provavel, parse_number_br
+from wolfz.br.documentos import (
+    clean_cep,
+    clean_cnpj,
+    clean_cpf,
+    clean_cpf_cnpj,
+    clean_phone,
+    cnpj_is_valid,
+    cpf_is_valid,
+)
+from wolfz.br.geo import normalize_uf
+from wolfz.br.numeros import decimal_provavel, parse_number_br, scale_from_unit
 from wolfz.core.suggest import CONVERSAO, DOCUMENTO, FORMA, LIMPEZA, VERIFICACAO, Contexto, Suggestion, rule
 from wolfz.core.text import (
     fix_mojibake,
@@ -105,7 +116,7 @@ def _do_tipo(ctx: Contexto, tipo: str) -> list[tuple[str, float]]:
         p = ctx.perfil(c)
         if p.inferred_type != tipo or p.type_rate < TAXA or _tem_sinais_ibge(ctx, c):
             continue
-        if tipo in ("numero", "moeda") and _parece_codigo(ctx, c):
+        if tipo in ("numero", "moeda") and (_parece_codigo(ctx, c) or _e_telefone(ctx, c)):
             continue
         saida.append((c, p.type_rate))
     return saida
@@ -594,8 +605,9 @@ def variacao_categoria(ctx: Contexto) -> Iterator[Suggestion]:
     PAULO', 'são paulo'): padroniza a caixa e, se for o caso, o acento."""
     por_modo: dict[str, list[str]] = {}
     sem_acento: list[str] = []
+    proprias = set(_colunas_de_uf(ctx)) | {c for c, _, _ in _colunas_de_municipio(ctx)}
     for c in ctx.texto:
-        if ctx.perfil(c).inferred_type != "texto":
+        if ctx.perfil(c).inferred_type != "texto" or c in proprias:
             continue
         valores = _uteis(ctx, c)
         distintos = set(valores)
@@ -1254,3 +1266,404 @@ def verificar_unicos(ctx: Contexto) -> Iterator[Suggestion]:
                 (c,),
                 order=VERIFICACAO,
             )
+
+
+# ---------------------------------------------------------------------------
+# Sugestões que faltavam (F7 da 1.1)
+# ---------------------------------------------------------------------------
+# O texto tem duas frases: o que foi encontrado, começando pela coluna, e o
+# que muda ("Muda N células; N viram vazio."). O exemplo entre parênteses é
+# de formato, nunca um valor da planilha (ux.md §3.3). Nenhuma mexe em
+# _DETECTORS: as detecções novas ficam dentro das regras.
+
+
+def _n_br(n: int) -> str:
+    return f"{n:,}".replace(",", ".")
+
+
+def _muda(n: int, vazias: int, motivo: str = "") -> str:
+    """'Muda 4.812 células; nenhuma fica vazia.' / '...; 12 viram vazio.'"""
+    if not vazias:
+        return f"Muda {_celulas_br(n)}; nenhuma fica vazia."
+    vira = "vira vazio" if vazias == 1 else "viram vazio"
+    return f"Muda {_celulas_br(n)}; {_n_br(vazias)} {vira}{motivo}."
+
+
+def _contagem(ctx: Contexto, col: str, fn) -> tuple[int, int, dict[str, Any]]:
+    """Na tabela inteira: células preenchidas, quantas viram vazio com
+    ``fn`` e o resultado de cada valor distinto."""
+    s = ctx.total[col].cast(pl.String)
+    preenchidas = s.filter(s.is_not_null() & (s.str.strip_chars() != ""))
+    contagem = preenchidas.value_counts()
+    resultados = {v: fn(v) for v in contagem[col].to_list()}
+    vazias = sum(
+        n
+        for v, n in zip(contagem[col].to_list(), contagem["count"].to_list(), strict=True)
+        if resultados[v] is None
+    )
+    return preenchidas.len(), vazias, resultados
+
+
+def _criadas_pela_receita(ctx: Contexto) -> set[str]:
+    """Colunas que um passo da receita acrescentou (o de-para do IBGE, o
+    original do telefone): não são sugeridas de novo, senão o "Aceitar
+    todas" entra em loop (A3)."""
+    criadas: set[str] = set()
+    for p in ctx.passos:
+        if not p.get("enabled", True):
+            continue
+        if p.get("op") == "normalize_municipio":
+            criadas |= {f"{p['col']}_{s}" for s in ("codigo_ibge", "nome_ibge", "status")}
+        if p.get("add_original_col"):
+            criadas |= {f"{c}_original" for c in p.get("cols") or []}
+    return criadas
+
+
+def _ja_na_receita(ctx: Contexto, op: str, col: str) -> bool:
+    for p in ctx.passos:
+        if p.get("op") != op or not p.get("enabled", True):
+            continue
+        if col in (p.get("cols") or []) or p.get("col") == col:
+            return True
+    return False
+
+
+_SIM_NAO = {"sim", "nao", "s", "n", "verdadeiro", "falso", "v", "f", "true", "false", "yes", "no"}
+
+
+@rule
+def booleano(ctx: Contexto) -> Iterator[Suggestion]:
+    """Sim/não ('Sim'/'Não', 'S'/'N'): vira verdadeiro ou falso (F7.1). Só
+    com os dois lados presentes: uma coluna de 'x' e 'y', ou só de 'X'
+    (marque com X), não é sim/não."""
+    for c, taxa in _do_tipo(ctx, "booleano"):
+        n, vazias, resultados = _contagem(ctx, c, parse_bool_br)
+        lados = {r for r in resultados.values() if r is not None}
+        familia = {normalize_key(v) for v, r in resultados.items() if r is not None} <= _SIM_NAO
+        if lados != {True, False} or not familia:
+            continue
+        yield Suggestion(
+            "booleano",
+            ({"op": "parse_bool_br", "cols": [c]},),
+            taxa,
+            f"A coluna {c} tem só Sim e Não (ou S e N). Converter para sim/não deixa o Power BI filtrar e "
+            f"contar direto. {_muda(n, vazias)}",
+            (c,),
+            order=CONVERSAO,
+        )
+
+
+_TAXA_UF = 0.95
+
+
+def _colunas_de_uf(ctx: Contexto) -> list[str]:
+    """Colunas em que pelo menos 95% dos valores distintos são UF (sigla ou
+    nome por extenso, em qualquer caixa) e ainda há o que padronizar."""
+    if "uf" in ctx.cache:
+        return ctx.cache["uf"]
+    cols = []
+    for c in ctx.texto:
+        if _ja_na_receita(ctx, "normalize_uf", c) or c in _criadas_pela_receita(ctx):
+            continue
+        distintos = {v for v in _uteis(ctx, c)}
+        if not distintos or len(distintos) > 200:
+            continue
+        ufs = {v: normalize_uf(v) for v in distintos}
+        if sum(u is not None for u in ufs.values()) / len(distintos) < _TAXA_UF:
+            continue
+        if all(u == v for v, u in ufs.items()):
+            continue  # já são as siglas
+        cols.append(c)
+    ctx.cache["uf"] = cols
+    return cols
+
+
+@rule
+def uf(ctx: Contexto) -> Iterator[Suggestion]:
+    """UF misturando sigla e nome por extenso: fica só a sigla (F7.2)."""
+    for c in _colunas_de_uf(ctx):
+        n, vazias, _ = _contagem(ctx, c, normalize_uf)
+        yield Suggestion(
+            "uf",
+            ({"op": "normalize_uf", "cols": [c]},),
+            0.85,
+            f"A coluna {c} mistura siglas e nomes por extenso (SP, São Paulo, sao paulo). "
+            f"Padronizar deixa só "
+            f"as 27 siglas. {_muda(n, vazias, ' porque não são UF' if vazias else '')}",
+            (c,),
+            order=CONVERSAO,
+        )
+
+
+_NOME_DE_TELEFONE = re.compile(r"tel|fone|celular|whats")
+_TAXA_TELEFONE = 0.9
+
+
+def _e_telefone(ctx: Contexto, col: str) -> bool:
+    """Nome de telefone e 90% dos valores com 10 a 13 dígitos (F7.3)."""
+    chave = ("telefone", col)
+    if chave not in ctx.cache:
+        valores = _uteis(ctx, col)
+        digitos = [len(re.sub(r"\D", "", v)) for v in valores]
+        ctx.cache[chave] = (
+            bool(_NOME_DE_TELEFONE.search(_nome(col)))
+            and bool(valores)
+            and sum(10 <= d <= 13 for d in digitos) / len(valores) >= _TAXA_TELEFONE
+        )
+    return ctx.cache[chave]
+
+
+@rule
+def telefone(ctx: Contexto) -> Iterator[Suggestion]:
+    """Telefone em formatos diferentes: padroniza em E.164. Se há número
+    que não é telefone (DDD que não existe), o original fica guardado em
+    ``<col>_original``, só nessas células (ADR-14, D7)."""
+    for c in ctx.texto:
+        if (
+            not _e_telefone(ctx, c)
+            or _ja_na_receita(ctx, "clean_phone", c)
+            or c in _criadas_pela_receita(ctx)
+        ):
+            continue
+        n, vazias, resultados = _contagem(ctx, c, clean_phone)
+        if all(r == v for v, r in resultados.items()):
+            continue  # já está padronizado
+        passo: dict[str, Any] = {"op": "clean_phone", "cols": [c]}
+        if vazias and f"{c}_original" not in ctx.total.columns:
+            passo["add_original_col"] = True
+            fim = (
+                f"Muda {_celulas_br(n)}. {_n_br(vazias)} "
+                f"{'número tem' if vazias == 1 else 'números têm'} DDD "
+                f"que não existe ou não {'é' if vazias == 1 else 'são'} telefone: "
+                f"{'ele fica vazio' if vazias == 1 else 'eles ficam vazios'} na coluna limpa, e o "
+                f"original fica "
+                f"guardado na coluna {c}_original."
+            )
+        else:
+            fim = _muda(n, vazias)
+        yield Suggestion(
+            "telefone",
+            (passo,),
+            0.8,
+            f"A coluna {c} tem números em formatos diferentes ((21) 99999-0000, 21999990000). "
+            f"Padronizar deixa "
+            f"todos iguais. {fim}",
+            (c,),
+            order=DOCUMENTO,
+        )
+
+
+_NOME_DE_MUNICIPIO = re.compile(r"munic|cidade")
+_TAXA_MUNICIPIO = 0.8
+
+
+def _colunas_de_municipio(ctx: Contexto) -> list[tuple[str, int, int]]:
+    """Colunas com nome de município e pelo menos 80% de casamento exato na
+    base do IBGE (empacotada, sem rede: R11). Devolve (coluna, células,
+    células para revisar)."""
+    if "municipio" in ctx.cache:
+        return ctx.cache["municipio"]
+    from wolfz.br.municipios import chave_municipio, tabela
+
+    nomes = set(tabela().select("nome").to_series().map_elements(chave_municipio, return_dtype=pl.String))
+    achadas = []
+    for c in ctx.texto:
+        if not _NOME_DE_MUNICIPIO.search(_nome(c)) or _ja_na_receita(ctx, "normalize_municipio", c):
+            continue
+        if c in _criadas_pela_receita(ctx):
+            continue
+        s = ctx.total[c].cast(pl.String)
+        contagem = s.filter(s.is_not_null() & (s.str.strip_chars() != "")).value_counts()
+        valores, vezes = contagem[c].to_list(), contagem["count"].to_list()
+        total = sum(vezes)
+        if not total:
+            continue
+        exatos = sum(n for v, n in zip(valores, vezes, strict=True) if chave_municipio(v) in nomes)
+        if exatos / total >= _TAXA_MUNICIPIO:
+            achadas.append((c, total, total - exatos))
+    ctx.cache["municipio"] = achadas
+    return achadas
+
+
+@rule
+def municipio(ctx: Contexto) -> Iterator[Suggestion]:
+    """Nome de município: liga ao IBGE (F7.5)."""
+    ufs = [c for c in ctx.total.columns if _nome(c) in ("uf", "estado", "sigla uf")]
+    for c, n, revisar in _colunas_de_municipio(ctx):
+        passo: dict[str, Any] = {"op": "normalize_municipio", "col": c}
+        if ufs:
+            passo["uf_col"] = ufs[0]
+        if revisar:
+            precisa = "precisa" if revisar == 1 else "precisam"
+            fim = f"Muda {_celulas_br(n)}; {_n_br(revisar)} {precisa} da sua revisão."
+        else:
+            fim = f"Muda {_celulas_br(n)}; nenhuma precisa de revisão."
+        yield Suggestion(
+            "municipio",
+            (passo,),
+            0.75,
+            f"A coluna {c} parece ter nomes de município. Ligar ao IBGE corrige grafia e acrescenta o código "
+            f"do município. {fim}",
+            (c,),
+            order=CONVERSAO,
+        )
+
+
+_UNIDADE = re.compile(r"\b(mil|milhares|milhoes|milhao|bilhoes|bilhao)\b")
+_ESCALA = {1_000: "1.000", 1_000_000: "1 milhão", 1_000_000_000: "1 bilhão"}
+
+
+def _colunas_de_valor(ctx: Contexto) -> list[str]:
+    """Colunas numéricas de valor: não código, não ano, não percentual."""
+    cols = []
+    for c, tipo in ctx.total.schema.items():
+        if not tipo.is_numeric() or _NOME_DE_CODIGO.search(_nome(c)) or _NOME_ANO.match(_nome(c)):
+            continue
+        if "%" in c or re.search(r"\b(percentual|taxa|indice|qtd|quantidade)\b", _nome(c)):
+            continue
+        s = ctx.total[c].drop_nulls()
+        if s.len() and s.dtype.is_integer() and s.is_between(1900, 2100).all():
+            continue
+        cols.append(c)
+    return cols
+
+
+@rule
+def unidade(ctx: Contexto) -> Iterator[Suggestion]:
+    """'Valores em Mil Reais' no título acima do cabeçalho, ou 'R$ mil' no
+    nome da coluna: multiplica as colunas de valor pela escala (F7.6). Só
+    depois de convertidas para número; antes, a sugestão de número vem
+    primeiro."""
+    if any(p.get("op") == "scale_by_unit" and p.get("enabled", True) for p in ctx.passos):
+        return
+    valor = _colunas_de_valor(ctx)
+    por_coluna = {c: c for c in valor if _UNIDADE.search(normalize_key(c)) and scale_from_unit(c) > 1}
+    if por_coluna:
+        cols = list(por_coluna)
+        escala = scale_from_unit(cols[0])
+        yield Suggestion(
+            "unidade",
+            tuple({"op": "scale_by_unit", "cols": [c], "unit": c} for c in cols),
+            0.75,
+            f"As colunas {_nomes_br(cols)} dizem a unidade no nome (mil, milhões). Multiplicar por "
+            f"{_ESCALA.get(escala, _n_br(escala))} deixa os valores em reais. "
+            f"{_muda(_preenchidas(ctx, cols), 0)}",
+            tuple(cols),
+            order=CONVERSAO,
+        )
+        return
+    for titulo, celula in ctx.titulos:
+        if not _UNIDADE.search(normalize_key(titulo)) or (escala := scale_from_unit(titulo)) == 1:
+            continue
+        if not valor:
+            return
+        onde = f" (célula {celula})" if celula else ""
+        yield Suggestion(
+            "unidade",
+            ({"op": "scale_by_unit", "cols": valor, "unit": titulo},),
+            0.75,
+            f'O título da planilha diz "{titulo}"{onde}. Multiplicar por '
+            f"{_ESCALA.get(escala, _n_br(escala))} "
+            f"deixa os valores em reais. Muda {_celulas_br(_preenchidas(ctx, valor))} nas colunas "
+            f"{_nomes_br(valor)}; nenhuma fica vazia.",
+            tuple(valor),
+            order=CONVERSAO,
+        )
+        return
+
+
+def _nomes_br(cols: list[str], n: int = 5) -> str:
+    """'Receita, Custo e Margem'; mais de n: 'Receita, Custo, … e mais 4'."""
+    if len(cols) > n:
+        return f"{', '.join(cols[:n])} e mais {len(cols) - n}"
+    return cols[0] if len(cols) == 1 else f"{', '.join(cols[:-1])} e {cols[-1]}"
+
+
+def _preenchidas(ctx: Contexto, cols: list[str]) -> int:
+    return int(sum(ctx.total[c].is_not_null().sum() for c in cols))
+
+
+_TAXA_HIERARQUIA = 0.3
+
+
+@rule
+def hierarquia(ctx: Contexto) -> Iterator[Suggestion]:
+    """Relatório que só escreve o grupo na primeira linha (centro de custo,
+    região): preenche para baixo (F7.7). Só as colunas de texto à esquerda
+    da primeira coluna de número, e só antes de despivotar ou tirar
+    duplicadas: o "Aceitar todas" acrescenta no fim, e preencher depois do
+    dedupe reabre a C5."""
+    if any(p.get("op") in ("unpivot", "dedupe") and p.get("enabled", True) for p in ctx.passos):
+        return
+    df = ctx.total
+    if df.height < 4:
+        return
+    primeira_numerica = next(
+        (i for i, c in enumerate(df.columns) if df.schema[c].is_numeric() or _numerica(ctx, c)), None
+    )
+    if primeira_numerica is None:
+        return
+    vazia = _linhas_vazias(df)
+    cols, celulas = [], 0
+    for c in df.columns[:primeira_numerica]:
+        if c not in ctx.texto or _ja_na_receita(ctx, "fill_down", c):
+            continue
+        s = df[c].cast(pl.String)
+        em_branco = (s.is_null() | (s.str.strip_chars() == "")) & ~vazia
+        preenchida = ~em_branco & ~vazia
+        inicio = preenchida.arg_true()[0] if preenchida.any() else None
+        if inicio is None:
+            continue
+        depois = em_branco.slice(inicio)
+        uteis = int((~vazia).slice(inicio).sum())
+        if not uteis or depois.sum() / uteis < _TAXA_HIERARQUIA:
+            continue
+        cols.append(c)
+        celulas += int(depois.sum())
+    if not cols:
+        return
+    nomes = _nomes_br(cols)
+    sujeito = f"As colunas {nomes} só estão" if len(cols) > 1 else f"A coluna {nomes} só está"
+    yield Suggestion(
+        "hierarquia",
+        ({"op": "fill_down", "cols": cols},),
+        0.75,
+        f"{sujeito} preenchida{'s' if len(cols) > 1 else ''} na primeira linha de cada grupo. Preencher para "
+        f"baixo repete o valor nas linhas vazias de baixo. {_muda(celulas, 0)}",
+        tuple(cols),
+        order=LIMPEZA,
+    )
+
+
+# Marcadores de "sem valor" que o sistema escreve como texto (F7.8). O '-'
+# fica de fora: na contabilidade e no IBGE ele é zero.
+_MARCADORES = {"null", "n/a", "n/d", "#n/d", "#n/a", "(null)", "<null>", "nd"}
+
+
+@rule
+def marcador_nulo(ctx: Contexto) -> Iterator[Suggestion]:
+    for c in ctx.texto:
+        if ctx.perfil(c).inferred_type != "texto":
+            continue  # número e data já tratam o marcador na conversão
+        s = ctx.total[c].cast(pl.String).drop_nulls()
+        contagem = s.value_counts()
+        achados = {
+            v: n
+            for v, n in zip(contagem[c].to_list(), contagem["count"].to_list(), strict=True)
+            if normalize_key(v) in _MARCADORES
+        }
+        if not achados or len(achados) == contagem.height:
+            continue
+        variantes = sorted(achados, key=lambda v: -achados[v])
+        n = sum(achados.values())
+        mostra = ", ".join(variantes[:-1]) + f" e {variantes[-1]}" if len(variantes) > 1 else variantes[0]
+        yield Suggestion(
+            "marcador_nulo",
+            tuple({"op": "replace", "cols": [c], "old": v, "new": None, "whole": True} for v in variantes),
+            0.8,
+            f'A coluna {c} usa {mostra} para dizer "sem valor". Trocar por vazio deixa o Power BI '
+            f"tratar como "
+            f"vazio de verdade. {_n_br(n)} {'célula vira' if n == 1 else 'células viram'} vazio.",
+            (c,),
+            order=LIMPEZA,
+        )
